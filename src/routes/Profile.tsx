@@ -6,8 +6,13 @@ import { useAuth } from "../context/AuthContext";
 import { FIRESTORE_DATABASE_ID } from "../lib/firebase";
 import { getReadableFirestoreError } from "../lib/firebaseErrors";
 import { formatCurrency, formatGameDate } from "../lib/format";
-import { subscribeBids, subscribeGames } from "../lib/firestore";
-import type { Bid, Game } from "../types";
+import {
+  subscribeBids,
+  subscribeCrews,
+  subscribeGames,
+  subscribeRatings
+} from "../lib/firestore";
+import type { Bid, Crew, Game, Rating } from "../types";
 
 function formatAccountCreatedAt(dateISO: string): string {
   const date = new Date(dateISO);
@@ -32,16 +37,35 @@ function formatRoleLabel(role: "official" | "assignor" | "school"): string {
   return "School";
 }
 
+function isOfficialAssignedToDirectGame(game: Game, officialUid: string): boolean {
+  if (game.mode !== "direct_assignment") {
+    return false;
+  }
+
+  return (game.directAssignments ?? []).some((assignment) => {
+    if (assignment.assignmentType === "individual") {
+      return assignment.officialUid === officialUid;
+    }
+    return assignment.memberUids.includes(officialUid);
+  });
+}
+
 export function Profile() {
-  const { user, profile, loading, profileLoading } = useAuth();
+  const { user, profile, loading, profileLoading, signOut } = useAuth();
   const [games, setGames] = useState<Game[]>([]);
   const [bids, setBids] = useState<Bid[]>([]);
+  const [crews, setCrews] = useState<Crew[]>([]);
+  const [ratings, setRatings] = useState<Rating[]>([]);
   const [dataError, setDataError] = useState<string | null>(null);
+  const [signOutError, setSignOutError] = useState<string | null>(null);
+  const [signingOut, setSigningOut] = useState(false);
 
   useEffect(() => {
     if (!user) {
       setGames([]);
       setBids([]);
+      setCrews([]);
+      setRatings([]);
       return;
     }
 
@@ -51,10 +75,18 @@ export function Profile() {
     const unsubscribeBids = subscribeBids(setBids, (error) =>
       setDataError(getReadableFirestoreError(error, FIRESTORE_DATABASE_ID))
     );
+    const unsubscribeCrews = subscribeCrews(setCrews, (error) =>
+      setDataError(getReadableFirestoreError(error, FIRESTORE_DATABASE_ID))
+    );
+    const unsubscribeRatings = subscribeRatings(setRatings, (error) =>
+      setDataError(getReadableFirestoreError(error, FIRESTORE_DATABASE_ID))
+    );
 
     return () => {
       unsubscribeGames();
       unsubscribeBids();
+      unsubscribeCrews();
+      unsubscribeRatings();
     };
   }, [user]);
 
@@ -90,9 +122,19 @@ export function Profile() {
         };
       })
       .filter(
-        (entry) =>
-          entry.game.status === "awarded" &&
-          entry.selectedBid?.officialUid === currentUserId
+        (entry) => {
+          if (entry.game.mode === "direct_assignment") {
+            return (
+              entry.game.status === "awarded" &&
+              isOfficialAssignedToDirectGame(entry.game, currentUserId)
+            );
+          }
+
+          return (
+            entry.game.status === "awarded" &&
+            entry.selectedBid?.officialUid === currentUserId
+          );
+        }
       )
       .sort(
         (a, b) =>
@@ -147,6 +189,59 @@ export function Profile() {
     [postedGames, bidCountByGameId]
   );
 
+  const officialCrewIds = useMemo(() => {
+    if (profile?.role !== "official") {
+      return [];
+    }
+
+    return crews
+      .filter((crew) => crew.memberUids.includes(currentUserId))
+      .map((crew) => crew.id);
+  }, [crews, currentUserId, profile?.role]);
+
+  const officialReceivedRatings = useMemo(() => {
+    if (profile?.role !== "official") {
+      return [];
+    }
+
+    const crewIdSet = new Set(officialCrewIds);
+    return ratings.filter((rating) => {
+      if (rating.targetType === "official") {
+        return rating.targetId === currentUserId;
+      }
+      return crewIdSet.has(rating.targetId);
+    });
+  }, [currentUserId, officialCrewIds, profile?.role, ratings]);
+
+  const averageRating = useMemo(() => {
+    const source = profile?.role === "official" ? officialReceivedRatings : [];
+    if (source.length === 0) {
+      return null;
+    }
+    const total = source.reduce((sum, rating) => sum + rating.stars, 0);
+    return total / source.length;
+  }, [officialReceivedRatings, profile?.role]);
+
+  const fiveStarRatingCount = useMemo(() => {
+    const source = profile?.role === "official" ? officialReceivedRatings : [];
+    return source.filter((rating) => rating.stars === 5).length;
+  }, [officialReceivedRatings, profile?.role]);
+
+  const mostRecentRating = useMemo(() => {
+    const source = profile?.role === "official" ? officialReceivedRatings : [];
+    if (source.length === 0) {
+      return null;
+    }
+    return [...source].sort((a, b) => b.updatedAtISO.localeCompare(a.updatedAtISO))[0];
+  }, [officialReceivedRatings, profile?.role]);
+
+  const submittedRatings = useMemo(() => {
+    if (profile?.role !== "assignor" && profile?.role !== "school") {
+      return [];
+    }
+    return ratings.filter((rating) => rating.ratedByUid === currentUserId);
+  }, [currentUserId, profile?.role, ratings]);
+
   if (loading) {
     return (
       <main className="page">
@@ -188,6 +283,19 @@ export function Profile() {
 
   const roleLabel = formatRoleLabel(profile.role);
 
+  async function handleSignOut() {
+    setSignOutError(null);
+    setSigningOut(true);
+    try {
+      await signOut();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Unable to sign out.";
+      setSignOutError(message);
+    } finally {
+      setSigningOut(false);
+    }
+  }
+
   return (
     <main className="page">
       <header className="hero">
@@ -212,12 +320,18 @@ export function Profile() {
           <p className="meta-line">
             <strong>Member Since:</strong> {formatAccountCreatedAt(profile.createdAtISO)}
           </p>
-          <p className="meta-line">
-            <strong>User ID:</strong> {profile.uid}
-          </p>
+          {signOutError ? <p className="error-text">{signOutError}</p> : null}
 
           <div className="profile-actions">
-            <Link to="/" className="button-secondary details-back-link">
+            <button
+              type="button"
+              className="button-secondary"
+              onClick={handleSignOut}
+              disabled={signingOut}
+            >
+              {signingOut ? "Signing Out..." : "Sign Out"}
+            </button>
+            <Link to="/marketplace" className="button-secondary details-back-link">
               Go to Marketplace
             </Link>
             <Link to="/schedule" className="button-secondary details-back-link">
@@ -266,7 +380,9 @@ export function Profile() {
                     <div>{game.location}</div>
                     <div>
                       Assigned by {game.createdByName ?? game.createdByRole} •{" "}
-                      {selectedBid ? formatCurrency(selectedBid.amount) : "-"}
+                      {selectedBid
+                        ? formatCurrency(selectedBid.amount)
+                        : formatCurrency(game.payPosted)}
                     </div>
                   </li>
                 ))}
@@ -332,6 +448,59 @@ export function Profile() {
             )}
           </article>
         )}
+
+        <article className="profile-panel">
+          <h3>Ratings</h3>
+          <div className="profile-stats-grid">
+            <div className="profile-stat">
+              <span className="profile-stat-label">Average Rating</span>
+              <strong className="profile-stat-value">
+                {averageRating === null ? "-" : averageRating.toFixed(2)}
+              </strong>
+            </div>
+            <div className="profile-stat">
+              <span className="profile-stat-label">
+                {profile.role === "official" ? "Ratings Received" : "Ratings Submitted"}
+              </span>
+              <strong className="profile-stat-value">
+                {profile.role === "official"
+                  ? officialReceivedRatings.length
+                  : submittedRatings.length}
+              </strong>
+            </div>
+            <div className="profile-stat">
+              <span className="profile-stat-label">5-Star Ratings</span>
+              <strong className="profile-stat-value">{fiveStarRatingCount}</strong>
+            </div>
+            <div className="profile-stat">
+              <span className="profile-stat-label">Most Recent Rating</span>
+              <strong className="profile-stat-value">
+                {mostRecentRating ? `${mostRecentRating.stars}/5` : "-"}
+              </strong>
+            </div>
+          </div>
+          {mostRecentRating ? (
+            <>
+              <p className="meta-line">
+                <strong>Most Recent By:</strong> {mostRecentRating.ratedByName}
+              </p>
+              <p className="meta-line">
+                <strong>Target:</strong> {mostRecentRating.targetName} (
+                {mostRecentRating.targetType === "crew" ? "Crew" : "Official"})
+              </p>
+              {mostRecentRating.comment ? (
+                <p className="meta-line">
+                  <strong>Comment:</strong> {mostRecentRating.comment}
+                </p>
+              ) : null}
+              <p className="meta-line">
+                <strong>Updated:</strong> {formatGameDate(mostRecentRating.updatedAtISO)}
+              </p>
+            </>
+          ) : (
+            <p className="meta-line">No ratings yet.</p>
+          )}
+        </article>
       </section>
     </main>
   );

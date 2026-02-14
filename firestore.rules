@@ -18,6 +18,12 @@ service cloud.firestore {
       return hasRole("assignor") || hasRole("school");
     }
 
+    function ownsGame(gameId) {
+      return signedIn()
+        && exists(/databases/$(database)/documents/games/$(gameId))
+        && get(/databases/$(database)/documents/games/$(gameId)).data.createdByUid == request.auth.uid;
+    }
+
     match /userProfiles/{uid} {
       allow read: if signedIn();
       allow create, update: if signedIn() && request.auth.uid == uid;
@@ -27,16 +33,21 @@ service cloud.firestore {
     match /crews/{crewId} {
       allow read: if signedIn();
 
-      allow create: if (hasRole("official") || hasRole("assignor"))
+      allow create: if (hasRole("official") || hasRole("assignor") || hasRole("school"))
         && request.resource.data.createdByUid == request.auth.uid
-        && (request.resource.data.createdByRole == "official" || request.resource.data.createdByRole == "assignor")
+        && (
+          request.resource.data.createdByRole == "official" ||
+          request.resource.data.createdByRole == "assignor" ||
+          request.resource.data.createdByRole == "school"
+        )
         && request.resource.data.memberUids.size() >= 1
         && request.resource.data.memberUids.size() <= 15;
 
       allow update: if signedIn()
         && resource.data.createdByUid == request.auth.uid;
 
-      allow delete: if false;
+      allow delete: if signedIn()
+        && resource.data.createdByUid == request.auth.uid;
     }
 
     match /games/{gameId} {
@@ -45,12 +56,13 @@ service cloud.firestore {
       allow create: if canManageGames()
         && request.resource.data.createdByUid == request.auth.uid
         && (request.resource.data.createdByRole == "assignor" || request.resource.data.createdByRole == "school")
-        && request.resource.data.status == "open";
+        && (request.resource.data.status == "open" || request.resource.data.status == "awarded");
 
       allow update: if canManageGames()
         && resource.data.createdByUid == request.auth.uid;
 
-      allow delete: if false;
+      allow delete: if canManageGames()
+        && resource.data.createdByUid == request.auth.uid;
     }
 
     match /bids/{bidId} {
@@ -60,12 +72,40 @@ service cloud.firestore {
         && request.resource.data.officialUid == request.auth.uid;
 
       allow delete: if signedIn()
-        && resource.data.officialUid == request.auth.uid;
+        && (
+          resource.data.officialUid == request.auth.uid
+          || ownsGame(resource.data.gameId)
+        );
 
       allow update: if signedIn()
         && resource.data.officialUid == request.auth.uid
         && request.resource.data.officialUid == resource.data.officialUid
         && request.resource.data.gameId == resource.data.gameId;
+    }
+
+    match /ratings/{ratingId} {
+      allow read: if signedIn();
+
+      allow create: if canManageGames()
+        && request.resource.data.ratedByUid == request.auth.uid
+        && (request.resource.data.ratedByRole == "assignor" || request.resource.data.ratedByRole == "school")
+        && ownsGame(request.resource.data.gameId)
+        && request.resource.data.targetType in ["official", "crew"]
+        && request.resource.data.stars is int
+        && request.resource.data.stars >= 1
+        && request.resource.data.stars <= 5;
+
+      allow update: if canManageGames()
+        && resource.data.ratedByUid == request.auth.uid
+        && request.resource.data.ratedByUid == resource.data.ratedByUid
+        && request.resource.data.gameId == resource.data.gameId
+        && request.resource.data.targetId == resource.data.targetId
+        && request.resource.data.targetType == resource.data.targetType
+        && request.resource.data.stars is int
+        && request.resource.data.stars >= 1
+        && request.resource.data.stars <= 5;
+
+      allow delete: if false;
     }
   }
 }

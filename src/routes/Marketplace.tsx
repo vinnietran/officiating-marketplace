@@ -5,6 +5,7 @@ import { Filters, type FilterValues } from "../components/Filters";
 import { GameCard } from "../components/GameCard";
 import { MessageModal } from "../components/MessageModal";
 import { useAuth } from "../context/AuthContext";
+import { getBidWindowInfo } from "../lib/format";
 import {
   createBid,
   deleteBid,
@@ -33,10 +34,19 @@ export function Marketplace() {
   const [bids, setBids] = useState<Bid[]>([]);
   const [crews, setCrews] = useState<Crew[]>([]);
   const [dataError, setDataError] = useState<string | null>(null);
+  const [nowMs, setNowMs] = useState(() => Date.now());
   const [modalMessage, setModalMessage] = useState<{
     title: string;
     message: string;
   } | null>(null);
+
+  useEffect(() => {
+    const timerId = window.setInterval(() => {
+      setNowMs(Date.now());
+    }, 60000);
+
+    return () => window.clearInterval(timerId);
+  }, []);
 
   useEffect(() => {
     if (!user) {
@@ -67,6 +77,20 @@ export function Marketplace() {
     const minPay = filters.minPay.trim() === "" ? null : Number(filters.minPay);
 
     return games.filter((game) => {
+      const bidWindowInfo = getBidWindowInfo(
+        game.acceptingBidsUntilISO,
+        game.status,
+        nowMs
+      );
+
+      if (bidWindowInfo.state === "closed") {
+        return false;
+      }
+
+      if (profile?.role === "official" && game.mode === "direct_assignment") {
+        return false;
+      }
+
       const matchesSearch = game.schoolName
         .toLowerCase()
         .includes(filters.search.trim().toLowerCase());
@@ -77,7 +101,7 @@ export function Marketplace() {
 
       return matchesSearch && matchesSport && matchesLevel && matchesPay;
     });
-  }, [games, filters]);
+  }, [games, filters, profile?.role, nowMs]);
 
   const officialCrews = useMemo(() => {
     if (!user || profile?.role !== "official") {
@@ -178,6 +202,9 @@ export function Marketplace() {
 
     if (game.status !== "open") {
       throw new Error("Bidding is closed for this game.");
+    }
+    if (game.mode === "direct_assignment") {
+      throw new Error("This game was directly assigned and cannot accept bids.");
     }
 
     const gameBids = bids.filter((bid) => bid.gameId === gameId);

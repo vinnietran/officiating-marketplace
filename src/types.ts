@@ -5,8 +5,22 @@ export type Level = "Youth" | "Middle School" | "Varsity" | "College";
 export type UserRole = "official" | "assignor" | "school";
 
 export type GameStatus = "open" | "awarded";
-export type CrewOwnerRole = "official" | "assignor";
+export type CrewOwnerRole = "official" | "assignor" | "school";
 export type BidderType = "individual" | "crew";
+export type GameMode = "marketplace" | "direct_assignment";
+export type RatingTargetType = "official" | "crew";
+export type FootballPosition =
+  | "R"
+  | "U"
+  | "C"
+  | "H"
+  | "L"
+  | "S"
+  | "F"
+  | "B"
+  | "RO"
+  | "RC"
+  | "ALT";
 
 export interface UserProfile {
   uid: string;
@@ -34,6 +48,24 @@ export interface Crew {
   members: CrewMember[];
 }
 
+export interface IndividualGameAssignment {
+  assignmentType: "individual";
+  officialUid: string;
+  officialName: string;
+  officialEmail: string;
+  position?: FootballPosition;
+}
+
+export interface CrewGameAssignment {
+  assignmentType: "crew";
+  crewId: string;
+  crewName: string;
+  memberUids: string[];
+  memberNames: string[];
+}
+
+export type GameAssignment = IndividualGameAssignment | CrewGameAssignment;
+
 export interface Game {
   id: string;
   schoolName: string;
@@ -49,6 +81,8 @@ export interface Game {
   createdByRole: "assignor" | "school";
   createdAtISO: string;
   status: GameStatus;
+  mode?: GameMode;
+  directAssignments?: GameAssignment[];
   selectedBidId?: string;
 }
 
@@ -63,4 +97,19 @@ export interface Bid {
   amount: number;
   message?: string;
   createdAtISO: string;
+}
+
+export interface Rating {
+  id: string;
+  gameId: string;
+  targetType: RatingTargetType;
+  targetId: string;
+  targetName: string;
+  ratedByUid: string;
+  ratedByName: string;
+  ratedByRole: "assignor" | "school";
+  stars: number;
+  comment?: string;
+  createdAtISO: string;
+  updatedAtISO: string;
 }

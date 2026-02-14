@@ -1,19 +1,58 @@
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
+import { AssignGameForm } from "../components/AssignGameForm";
 import { AuthPanel } from "../components/AuthPanel";
 import { CompleteProfilePanel } from "../components/CompleteProfilePanel";
 import { MessageModal } from "../components/MessageModal";
-import { PostGameForm } from "../components/PostGameForm";
 import { useAuth } from "../context/AuthContext";
-import { createGame } from "../lib/firestore";
-import type { Game } from "../types";
+import { FIRESTORE_DATABASE_ID } from "../lib/firebase";
+import { getReadableFirestoreError } from "../lib/firebaseErrors";
+import {
+  createAssignedGame,
+  subscribeCrews,
+  subscribeOfficialProfiles
+} from "../lib/firestore";
+import type { Crew, Game, GameAssignment, UserProfile } from "../types";
 
-export function PostGame() {
+export function AssignGame() {
   const { user, profile, loading, profileLoading, signOut } = useAuth();
+  const [crews, setCrews] = useState<Crew[]>([]);
+  const [officialProfiles, setOfficialProfiles] = useState<UserProfile[]>([]);
+  const [dataError, setDataError] = useState<string | null>(null);
   const [modalMessage, setModalMessage] = useState<{
     title: string;
     message: string;
   } | null>(null);
+
+  useEffect(() => {
+    if (!user) {
+      setCrews([]);
+      setOfficialProfiles([]);
+      return;
+    }
+
+    const unsubscribeCrews = subscribeCrews(setCrews, (error) =>
+      setDataError(getReadableFirestoreError(error, FIRESTORE_DATABASE_ID))
+    );
+    const unsubscribeOfficials = subscribeOfficialProfiles(setOfficialProfiles, (error) =>
+      setDataError(getReadableFirestoreError(error, FIRESTORE_DATABASE_ID))
+    );
+
+    return () => {
+      unsubscribeCrews();
+      unsubscribeOfficials();
+    };
+  }, [user]);
+
+  const availableCrews = useMemo(() => {
+    if (!user || !profile || profile.role === "official") {
+      return [];
+    }
+
+    return crews
+      .filter((crew) => crew.createdByUid === user.uid)
+      .sort((a, b) => a.name.localeCompare(b.name));
+  }, [crews, profile, user]);
 
   if (loading) {
     return (
@@ -27,8 +66,8 @@ export function PostGame() {
     return (
       <main className="page">
         <header className="hero">
-          <h1>Post a Game</h1>
-          <p>Sign in to post new assignments.</p>
+          <h1>Assign Game</h1>
+          <p>Sign in to assign games directly.</p>
         </header>
         <AuthPanel />
       </main>
@@ -47,7 +86,7 @@ export function PostGame() {
     return (
       <main className="page">
         <header className="hero">
-          <h1>Post a Game</h1>
+          <h1>Assign Game</h1>
         </header>
         <CompleteProfilePanel />
       </main>
@@ -58,8 +97,8 @@ export function PostGame() {
     return (
       <main className="page">
         <header className="hero">
-          <h1>Post a Game</h1>
-          <p>Only assignors and schools can post games.</p>
+          <h1>Assign Game</h1>
+          <p>Only assignors and schools can assign games.</p>
         </header>
         <Link to="/marketplace" className="button-secondary details-back-link">
           Back to Marketplace
@@ -73,33 +112,33 @@ export function PostGame() {
   const postingRole: "assignor" | "school" =
     activeProfile.role === "assignor" ? "assignor" : "school";
 
-  async function handlePostGame(values: {
+  async function handleAssignGame(values: {
     schoolName: string;
     sport: Game["sport"];
     level: Game["level"];
     dateISO: string;
-    acceptingBidsUntilISO?: string;
     location: string;
     payPosted: number;
     notes?: string;
+    directAssignments: GameAssignment[];
   }) {
-    await createGame(values, {
+    await createAssignedGame(values, {
       uid: activeUser.uid,
       role: postingRole,
       displayName: activeProfile.displayName
     });
 
     setModalMessage({
-      title: "Game Posted",
-      message: "Your game was posted successfully."
+      title: "Game Assigned",
+      message: "Your game was directly assigned."
     });
   }
 
   return (
     <main className="page post-game-page">
       <header className="hero">
-        <h1>Post a Game</h1>
-        <p>Create a new assignment in a full-page posting workflow.</p>
+        <h1>Assign Game</h1>
+        <p>Create a game and assign crews or individuals with no bidding workflow.</p>
       </header>
 
       <section className="session-bar">
@@ -112,21 +151,27 @@ export function PostGame() {
         </button>
       </section>
 
+      {dataError ? <p className="error-text">{dataError}</p> : null}
+
       <section className="post-game-layout">
         <article className="post-game-info-card">
-          <h3>Posting Tips</h3>
+          <h3>Assignment Tips</h3>
           <p className="meta-line">
-            Include a precise location and a realistic posted pay to attract the right officials.
+            This mode creates a game as already assigned. Officials cannot bid on it.
           </p>
           <p className="meta-line">
-            Set an <strong>Accepting bids until</strong> date to control the auction window.
+            For football, set a position for each individual assignment.
           </p>
           <p className="meta-line">
-            You can edit this game later from Marketplace or Schedule.
+            Need crews first? Create them in the <Link to="/crews">Crews</Link> tab.
           </p>
         </article>
 
-        <PostGameForm onSubmit={handlePostGame} />
+        <AssignGameForm
+          availableCrews={availableCrews}
+          availableOfficials={officialProfiles}
+          onSubmit={handleAssignGame}
+        />
       </section>
 
       {modalMessage ? (

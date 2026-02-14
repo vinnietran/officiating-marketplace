@@ -7,8 +7,10 @@ import { FIRESTORE_DATABASE_ID } from "../lib/firebase";
 import { getReadableFirestoreError } from "../lib/firebaseErrors";
 import {
   createCrew,
+  deleteCrew,
   searchOfficialProfilesByEmail,
-  subscribeCrews
+  subscribeCrews,
+  updateCrewMembers
 } from "../lib/firestore";
 import type { Crew, CrewMember, UserProfile } from "../types";
 
@@ -16,6 +18,19 @@ const MAX_CREW_MEMBERS = 15;
 
 function byName(a: CrewMember, b: CrewMember) {
   return a.name.localeCompare(b.name);
+}
+
+function formatCreatedAt(dateISO: string): string {
+  const date = new Date(dateISO);
+  if (Number.isNaN(date.getTime())) {
+    return "Unknown";
+  }
+
+  return new Intl.DateTimeFormat("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric"
+  }).format(date);
 }
 
 export function Crews() {
@@ -29,8 +44,16 @@ export function Crews() {
   const [searching, setSearching] = useState(false);
   const [searchResultMessage, setSearchResultMessage] = useState<string | null>(null);
   const [selectedMembers, setSelectedMembers] = useState<CrewMember[]>([]);
+  const [selectedCrewId, setSelectedCrewId] = useState<string | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
+  const [deleteCrewId, setDeleteCrewId] = useState<string | null>(null);
+  const [deletingCrew, setDeletingCrew] = useState(false);
+  const [manageInviteEmail, setManageInviteEmail] = useState("");
+  const [manageMatchedOfficials, setManageMatchedOfficials] = useState<UserProfile[]>([]);
+  const [manageSearching, setManageSearching] = useState(false);
+  const [manageResultMessage, setManageResultMessage] = useState<string | null>(null);
+  const [updatingCrewMembers, setUpdatingCrewMembers] = useState(false);
   const [modalMessage, setModalMessage] = useState<{
     title: string;
     message: string;
@@ -73,7 +96,10 @@ export function Crews() {
     });
   }, [profile]);
 
-  const canAccessCrews = profile?.role === "official" || profile?.role === "assignor";
+  const canAccessCrews =
+    profile?.role === "official" ||
+    profile?.role === "assignor" ||
+    profile?.role === "school";
 
   const visibleCrews = useMemo(() => {
     if (!user || !profile) {
@@ -84,7 +110,7 @@ export function Crews() {
       return crews.filter((crew) => crew.memberUids.includes(user.uid));
     }
 
-    if (profile.role === "assignor") {
+    if (profile.role === "assignor" || profile.role === "school") {
       return crews.filter((crew) => crew.createdByUid === user.uid);
     }
 
@@ -92,6 +118,26 @@ export function Crews() {
   }, [crews, profile, user]);
 
   const hasMaximumMembers = selectedMembers.length >= MAX_CREW_MEMBERS;
+  const selectedCrew = useMemo(
+    () => visibleCrews.find((crew) => crew.id === selectedCrewId) ?? null,
+    [selectedCrewId, visibleCrews]
+  );
+  useEffect(() => {
+    if (!selectedCrewId) {
+      setManageInviteEmail("");
+      setManageMatchedOfficials([]);
+      setManageResultMessage(null);
+      return;
+    }
+
+    const exists = visibleCrews.some((crew) => crew.id === selectedCrewId);
+    if (!exists) {
+      setSelectedCrewId(null);
+      setManageInviteEmail("");
+      setManageMatchedOfficials([]);
+      setManageResultMessage(null);
+    }
+  }, [selectedCrewId, visibleCrews]);
 
   if (loading) {
     return (
@@ -137,7 +183,7 @@ export function Crews() {
       <main className="page">
         <header className="hero">
           <h1>Crews</h1>
-          <p>Crews are available for officials and assignors.</p>
+          <p>Crews are available for officials, assignors, and schools.</p>
         </header>
       </main>
     );
@@ -145,8 +191,12 @@ export function Crews() {
 
   const activeUser = user;
   const activeProfile = profile;
-  const creatorRole: "official" | "assignor" =
-    activeProfile.role === "official" ? "official" : "assignor";
+  const creatorRole: "official" | "assignor" | "school" =
+    activeProfile.role === "official"
+      ? "official"
+      : activeProfile.role === "assignor"
+        ? "assignor"
+        : "school";
 
   async function handleSearchInvite() {
     const email = inviteEmail.trim();
@@ -258,6 +308,149 @@ export function Crews() {
       setFormError(getReadableFirestoreError(error, FIRESTORE_DATABASE_ID));
     } finally {
       setCreating(false);
+    }
+  }
+
+  async function handleConfirmDeleteCrew() {
+    if (!deleteCrewId) {
+      return;
+    }
+
+    const crewToDelete = visibleCrews.find((crew) => crew.id === deleteCrewId);
+    if (!crewToDelete) {
+      setDeleteCrewId(null);
+      return;
+    }
+
+    if (crewToDelete.createdByUid !== activeUser.uid) {
+      setDeleteCrewId(null);
+      setModalMessage({
+        title: "Not Allowed",
+        message: "Only the crew creator can delete this crew."
+      });
+      return;
+    }
+
+    setDeletingCrew(true);
+    try {
+      await deleteCrew(crewToDelete.id);
+      setDeleteCrewId(null);
+      if (selectedCrewId === crewToDelete.id) {
+        setSelectedCrewId(null);
+      }
+      setModalMessage({
+        title: "Crew Deleted",
+        message: `${crewToDelete.name} was deleted.`
+      });
+    } catch (error) {
+      setDataError(getReadableFirestoreError(error, FIRESTORE_DATABASE_ID));
+      setDeleteCrewId(null);
+    } finally {
+      setDeletingCrew(false);
+    }
+  }
+
+  async function handleSearchManageInvite() {
+    const email = manageInviteEmail.trim();
+    if (!email) {
+      setManageResultMessage("Enter an email to search.");
+      setManageMatchedOfficials([]);
+      return;
+    }
+
+    setManageSearching(true);
+    setManageResultMessage(null);
+    setManageMatchedOfficials([]);
+
+    try {
+      const results = await searchOfficialProfilesByEmail(email);
+      if (results.length === 0) {
+        setManageResultMessage("No official found for that email.");
+      } else {
+        setManageMatchedOfficials(results);
+      }
+    } catch (error) {
+      setManageResultMessage(getReadableFirestoreError(error, FIRESTORE_DATABASE_ID));
+    } finally {
+      setManageSearching(false);
+    }
+  }
+
+  async function handleAddMemberToSelectedCrew(official: UserProfile) {
+    if (!selectedCrew) {
+      return;
+    }
+
+    if (selectedCrew.createdByUid !== activeUser.uid) {
+      setModalMessage({
+        title: "Not Allowed",
+        message: "Only the crew creator can manage members."
+      });
+      return;
+    }
+
+    const alreadyMember = selectedCrew.members.some((member) => member.uid === official.uid);
+    if (alreadyMember) {
+      return;
+    }
+
+    const nextMembers = [...selectedCrew.members, {
+      uid: official.uid,
+      name: official.displayName,
+      email: official.email
+    }].sort(byName);
+
+    if (nextMembers.length > MAX_CREW_MEMBERS) {
+      setModalMessage({
+        title: "Crew Limit Reached",
+        message: `A crew can include up to ${MAX_CREW_MEMBERS} members.`
+      });
+      return;
+    }
+
+    setUpdatingCrewMembers(true);
+    try {
+      await updateCrewMembers(selectedCrew.id, nextMembers);
+      setManageResultMessage("Member added.");
+      setManageInviteEmail("");
+      setManageMatchedOfficials([]);
+    } catch (error) {
+      setDataError(getReadableFirestoreError(error, FIRESTORE_DATABASE_ID));
+    } finally {
+      setUpdatingCrewMembers(false);
+    }
+  }
+
+  async function handleRemoveMemberFromSelectedCrew(memberUid: string) {
+    if (!selectedCrew) {
+      return;
+    }
+
+    if (selectedCrew.createdByUid !== activeUser.uid) {
+      setModalMessage({
+        title: "Not Allowed",
+        message: "Only the crew creator can manage members."
+      });
+      return;
+    }
+
+    const nextMembers = selectedCrew.members.filter((member) => member.uid !== memberUid);
+    if (nextMembers.length < 1) {
+      setModalMessage({
+        title: "Member Required",
+        message: "A crew must include at least 1 member."
+      });
+      return;
+    }
+
+    setUpdatingCrewMembers(true);
+    try {
+      await updateCrewMembers(selectedCrew.id, nextMembers.sort(byName));
+      setManageResultMessage("Member removed.");
+    } catch (error) {
+      setDataError(getReadableFirestoreError(error, FIRESTORE_DATABASE_ID));
+    } finally {
+      setUpdatingCrewMembers(false);
     }
   }
 
@@ -392,21 +585,158 @@ export function Crews() {
                     <th>Name</th>
                     <th>Created By</th>
                     <th>Members</th>
-                    <th>Member List</th>
+                    <th>Action</th>
                   </tr>
                 </thead>
                 <tbody>
                   {visibleCrews.map((crew) => (
-                    <tr key={crew.id}>
+                    <tr
+                      key={crew.id}
+                      className={`clickable-row${selectedCrewId === crew.id ? " crew-selected-row" : ""}`}
+                      role="button"
+                      tabIndex={0}
+                      onClick={() => setSelectedCrewId(crew.id)}
+                      onKeyDown={(event) => {
+                        if (event.key === "Enter" || event.key === " ") {
+                          event.preventDefault();
+                          setSelectedCrewId(crew.id);
+                        }
+                      }}
+                      aria-label={`Manage crew ${crew.name}`}
+                    >
                       <td>{crew.name}</td>
                       <td>{crew.createdByName}</td>
                       <td>{crew.memberUids.length}</td>
-                      <td>{crew.members.map((member) => member.name).join(", ")}</td>
+                      <td>
+                        <button
+                          type="button"
+                          className="button-secondary"
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            setSelectedCrewId(crew.id);
+                          }}
+                        >
+                          Manage
+                        </button>
+                      </td>
                     </tr>
                   ))}
                 </tbody>
               </table>
             </div>
+          )}
+        </article>
+
+        <article className="crew-card">
+          <h3>Manage Crew</h3>
+          {!selectedCrew ? (
+            <p className="empty-text">Select a crew above to view details and members.</p>
+          ) : (
+            <>
+              <p className="meta-line">
+                <strong>Name:</strong> {selectedCrew.name}
+              </p>
+              <p className="meta-line">
+                <strong>Created By:</strong> {selectedCrew.createdByName} ({selectedCrew.createdByRole})
+              </p>
+              <p className="meta-line">
+                <strong>Created:</strong> {formatCreatedAt(selectedCrew.createdAtISO)}
+              </p>
+              <p className="meta-line">
+                <strong>Total Members:</strong> {selectedCrew.memberUids.length}
+              </p>
+
+              <h4>Members</h4>
+              {selectedCrew.members.length === 0 ? (
+                <p className="empty-text">No crew members found.</p>
+              ) : (
+                <ul className="crew-member-list">
+                  {selectedCrew.members.map((member) => (
+                    <li key={member.uid} className="crew-member-item">
+                      <div>
+                        <strong>{member.name}</strong>
+                        <div className="meta-line">{member.email}</div>
+                      </div>
+                      {selectedCrew.createdByUid === activeUser.uid ? (
+                        <button
+                          type="button"
+                          className="button-link-danger"
+                          onClick={() => handleRemoveMemberFromSelectedCrew(member.uid)}
+                          disabled={updatingCrewMembers}
+                        >
+                          {updatingCrewMembers ? "Saving..." : "Remove"}
+                        </button>
+                      ) : null}
+                    </li>
+                  ))}
+                </ul>
+              )}
+
+              {selectedCrew.createdByUid === activeUser.uid ? (
+                <>
+                  <div className="crew-invite-row crew-manage-tools">
+                    <label>
+                      Add Member by Email
+                      <input
+                        type="email"
+                        value={manageInviteEmail}
+                        onChange={(event) => setManageInviteEmail(event.target.value)}
+                        placeholder="official@email.com"
+                      />
+                    </label>
+                    <button
+                      type="button"
+                      className="button-secondary"
+                      onClick={handleSearchManageInvite}
+                      disabled={manageSearching || updatingCrewMembers}
+                    >
+                      {manageSearching ? "Searching..." : "Search"}
+                    </button>
+                  </div>
+
+                  {manageResultMessage ? <p className="hint-text">{manageResultMessage}</p> : null}
+
+                  {manageMatchedOfficials.length > 0 ? (
+                    <div className="crew-search-results">
+                      {manageMatchedOfficials.map((official) => {
+                        const alreadyMember = selectedCrew.members.some(
+                          (member) => member.uid === official.uid
+                        );
+                        const atLimit = selectedCrew.members.length >= MAX_CREW_MEMBERS;
+
+                        return (
+                          <div key={official.uid} className="crew-result-row">
+                            <div>
+                              <strong>{official.displayName}</strong>
+                              <div className="meta-line">{official.email}</div>
+                            </div>
+                            <button
+                              type="button"
+                              className="button-secondary"
+                              disabled={alreadyMember || atLimit || updatingCrewMembers}
+                              onClick={() => handleAddMemberToSelectedCrew(official)}
+                            >
+                              {alreadyMember ? "Added" : atLimit ? "Limit Reached" : "Add"}
+                            </button>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  ) : null}
+
+                  <div className="crew-actions">
+                    <button
+                      type="button"
+                      className="button-danger"
+                      onClick={() => setDeleteCrewId(selectedCrew.id)}
+                      disabled={deletingCrew || updatingCrewMembers}
+                    >
+                      Delete Crew
+                    </button>
+                  </div>
+                </>
+              ) : null}
+            </>
           )}
         </article>
       </section>
@@ -416,6 +746,23 @@ export function Crews() {
           title={modalMessage.title}
           message={modalMessage.message}
           onClose={() => setModalMessage(null)}
+        />
+      ) : null}
+
+      {deleteCrewId ? (
+        <MessageModal
+          title="Delete Crew"
+          message="Delete this crew permanently? This action cannot be undone."
+          onClose={() => {
+            if (!deletingCrew) {
+              setDeleteCrewId(null);
+            }
+          }}
+          onConfirm={handleConfirmDeleteCrew}
+          confirmTone="danger"
+          confirmLabel={deletingCrew ? "Deleting..." : "Delete Crew"}
+          confirmDisabled={deletingCrew}
+          cancelDisabled={deletingCrew}
         />
       ) : null}
     </main>

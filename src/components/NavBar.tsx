@@ -15,7 +15,18 @@ export function NavBar() {
       <nav className="top-nav">
         <div className="top-nav-inner">
           <div className="top-nav-links">
-            <NavLink to="/" className={({ isActive }) => `nav-link${isActive ? " active" : ""}`} end>
+            {user && profile && profile.role !== "official" ? (
+              <NavLink
+                to="/dashboard"
+                className={({ isActive }) => `nav-link${isActive ? " active" : ""}`}
+              >
+                Dashboard
+              </NavLink>
+            ) : null}
+            <NavLink
+              to="/marketplace"
+              className={({ isActive }) => `nav-link${isActive ? " active" : ""}`}
+            >
               Marketplace
             </NavLink>
             <NavLink
@@ -24,12 +35,20 @@ export function NavBar() {
             >
               Schedule
             </NavLink>
-            {user && profile && (profile.role === "official" || profile.role === "assignor") ? (
+            {user && profile ? (
               <NavLink
                 to="/crews"
                 className={({ isActive }) => `nav-link${isActive ? " active" : ""}`}
               >
                 Crews
+              </NavLink>
+            ) : null}
+            {user && profile && profile.role !== "official" ? (
+              <NavLink
+                to="/assign-game"
+                className={({ isActive }) => `nav-link${isActive ? " active" : ""}`}
+              >
+                Assign Game
               </NavLink>
             ) : null}
             {user && profile && profile.role !== "official" ? (

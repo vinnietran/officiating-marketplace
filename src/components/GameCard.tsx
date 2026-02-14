@@ -85,6 +85,8 @@ export function GameCard({
           allGameBids[0].amount
         )
       : null;
+  const isDirectAssignment = game.mode === "direct_assignment";
+  const directAssignmentCount = game.directAssignments?.length ?? 0;
 
   const officialBidsForGame = useMemo(
     () => allGameBids.filter((bid) => bid.officialUid === currentUserId),
@@ -102,18 +104,21 @@ export function GameCard({
   }, [officialBidsForGame]);
 
   const canPlaceBid = useMemo(() => {
-    return role === "official" && game.status === "open";
-  }, [role, game.status]);
+    return role === "official" && game.status === "open" && !isDirectAssignment;
+  }, [role, game.status, isDirectAssignment]);
 
   const placeBidDisabledReason = useMemo(() => {
     if (role !== "official") {
       return null;
     }
+    if (isDirectAssignment) {
+      return "This game was directly assigned. Bidding is not available.";
+    }
     if (game.status !== "open") {
       return "Bidding is closed for this game.";
     }
     return null;
-  }, [role, game.status]);
+  }, [role, game.status, isDirectAssignment]);
 
   const gameBids = useMemo(() => {
     if (role === "official") {
@@ -227,15 +232,23 @@ export function GameCard({
       <p className="meta-line status-line">
         Status: <strong>{game.status === "awarded" ? "Awarded" : "Open"}</strong>
       </p>
-      <p className="meta-line">
-        Total bids: <strong>{totalBidCount}</strong>
-      </p>
-      <p className={`meta-line bid-window bid-window-${bidWindowInfo.state}`}>
-        Bid window: <strong>{bidWindowInfo.label}</strong>
-      </p>
-      <p className="meta-line">
-        Highest bid: <strong>{highestBidAmount ? formatCurrency(highestBidAmount) : "-"}</strong>
-      </p>
+      {isDirectAssignment ? (
+        <p className="meta-line">
+          Direct assignments: <strong>{directAssignmentCount}</strong>
+        </p>
+      ) : (
+        <>
+          <p className="meta-line">
+            Total bids: <strong>{totalBidCount}</strong>
+          </p>
+          <p className={`meta-line bid-window bid-window-${bidWindowInfo.state}`}>
+            Bid window: <strong>{bidWindowInfo.label}</strong>
+          </p>
+          <p className="meta-line">
+            Highest bid: <strong>{highestBidAmount ? formatCurrency(highestBidAmount) : "-"}</strong>
+          </p>
+        </>
+      )}
       {game.notes ? <p className="notes">Notes: {game.notes}</p> : null}
 
       <div className="card-actions">
@@ -293,7 +306,7 @@ export function GameCard({
         />
       ) : null}
 
-      {role === "official" ? (
+      {role === "official" && !isDirectAssignment ? (
         <section className="bids-section">
           <h4>Your bids on this game</h4>
           {gameBids.length === 0 ? (

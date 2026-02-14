@@ -17,11 +17,23 @@ import {
   type Unsubscribe
 } from "firebase/firestore";
 import { db, dbFallback } from "./firebase";
-import type { Bid, Crew, CrewMember, Game, Level, Sport, UserProfile } from "../types";
+import type {
+  Bid,
+  Crew,
+  CrewMember,
+  Game,
+  GameAssignment,
+  Level,
+  Rating,
+  RatingTargetType,
+  Sport,
+  UserProfile
+} from "../types";
 
 const GAMES_COLLECTION = "games";
 const BIDS_COLLECTION = "bids";
 const CREWS_COLLECTION = "crews";
+const RATINGS_COLLECTION = "ratings";
 const USER_PROFILES_COLLECTION = "userProfiles";
 
 function isMissingDatabaseError(error: unknown): boolean {
@@ -65,6 +77,17 @@ export interface NewGameInput {
   notes?: string;
 }
 
+export interface NewAssignedGameInput {
+  schoolName: string;
+  sport: Sport;
+  level: Level;
+  dateISO: string;
+  location: string;
+  payPosted: number;
+  notes?: string;
+  directAssignments: GameAssignment[];
+}
+
 export interface NewBidInput {
   gameId: string;
   officialUid: string;
@@ -88,6 +111,15 @@ export interface UpdateBidInput {
 export interface NewCrewInput {
   name: string;
   members: CrewMember[];
+}
+
+export interface UpsertGameRatingInput {
+  gameId: string;
+  targetType: RatingTargetType;
+  targetId: string;
+  targetName: string;
+  stars: number;
+  comment?: string;
 }
 
 export async function createUserProfile(profile: UserProfile): Promise<void> {
@@ -288,6 +320,62 @@ export function subscribeBids(
   return () => unsubscribeCurrent();
 }
 
+export function subscribeOfficialProfiles(
+  onChange: (profiles: UserProfile[]) => void,
+  onError?: (error: Error) => void
+): Unsubscribe {
+  let unsubscribeCurrent: Unsubscribe = () => undefined;
+  let hasRetriedWithFallback = false;
+
+  const subscribeToDatabase = (database: Firestore): Unsubscribe => {
+    const profilesCollection = collection(database, USER_PROFILES_COLLECTION);
+
+    return onSnapshot(
+      profilesCollection,
+      (snapshot) => {
+        const profiles = snapshot.docs
+          .map((profileDoc) => {
+            const data = profileDoc.data() as UserProfile;
+            return {
+              ...data,
+              uid: data.uid || profileDoc.id,
+              emailLowercase: data.emailLowercase ?? data.email.toLowerCase()
+            } as UserProfile;
+          })
+          .filter((profile) => profile.role === "official")
+          .sort((a, b) => a.displayName.localeCompare(b.displayName));
+
+        onChange(profiles);
+      },
+      (error) => {
+        if (
+          !hasRetriedWithFallback &&
+          dbFallback &&
+          database === db &&
+          isMissingDatabaseError(error)
+        ) {
+          hasRetriedWithFallback = true;
+          if (import.meta.env.DEV) {
+            console.warn(
+              "Official profiles subscription switched to fallback Firestore database ID."
+            );
+          }
+          unsubscribeCurrent();
+          unsubscribeCurrent = subscribeToDatabase(dbFallback);
+          return;
+        }
+
+        if (onError) {
+          onError(error as Error);
+        }
+      }
+    );
+  };
+
+  unsubscribeCurrent = subscribeToDatabase(db);
+  return () => unsubscribeCurrent();
+}
+
 export function subscribeCrews(
   onChange: (crews: Crew[]) => void,
   onError?: (error: Error) => void
@@ -342,6 +430,115 @@ export function subscribeCrews(
   return () => unsubscribeCurrent();
 }
 
+export function subscribeRatingsForGame(
+  gameId: string,
+  onChange: (ratings: Rating[]) => void,
+  onError?: (error: Error) => void
+): Unsubscribe {
+  let unsubscribeCurrent: Unsubscribe = () => undefined;
+  let hasRetriedWithFallback = false;
+
+  const subscribeToDatabase = (database: Firestore): Unsubscribe => {
+    const ratingsQuery = query(
+      collection(database, RATINGS_COLLECTION),
+      where("gameId", "==", gameId)
+    );
+
+    return onSnapshot(
+      ratingsQuery,
+      (snapshot) => {
+        const ratings = snapshot.docs.map((ratingDoc) => {
+          const data = ratingDoc.data();
+          return {
+            id: ratingDoc.id,
+            ...data
+          } as Rating;
+        });
+        onChange(ratings);
+      },
+      (error) => {
+        if (
+          !hasRetriedWithFallback &&
+          dbFallback &&
+          database === db &&
+          isMissingDatabaseError(error)
+        ) {
+          hasRetriedWithFallback = true;
+          if (import.meta.env.DEV) {
+            console.warn(
+              "Ratings subscription switched to fallback Firestore database ID."
+            );
+          }
+          unsubscribeCurrent();
+          unsubscribeCurrent = subscribeToDatabase(dbFallback);
+          return;
+        }
+
+        if (onError) {
+          onError(error as Error);
+        }
+      }
+    );
+  };
+
+  unsubscribeCurrent = subscribeToDatabase(db);
+  return () => unsubscribeCurrent();
+}
+
+export function subscribeRatings(
+  onChange: (ratings: Rating[]) => void,
+  onError?: (error: Error) => void
+): Unsubscribe {
+  let unsubscribeCurrent: Unsubscribe = () => undefined;
+  let hasRetriedWithFallback = false;
+
+  const subscribeToDatabase = (database: Firestore): Unsubscribe => {
+    const ratingsQuery = query(
+      collection(database, RATINGS_COLLECTION),
+      orderBy("updatedAtISO", "desc")
+    );
+
+    return onSnapshot(
+      ratingsQuery,
+      (snapshot) => {
+        const ratings = snapshot.docs.map((ratingDoc) => {
+          const data = ratingDoc.data();
+          return {
+            id: ratingDoc.id,
+            ...data
+          } as Rating;
+        });
+        onChange(ratings);
+      },
+      (error) => {
+        if (
+          !hasRetriedWithFallback &&
+          dbFallback &&
+          database === db &&
+          isMissingDatabaseError(error)
+        ) {
+          hasRetriedWithFallback = true;
+          if (import.meta.env.DEV) {
+            console.warn(
+              "Ratings subscription switched to fallback Firestore database ID."
+            );
+          }
+          unsubscribeCurrent();
+          unsubscribeCurrent = subscribeToDatabase(dbFallback);
+          return;
+        }
+
+        if (onError) {
+          onError(error as Error);
+        }
+      }
+    );
+  };
+
+  unsubscribeCurrent = subscribeToDatabase(db);
+  return () => unsubscribeCurrent();
+}
+
 export async function createGame(
   input: NewGameInput,
   createdBy: { uid: string; role: "assignor" | "school"; displayName: string }
@@ -358,9 +555,36 @@ export async function createGame(
     createdByRole: createdBy.role,
     createdAtISO: new Date().toISOString(),
     status: "open",
+    mode: "marketplace",
     ...(input.acceptingBidsUntilISO
       ? { acceptingBidsUntilISO: input.acceptingBidsUntilISO }
       : {}),
+    ...(input.notes ? { notes: input.notes } : {})
+  };
+
+  await runWithDbFallback((database) =>
+    addDoc(collection(database, GAMES_COLLECTION), gamePayload)
+  );
+}
+
+export async function createAssignedGame(
+  input: NewAssignedGameInput,
+  createdBy: { uid: string; role: "assignor" | "school"; displayName: string }
+): Promise<void> {
+  const gamePayload = {
+    schoolName: input.schoolName,
+    sport: input.sport,
+    level: input.level,
+    dateISO: input.dateISO,
+    location: input.location,
+    payPosted: input.payPosted,
+    createdByUid: createdBy.uid,
+    createdByName: createdBy.displayName,
+    createdByRole: createdBy.role,
+    createdAtISO: new Date().toISOString(),
+    status: "awarded",
+    mode: "direct_assignment",
+    directAssignments: input.directAssignments,
     ...(input.notes ? { notes: input.notes } : {})
   };
 
@@ -432,7 +656,11 @@ export async function deleteBid(bidId: string): Promise<void> {
 
 export async function createCrew(
   input: NewCrewInput,
-  createdBy: { uid: string; role: "official" | "assignor"; displayName: string }
+  createdBy: {
+    uid: string;
+    role: "official" | "assignor" | "school";
+    displayName: string;
+  }
 ): Promise<void> {
   const normalizedName = input.name.trim();
   const uniqueMembers = Array.from(
@@ -466,6 +694,65 @@ export async function createCrew(
   );
 }
 
+export async function deleteCrew(crewId: string): Promise<void> {
+  await runWithDbFallback((database) =>
+    deleteDoc(doc(database, CREWS_COLLECTION, crewId))
+  );
+}
+
+export async function updateCrewMembers(
+  crewId: string,
+  members: CrewMember[]
+): Promise<void> {
+  const uniqueMembers = Array.from(
+    new Map(members.map((member) => [member.uid, member])).values()
+  );
+
+  if (uniqueMembers.length < 1 || uniqueMembers.length > 15) {
+    throw new Error("Crew must include between 1 and 15 members.");
+  }
+
+  await runWithDbFallback((database) =>
+    updateDoc(doc(database, CREWS_COLLECTION, crewId), {
+      memberUids: uniqueMembers.map((member) => member.uid),
+      members: uniqueMembers.map((member) => ({
+        uid: member.uid,
+        name: member.name,
+        email: member.email
+      }))
+    })
+  );
+}
+
+export async function upsertGameRating(
+  input: UpsertGameRatingInput,
+  ratedBy: { uid: string; role: "assignor" | "school"; displayName: string }
+): Promise<void> {
+  if (!Number.isInteger(input.stars) || input.stars < 1 || input.stars > 5) {
+    throw new Error("Rating must be an integer between 1 and 5.");
+  }
+
+  const nowISO = new Date().toISOString();
+  const ratingId = `${input.gameId}__${ratedBy.uid}__${input.targetType}__${input.targetId}`;
+  const payload = {
+    gameId: input.gameId,
+    targetType: input.targetType,
+    targetId: input.targetId,
+    targetName: input.targetName,
+    ratedByUid: ratedBy.uid,
+    ratedByName: ratedBy.displayName,
+    ratedByRole: ratedBy.role,
+    stars: input.stars,
+    updatedAtISO: nowISO,
+    createdAtISO: nowISO,
+    comment: input.comment ? input.comment : deleteField()
+  };
+
+  await runWithDbFallback((database) =>
+    setDoc(doc(database, RATINGS_COLLECTION, ratingId), payload, { merge: true })
+  );
+}
+
 export async function selectBid(gameId: string, bidId: string): Promise<void> {
   await runWithDbFallback((database) =>
     updateDoc(doc(database, GAMES_COLLECTION, gameId), {
@@ -473,4 +760,22 @@ export async function selectBid(gameId: string, bidId: string): Promise<void> {
       status: "awarded"
     })
   );
+}
+
+export async function deleteGame(gameId: string): Promise<void> {
+  await runWithDbFallback(async (database) => {
+    const bidsSnapshot = await getDocs(
+      query(collection(database, BIDS_COLLECTION), where("gameId", "==", gameId))
+    );
+
+    if (!bidsSnapshot.empty) {
+      await Promise.all(
+        bidsSnapshot.docs.map((bidDoc) =>
+          deleteDoc(doc(database, BIDS_COLLECTION, bidDoc.id))
+        )
+      );
+    }
+
+    await deleteDoc(doc(database, GAMES_COLLECTION, gameId));
+  });
 }

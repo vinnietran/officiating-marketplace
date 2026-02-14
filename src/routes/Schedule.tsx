@@ -19,6 +19,36 @@ function getBidderName(bid: Bid | null): string {
   return bid.officialName;
 }
 
+function getDirectAssignmentLabel(game: Game): string {
+  const assignments = game.directAssignments ?? [];
+  if (assignments.length === 0) {
+    return "-";
+  }
+
+  if (assignments.length === 1) {
+    const assignment = assignments[0];
+    if (assignment.assignmentType === "crew") {
+      return `${assignment.crewName} (Crew)`;
+    }
+    return assignment.officialName;
+  }
+
+  return `${assignments.length} assignees`;
+}
+
+function isOfficialAssignedToDirectGame(game: Game, officialUid: string): boolean {
+  if (game.mode !== "direct_assignment") {
+    return false;
+  }
+
+  return (game.directAssignments ?? []).some((assignment) => {
+    if (assignment.assignmentType === "individual") {
+      return assignment.officialUid === officialUid;
+    }
+    return assignment.memberUids.includes(officialUid);
+  });
+}
+
 export function Schedule() {
   const navigate = useNavigate();
   const { user, profile, loading, profileLoading } = useAuth();
@@ -73,9 +103,19 @@ export function Schedule() {
         selectedBid: game.selectedBidId ? bidsById.get(game.selectedBidId) ?? null : null
       }))
       .filter(
-        (entry) =>
-          entry.game.status === "awarded" &&
-          entry.selectedBid?.officialUid === user.uid
+        (entry) => {
+          if (entry.game.mode === "direct_assignment") {
+            return (
+              entry.game.status === "awarded" &&
+              isOfficialAssignedToDirectGame(entry.game, user.uid)
+            );
+          }
+
+          return (
+            entry.game.status === "awarded" &&
+            entry.selectedBid?.officialUid === user.uid
+          );
+        }
       )
       .sort(
         (a, b) =>
@@ -194,7 +234,11 @@ export function Schedule() {
                       </td>
                       <td>{game.location}</td>
                       <td>{assignedByLabel}</td>
-                      <td>{selectedBid ? formatCurrency(selectedBid.amount) : "-"}</td>
+                      <td>
+                        {selectedBid
+                          ? formatCurrency(selectedBid.amount)
+                          : formatCurrency(game.payPosted)}
+                      </td>
                     </tr>
                   );
                 })}
@@ -256,9 +300,25 @@ export function Schedule() {
                       </td>
                       <td>{game.location}</td>
                       <td>{game.status === "awarded" ? "Awarded" : "Open"}</td>
-                      <td>{getBidderName(selectedBid)}</td>
-                      <td>{selectedBid ? formatCurrency(selectedBid.amount) : "-"}</td>
-                      <td>{selectedBid ? formatGameDate(selectedBid.createdAtISO) : "-"}</td>
+                      <td>
+                        {game.mode === "direct_assignment"
+                          ? getDirectAssignmentLabel(game)
+                          : getBidderName(selectedBid)}
+                      </td>
+                      <td>
+                        {game.mode === "direct_assignment"
+                          ? formatCurrency(game.payPosted)
+                          : selectedBid
+                            ? formatCurrency(selectedBid.amount)
+                            : "-"}
+                      </td>
+                      <td>
+                        {game.mode === "direct_assignment"
+                          ? formatGameDate(game.createdAtISO)
+                          : selectedBid
+                            ? formatGameDate(selectedBid.createdAtISO)
+                            : "-"}
+                      </td>
                     </tr>
                   );
                 })}

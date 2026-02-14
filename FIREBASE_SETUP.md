@@ -10,6 +10,15 @@
    - `npm install`
    - `npm run dev`
 
+## Optional: Google Places Autocomplete
+
+If you want address autocomplete on `Post a Game`:
+1. In Google Cloud Console, enable **Maps JavaScript API** and **Places API**.
+2. Create or reuse a browser API key.
+3. Add to `.env.local`:
+   - `VITE_GOOGLE_MAPS_API_KEY=<your_api_key>`
+4. Restart `npm run dev`.
+
 ## Data Model
 
 - `userProfiles/{uid}`

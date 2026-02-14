@@ -1,4 +1,9 @@
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import {
+  getLocationSuggestions,
+  hasGooglePlacesApiKey,
+  type PlaceSuggestion
+} from "../lib/googlePlaces";
 import type { Level, Sport } from "../types";
 
 interface PostGameFormValues {
@@ -18,6 +23,7 @@ interface PostGameFormProps {
 
 const SPORTS: Sport[] = ["Football", "Basketball", "Soccer", "Baseball"];
 const LEVELS: Level[] = ["Youth", "Middle School", "Varsity", "College"];
+const MIN_AUTOCOMPLETE_CHARS = 3;
 
 export function PostGameForm({ onSubmit }: PostGameFormProps) {
   const [schoolName, setSchoolName] = useState("");
@@ -26,10 +32,64 @@ export function PostGameForm({ onSubmit }: PostGameFormProps) {
   const [dateLocal, setDateLocal] = useState("");
   const [acceptingBidsUntilLocal, setAcceptingBidsUntilLocal] = useState("");
   const [location, setLocation] = useState("");
+  const [locationSuggestions, setLocationSuggestions] = useState<PlaceSuggestion[]>([]);
+  const [locationLookupBusy, setLocationLookupBusy] = useState(false);
+  const [locationLookupError, setLocationLookupError] = useState<string | null>(null);
+  const [locationFocused, setLocationFocused] = useState(false);
   const [payPosted, setPayPosted] = useState("");
   const [notes, setNotes] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const placesEnabled = hasGooglePlacesApiKey();
+
+  const showLocationSuggestions = useMemo(
+    () => locationFocused && locationSuggestions.length > 0,
+    [locationFocused, locationSuggestions]
+  );
+
+  useEffect(() => {
+    const trimmedLocation = location.trim();
+    if (!placesEnabled || trimmedLocation.length < MIN_AUTOCOMPLETE_CHARS) {
+      setLocationSuggestions([]);
+      setLocationLookupBusy(false);
+      setLocationLookupError(null);
+      return;
+    }
+
+    let cancelled = false;
+    setLocationLookupBusy(true);
+    setLocationLookupError(null);
+
+    const timeoutId = window.setTimeout(async () => {
+      try {
+        const suggestions = await getLocationSuggestions(trimmedLocation);
+        if (!cancelled) {
+          setLocationSuggestions(suggestions);
+        }
+      } catch {
+        if (!cancelled) {
+          setLocationSuggestions([]);
+          setLocationLookupError("Unable to load location suggestions.");
+        }
+      } finally {
+        if (!cancelled) {
+          setLocationLookupBusy(false);
+        }
+      }
+    }, 250);
+
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timeoutId);
+    };
+  }, [location, placesEnabled]);
+
+  function selectLocationSuggestion(suggestion: PlaceSuggestion) {
+    setLocation(suggestion.description);
+    setLocationSuggestions([]);
+    setLocationLookupError(null);
+    setLocationFocused(false);
+  }
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -86,6 +146,7 @@ export function PostGameForm({ onSubmit }: PostGameFormProps) {
       setDateLocal("");
       setAcceptingBidsUntilLocal("");
       setLocation("");
+      setLocationSuggestions([]);
       setPayPosted("");
       setNotes("");
     } catch (submitError) {
@@ -98,9 +159,9 @@ export function PostGameForm({ onSubmit }: PostGameFormProps) {
   }
 
   return (
-    <section className="post-game-panel">
-      <h2>Post Game</h2>
-      <form className="filters-grid" onSubmit={handleSubmit}>
+    <section className="post-game-panel post-game-panel-full">
+      <h2>Create Assignment</h2>
+      <form className="post-game-form-grid" onSubmit={handleSubmit}>
         <label>
           School Name
           <input
@@ -158,14 +219,45 @@ export function PostGameForm({ onSubmit }: PostGameFormProps) {
           />
         </label>
 
-        <label>
+        <label className="location-field">
           Location
           <input
             type="text"
             value={location}
             onChange={(event) => setLocation(event.target.value)}
+            onFocus={() => setLocationFocused(true)}
+            onBlur={() => {
+              window.setTimeout(() => setLocationFocused(false), 160);
+            }}
             required
+            autoComplete="off"
+            placeholder="Start typing an address to use Google Places autocomplete."
+            aria-busy={locationLookupBusy}
           />
+          {!placesEnabled ? (
+            <small className="hint-text">
+              Add `VITE_GOOGLE_MAPS_API_KEY` to enable location autocomplete.
+            </small>
+          ) : null}
+          {locationLookupError ? <small className="error-text">{locationLookupError}</small> : null}
+          {showLocationSuggestions ? (
+            <ul className="location-suggestions">
+              {locationSuggestions.map((suggestion) => (
+                <li key={suggestion.placeId}>
+                  <button
+                    type="button"
+                    className="location-suggestion-button"
+                    onMouseDown={(event) => {
+                      event.preventDefault();
+                      selectLocationSuggestion(suggestion);
+                    }}
+                  >
+                    {suggestion.description}
+                  </button>
+                </li>
+              ))}
+            </ul>
+          ) : null}
         </label>
 
         <label>
@@ -191,7 +283,7 @@ export function PostGameForm({ onSubmit }: PostGameFormProps) {
 
         {error ? <p className="error-text full-width">{error}</p> : null}
 
-        <div className="full-width">
+        <div className="full-width post-game-submit-row">
           <button type="submit" disabled={submitting}>
             {submitting ? "Posting..." : "Post Game"}
           </button>

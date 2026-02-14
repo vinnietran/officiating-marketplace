@@ -121,6 +121,266 @@ body {
   gap: 8px;
 }
 
+.dashboard-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 14px;
+}
+
+.dashboard-link-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  text-decoration: none;
+  border: 1px solid #6b7280;
+  border-radius: 8px;
+  padding: 8px 12px;
+  color: #374151;
+  background: #ffffff;
+}
+
+.dashboard-link-button:hover {
+  background: #f3f4f6;
+}
+
+.dashboard-kpis {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.dashboard-kpi-card {
+  background: #ffffff;
+  border: 1px solid #dce2ea;
+  border-radius: 12px;
+  padding: 12px;
+}
+
+.dashboard-kpi-label {
+  display: block;
+  font-size: 0.85rem;
+  color: #475467;
+}
+
+.dashboard-kpi-value {
+  display: block;
+  margin-top: 4px;
+  font-size: 1.3rem;
+}
+
+.dashboard-panel {
+  margin-bottom: 14px;
+}
+
+.post-game-page {
+  max-width: 1600px;
+}
+
+.post-game-layout {
+  display: grid;
+  gap: 14px;
+  grid-template-columns: 320px 1fr;
+}
+
+.post-game-info-card {
+  background: #ffffff;
+  border: 1px solid #dce2ea;
+  border-radius: 12px;
+  padding: 16px;
+  align-self: start;
+}
+
+.post-game-info-card h3 {
+  margin: 0 0 8px;
+}
+
+.post-game-panel-full {
+  margin-bottom: 0;
+  padding: 20px;
+}
+
+.post-game-form-grid {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.post-game-submit-row {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.location-field {
+  position: relative;
+}
+
+.location-suggestions {
+  list-style: none;
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  margin: 0;
+  padding: 0;
+  border: 1px solid #dce2ea;
+  border-radius: 8px;
+  background: #ffffff;
+  max-height: 220px;
+  overflow-y: auto;
+  z-index: 30;
+  box-shadow: 0 8px 20px rgba(15, 23, 42, 0.12);
+}
+
+.location-suggestion-button {
+  width: 100%;
+  text-align: left;
+  border: none;
+  border-bottom: 1px solid #eef2f7;
+  border-radius: 0;
+  color: #1f2937;
+  background: #ffffff;
+}
+
+.location-suggestion-button:hover {
+  background: #f8fafc;
+}
+
+.location-suggestions li:last-child .location-suggestion-button {
+  border-bottom: none;
+}
+
+.assign-section {
+  border: 1px solid #dce2ea;
+  border-radius: 10px;
+  padding: 12px;
+  display: grid;
+  gap: 10px;
+}
+
+.assign-section h3 {
+  margin: 0;
+}
+
+.assign-search-row {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 8px;
+}
+
+.assign-match-list,
+.assign-selected-list,
+.assign-crew-list {
+  display: grid;
+  gap: 8px;
+}
+
+.assign-match-item,
+.assign-selected-item {
+  border: 1px solid #e4e9f0;
+  border-radius: 8px;
+  padding: 10px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+}
+
+.assign-selected-item {
+  align-items: flex-start;
+}
+
+.assign-selected-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.assign-selected-actions select {
+  width: 220px;
+}
+
+.assign-roster-panel {
+  border: 1px solid #dce2ea;
+  border-radius: 10px;
+  background: #f8fafc;
+  padding: 12px;
+}
+
+.assign-roster-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.assign-roster-header h4 {
+  margin: 0;
+}
+
+.assign-roster-subtitle {
+  margin: 4px 0 0;
+  color: #667085;
+  font-size: 0.85rem;
+}
+
+.assign-roster-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 30px;
+  height: 30px;
+  border-radius: 999px;
+  background: #1d4ed8;
+  color: #ffffff;
+  font-weight: 700;
+  padding: 0 8px;
+}
+
+.assign-roster-empty {
+  margin: 0;
+  color: #667085;
+}
+
+.assign-roster-table-wrapper {
+  overflow-x: auto;
+  border: 1px solid #dce2ea;
+  border-radius: 8px;
+  background: #ffffff;
+}
+
+.assign-roster-table {
+  width: 100%;
+  min-width: 620px;
+  border-collapse: collapse;
+}
+
+.assign-roster-table th,
+.assign-roster-table td {
+  text-align: left;
+  padding: 9px 10px;
+  border-bottom: 1px solid #e4e9f0;
+  vertical-align: top;
+}
+
+.assign-roster-table th {
+  background: #f8fafc;
+  color: #475467;
+  font-size: 0.82rem;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+}
+
+.assign-roster-table tr:last-child td {
+  border-bottom: none;
+}
+
+.assign-action-button {
+  white-space: nowrap;
+}
+
 .icon-button {
   width: 38px;
   height: 38px;
@@ -221,6 +481,16 @@ button:disabled {
 
 .button-secondary:hover {
   background: #f3f4f6;
+}
+
+.button-danger {
+  border-color: #b42318;
+  background: #b42318;
+  color: #ffffff;
+}
+
+.button-danger:hover {
+  background: #9f1b12;
 }
 
 .button-link-danger {
@@ -458,6 +728,17 @@ button:disabled {
   margin-bottom: 14px;
 }
 
+.details-top-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin-bottom: 14px;
+}
+
+.details-top-actions .details-back-link {
+  margin-bottom: 0;
+}
+
 .details-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
@@ -474,6 +755,15 @@ button:disabled {
 
 .details-card h3 {
   margin: 0 0 10px;
+}
+
+.rating-edit-row td {
+  background: #f8fafc;
+}
+
+.rating-edit-grid {
+  display: grid;
+  gap: 10px;
 }
 
 .profile-layout {
@@ -677,6 +967,21 @@ button:disabled {
   border-bottom: none;
 }
 
+.crew-selected-row {
+  background: #eef4ff;
+}
+
+.crew-actions {
+  margin-top: 12px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.crew-manage-tools {
+  margin-top: 12px;
+}
+
 .selected-badge-inline {
   display: inline-block;
   font-weight: 600;
@@ -715,6 +1020,7 @@ button:disabled {
   margin-top: 14px;
   display: flex;
   justify-content: flex-end;
+  gap: 8px;
 }
 
 @media (max-width: 600px) {
@@ -737,7 +1043,42 @@ button:disabled {
     align-items: flex-start;
   }
 
+  .post-game-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .post-game-form-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .post-game-submit-row {
+    justify-content: flex-start;
+  }
+
+  .assign-search-row {
+    grid-template-columns: 1fr;
+  }
+
+  .assign-match-item,
+  .assign-selected-item {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .assign-selected-actions {
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  .assign-selected-actions select {
+    width: 100%;
+  }
+
   .crew-invite-row {
+    grid-template-columns: 1fr;
+  }
+
+  .dashboard-kpis {
     grid-template-columns: 1fr;
   }
 }

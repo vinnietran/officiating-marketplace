@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { Link } from "react-router-dom";
 import { AuthPanel } from "../components/AuthPanel";
 import { CompleteProfilePanel } from "../components/CompleteProfilePanel";
@@ -7,12 +7,22 @@ import { FIRESTORE_DATABASE_ID } from "../lib/firebase";
 import { getReadableFirestoreError } from "../lib/firebaseErrors";
 import { formatCurrency, formatGameDate } from "../lib/format";
 import {
+  getUserProfile,
   subscribeBids,
   subscribeCrews,
   subscribeGames,
-  subscribeRatings
+  subscribeRatings,
+  updateOfficialProfile
 } from "../lib/firestore";
-import type { Bid, Crew, Game, Rating } from "../types";
+import type { Bid, Crew, Game, OfficiatingLevel, Rating } from "../types";
+
+const OFFICIATING_LEVEL_OPTIONS: OfficiatingLevel[] = [
+  "Varsity",
+  "Sub Varsity",
+  "NCAA DI",
+  "NCAA DII",
+  "NCAA DIII"
+];
 
 function formatAccountCreatedAt(dateISO: string): string {
   const date = new Date(dateISO);
@@ -59,6 +69,15 @@ export function Profile() {
   const [dataError, setDataError] = useState<string | null>(null);
   const [signOutError, setSignOutError] = useState<string | null>(null);
   const [signingOut, setSigningOut] = useState(false);
+  const [levelsOfficiated, setLevelsOfficiated] = useState<OfficiatingLevel[]>([]);
+  const [addressLine1, setAddressLine1] = useState("");
+  const [addressLine2, setAddressLine2] = useState("");
+  const [city, setCity] = useState("");
+  const [stateRegion, setStateRegion] = useState("");
+  const [postalCode, setPostalCode] = useState("");
+  const [profileSaveError, setProfileSaveError] = useState<string | null>(null);
+  const [profileSaveSuccess, setProfileSaveSuccess] = useState<string | null>(null);
+  const [savingProfileDetails, setSavingProfileDetails] = useState(false);
 
   useEffect(() => {
     if (!user) {
@@ -89,6 +108,46 @@ export function Profile() {
       unsubscribeRatings();
     };
   }, [user]);
+
+  useEffect(() => {
+    if (!profile || profile.role !== "official") {
+      setLevelsOfficiated([]);
+      setAddressLine1("");
+      setAddressLine2("");
+      setCity("");
+      setStateRegion("");
+      setPostalCode("");
+      return;
+    }
+
+    setLevelsOfficiated(profile.levelsOfficiated ?? []);
+    setAddressLine1(profile.contactInfo?.addressLine1 ?? "");
+    setAddressLine2(profile.contactInfo?.addressLine2 ?? "");
+    setCity(profile.contactInfo?.city ?? "");
+    setStateRegion(profile.contactInfo?.state ?? "");
+    setPostalCode(profile.contactInfo?.postalCode ?? "");
+
+    let cancelled = false;
+
+    void getUserProfile(profile.uid)
+      .then((freshProfile) => {
+        if (cancelled || !freshProfile || freshProfile.role !== "official") {
+          return;
+        }
+
+        setLevelsOfficiated(freshProfile.levelsOfficiated ?? []);
+        setAddressLine1(freshProfile.contactInfo?.addressLine1 ?? "");
+        setAddressLine2(freshProfile.contactInfo?.addressLine2 ?? "");
+        setCity(freshProfile.contactInfo?.city ?? "");
+        setStateRegion(freshProfile.contactInfo?.state ?? "");
+        setPostalCode(freshProfile.contactInfo?.postalCode ?? "");
+      })
+      .catch(() => undefined);
+
+    return () => {
+      cancelled = true;
+    };
+  }, [profile]);
 
   const bidsById = useMemo(() => {
     const result = new Map<string, Bid>();
@@ -296,6 +355,48 @@ export function Profile() {
     }
   }
 
+  function handleToggleOfficiatingLevel(level: OfficiatingLevel) {
+    setLevelsOfficiated((currentLevels) => {
+      if (currentLevels.includes(level)) {
+        return currentLevels.filter((currentLevel) => currentLevel !== level);
+      }
+      return [...currentLevels, level];
+    });
+  }
+
+  async function handleSaveOfficialProfile(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    if (!profile || profile.role !== "official") {
+      return;
+    }
+
+    setProfileSaveError(null);
+    setProfileSaveSuccess(null);
+    setSavingProfileDetails(true);
+
+    try {
+      await updateOfficialProfile(profile.uid, {
+        levelsOfficiated,
+        contactInfo: {
+          addressLine1,
+          addressLine2,
+          city,
+          state: stateRegion,
+          postalCode
+        }
+      });
+
+      setProfileSaveSuccess("Official details saved.");
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "Unable to save official details.";
+      setProfileSaveError(message);
+    } finally {
+      setSavingProfileDetails(false);
+    }
+  }
+
   return (
     <main className="page">
       <header className="hero">
@@ -339,6 +440,96 @@ export function Profile() {
             </Link>
           </div>
         </article>
+
+        {profile.role === "official" ? (
+          <article className="profile-panel">
+            <h3>Official Details</h3>
+            <p className="meta-line">
+              Add levels officiated and address details for upcoming smart matching.
+            </p>
+
+            <form className="profile-details-form" onSubmit={handleSaveOfficialProfile}>
+              <div className="profile-levels-grid">
+                {OFFICIATING_LEVEL_OPTIONS.map((levelOption) => {
+                  const isChecked = levelsOfficiated.includes(levelOption);
+                  return (
+                    <label key={levelOption} className="profile-level-option">
+                      <input
+                        type="checkbox"
+                        checked={isChecked}
+                        onChange={() => handleToggleOfficiatingLevel(levelOption)}
+                      />
+                      <span>{levelOption}</span>
+                    </label>
+                  );
+                })}
+              </div>
+
+              <label>
+                Address Line 1
+                <input
+                  type="text"
+                  value={addressLine1}
+                  onChange={(event) => setAddressLine1(event.target.value)}
+                  placeholder="123 Main St"
+                />
+              </label>
+
+              <label>
+                Address Line 2 (Optional)
+                <input
+                  type="text"
+                  value={addressLine2}
+                  onChange={(event) => setAddressLine2(event.target.value)}
+                  placeholder="Apt, Suite, Unit"
+                />
+              </label>
+
+              <div className="profile-address-grid">
+                <label>
+                  City
+                  <input
+                    type="text"
+                    value={city}
+                    onChange={(event) => setCity(event.target.value)}
+                    placeholder="City"
+                  />
+                </label>
+
+                <label>
+                  State
+                  <input
+                    type="text"
+                    value={stateRegion}
+                    onChange={(event) => setStateRegion(event.target.value)}
+                    placeholder="State"
+                  />
+                </label>
+
+                <label>
+                  ZIP
+                  <input
+                    type="text"
+                    value={postalCode}
+                    onChange={(event) => setPostalCode(event.target.value)}
+                    placeholder="ZIP code"
+                  />
+                </label>
+              </div>
+
+              {profileSaveError ? <p className="error-text">{profileSaveError}</p> : null}
+              {profileSaveSuccess ? (
+                <p className="hint-text">{profileSaveSuccess}</p>
+              ) : null}
+
+              <div className="profile-actions">
+                <button type="submit" disabled={savingProfileDetails}>
+                  {savingProfileDetails ? "Saving..." : "Save Official Details"}
+                </button>
+              </div>
+            </form>
+          </article>
+        ) : null}
 
         {profile.role === "official" ? (
           <article className="profile-panel">
@@ -481,18 +672,6 @@ export function Profile() {
           </div>
           {mostRecentRating ? (
             <>
-              <p className="meta-line">
-                <strong>Most Recent By:</strong> {mostRecentRating.ratedByName}
-              </p>
-              <p className="meta-line">
-                <strong>Target:</strong> {mostRecentRating.targetName} (
-                {mostRecentRating.targetType === "crew" ? "Crew" : "Official"})
-              </p>
-              {mostRecentRating.comment ? (
-                <p className="meta-line">
-                  <strong>Comment:</strong> {mostRecentRating.comment}
-                </p>
-              ) : null}
               <p className="meta-line">
                 <strong>Updated:</strong> {formatGameDate(mostRecentRating.updatedAtISO)}
               </p>

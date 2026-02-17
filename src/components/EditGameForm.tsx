@@ -19,7 +19,13 @@ interface EditGameFormProps {
 }
 
 const SPORTS: Sport[] = ["Football", "Basketball", "Soccer", "Baseball"];
-const LEVELS: Level[] = ["Youth", "Middle School", "Varsity", "College"];
+const LEVELS: Level[] = [
+  "NCAA",
+  "Varsity",
+  "Junior Varsity",
+  "Middle School",
+  "Youth"
+];
 
 function toDateTimeLocalValue(dateISO?: string): string {
   if (!dateISO) {

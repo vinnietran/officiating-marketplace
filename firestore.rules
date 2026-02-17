@@ -24,6 +24,10 @@ service cloud.firestore {
         && get(/databases/$(database)/documents/games/$(gameId)).data.createdByUid == request.auth.uid;
     }
 
+    function anonymousRatingPayload() {
+      return !request.resource.data.keys().hasAny(["ratedByName", "targetName"]);
+    }
+
     match /userProfiles/{uid} {
       allow read: if signedIn();
       allow create, update: if signedIn() && request.auth.uid == uid;
@@ -90,6 +94,7 @@ service cloud.firestore {
         && request.resource.data.ratedByUid == request.auth.uid
         && (request.resource.data.ratedByRole == "assignor" || request.resource.data.ratedByRole == "school")
         && ownsGame(request.resource.data.gameId)
+        && anonymousRatingPayload()
         && request.resource.data.targetType in ["official", "crew"]
         && request.resource.data.stars is int
         && request.resource.data.stars >= 1
@@ -101,6 +106,7 @@ service cloud.firestore {
         && request.resource.data.gameId == resource.data.gameId
         && request.resource.data.targetId == resource.data.targetId
         && request.resource.data.targetType == resource.data.targetType
+        && anonymousRatingPayload()
         && request.resource.data.stars is int
         && request.resource.data.stars >= 1
         && request.resource.data.stars <= 5;

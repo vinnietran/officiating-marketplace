@@ -22,7 +22,13 @@ interface PostGameFormProps {
 }
 
 const SPORTS: Sport[] = ["Football", "Basketball", "Soccer", "Baseball"];
-const LEVELS: Level[] = ["Youth", "Middle School", "Varsity", "College"];
+const LEVELS: Level[] = [
+  "NCAA",
+  "Varsity",
+  "Junior Varsity",
+  "Middle School",
+  "Youth"
+];
 const MIN_AUTOCOMPLETE_CHARS = 3;
 
 export function PostGameForm({ onSubmit }: PostGameFormProps) {

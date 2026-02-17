@@ -23,6 +23,8 @@ If you want address autocomplete on `Post a Game`:
 
 - `userProfiles/{uid}`
   - `uid`, `email`, `displayName`, `role`, `createdAtISO`
+  - `levelsOfficiated?`: array of `Varsity | Sub Varsity | NCAA DI | NCAA DII | NCAA DIII`
+  - `contactInfo?`: `{ addressLine1?, addressLine2?, city?, state?, postalCode? }`
 
 - `games/{gameId}`
   - `schoolName`, `sport`, `level`, `dateISO`, `acceptingBidsUntilISO?`, `location`, `payPosted`, `notes?`

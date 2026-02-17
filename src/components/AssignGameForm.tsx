@@ -52,7 +52,13 @@ interface IndividualAssignee {
 }
 
 const SPORTS: Sport[] = ["Football", "Basketball", "Soccer", "Baseball"];
-const LEVELS: Level[] = ["Youth", "Middle School", "Varsity", "College"];
+const LEVELS: Level[] = [
+  "NCAA",
+  "Varsity",
+  "Junior Varsity",
+  "Middle School",
+  "Youth"
+];
 const FOOTBALL_POSITIONS: Array<{ code: FootballPosition; label: string }> = [
   { code: "R", label: "Referee (R)" },
   { code: "U", label: "Umpire (U)" },

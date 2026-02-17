@@ -862,6 +862,38 @@ button:disabled {
   border-bottom: none;
 }
 
+.profile-details-form {
+  display: grid;
+  gap: 10px;
+}
+
+.profile-levels-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 8px;
+}
+
+.profile-level-option {
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid #dce2ea;
+  border-radius: 8px;
+  padding: 8px 10px;
+  background: #f8fafc;
+}
+
+.profile-level-option input {
+  width: auto;
+  margin: 0;
+}
+
+.profile-address-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 10px;
+}
+
 .crew-layout {
   display: grid;
   gap: 14px;

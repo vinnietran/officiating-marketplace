@@ -399,14 +399,12 @@ export function ScheduleGameDetails() {
           gameId: activeGame.id,
           targetType: target.targetType,
           targetId: target.targetId,
-          targetName: target.targetName,
           stars: parsedStars,
           comment: ratingComment.trim() || undefined
         },
         {
           uid: activeUser.uid,
-          role: activeRaterRole,
-          displayName: activeProfile.displayName
+          role: activeRaterRole
         }
       );
 

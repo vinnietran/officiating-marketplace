@@ -24,6 +24,7 @@ import type {
   Game,
   GameAssignment,
   Level,
+  OfficiatingLevel,
   Rating,
   RatingTargetType,
   Sport,
@@ -35,6 +36,13 @@ const BIDS_COLLECTION = "bids";
 const CREWS_COLLECTION = "crews";
 const RATINGS_COLLECTION = "ratings";
 const USER_PROFILES_COLLECTION = "userProfiles";
+const OFFICIATING_LEVELS: OfficiatingLevel[] = [
+  "Varsity",
+  "Sub Varsity",
+  "NCAA DI",
+  "NCAA DII",
+  "NCAA DIII"
+];
 
 function isMissingDatabaseError(error: unknown): boolean {
   const maybeCode =
@@ -117,9 +125,19 @@ export interface UpsertGameRatingInput {
   gameId: string;
   targetType: RatingTargetType;
   targetId: string;
-  targetName: string;
   stars: number;
   comment?: string;
+}
+
+export interface UpdateOfficialProfileInput {
+  levelsOfficiated: OfficiatingLevel[];
+  contactInfo: {
+    addressLine1?: string;
+    addressLine2?: string;
+    city?: string;
+    state?: string;
+    postalCode?: string;
+  };
 }
 
 export async function createUserProfile(profile: UserProfile): Promise<void> {
@@ -174,6 +192,33 @@ export async function getUserProfilesByUids(
     }
     return accumulator;
   }, {});
+}
+
+export async function updateOfficialProfile(
+  uid: string,
+  input: UpdateOfficialProfileInput
+): Promise<void> {
+  const allowedLevels = new Set<OfficiatingLevel>(OFFICIATING_LEVELS);
+  const normalizedLevels = Array.from(
+    new Set(input.levelsOfficiated.filter((level) => allowedLevels.has(level)))
+  );
+
+  const normalizedContactInfo = {
+    addressLine1: input.contactInfo.addressLine1?.trim() ?? "",
+    addressLine2: input.contactInfo.addressLine2?.trim() ?? "",
+    city: input.contactInfo.city?.trim() ?? "",
+    state: input.contactInfo.state?.trim() ?? "",
+    postalCode: input.contactInfo.postalCode?.trim() ?? ""
+  };
+
+  const hasContactInfo = Object.values(normalizedContactInfo).some(Boolean);
+
+  await runWithDbFallback((database) =>
+    updateDoc(doc(database, USER_PROFILES_COLLECTION, uid), {
+      levelsOfficiated: normalizedLevels,
+      contactInfo: hasContactInfo ? normalizedContactInfo : deleteField()
+    })
+  );
 }
 
 export async function searchOfficialProfilesByEmail(
@@ -726,7 +771,7 @@ export async function updateCrewMembers(
 
 export async function upsertGameRating(
   input: UpsertGameRatingInput,
-  ratedBy: { uid: string; role: "assignor" | "school"; displayName: string }
+  ratedBy: { uid: string; role: "assignor" | "school" }
 ): Promise<void> {
   if (!Number.isInteger(input.stars) || input.stars < 1 || input.stars > 5) {
     throw new Error("Rating must be an integer between 1 and 5.");
@@ -738,13 +783,13 @@ export async function upsertGameRating(
     gameId: input.gameId,
     targetType: input.targetType,
     targetId: input.targetId,
-    targetName: input.targetName,
     ratedByUid: ratedBy.uid,
-    ratedByName: ratedBy.displayName,
     ratedByRole: ratedBy.role,
     stars: input.stars,
     updatedAtISO: nowISO,
     createdAtISO: nowISO,
+    targetName: deleteField(),
+    ratedByName: deleteField(),
     comment: input.comment ? input.comment : deleteField()
   };
 

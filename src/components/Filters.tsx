@@ -22,10 +22,11 @@ const SPORT_OPTIONS: Array<"All" | Sport> = [
 
 const LEVEL_OPTIONS: Array<"All" | Level> = [
   "All",
-  "Youth",
-  "Middle School",
+  "NCAA",
   "Varsity",
-  "College"
+  "Junior Varsity",
+  "Middle School",
+  "Youth"
 ];
 
 export function Filters({ values, onChange }: FiltersProps) {

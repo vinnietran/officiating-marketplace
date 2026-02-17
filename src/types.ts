@@ -1,8 +1,19 @@
 export type Sport = "Football" | "Basketball" | "Soccer" | "Baseball";
 
-export type Level = "Youth" | "Middle School" | "Varsity" | "College";
+export type Level =
+  | "NCAA"
+  | "Varsity"
+  | "Junior Varsity"
+  | "Middle School"
+  | "Youth";
 
 export type UserRole = "official" | "assignor" | "school";
+export type OfficiatingLevel =
+  | "Varsity"
+  | "Sub Varsity"
+  | "NCAA DI"
+  | "NCAA DII"
+  | "NCAA DIII";
 
 export type GameStatus = "open" | "awarded";
 export type CrewOwnerRole = "official" | "assignor" | "school";
@@ -29,6 +40,14 @@ export interface UserProfile {
   displayName: string;
   role: UserRole;
   createdAtISO: string;
+  levelsOfficiated?: OfficiatingLevel[];
+  contactInfo?: {
+    addressLine1?: string;
+    addressLine2?: string;
+    city?: string;
+    state?: string;
+    postalCode?: string;
+  };
 }
 
 export interface CrewMember {
@@ -104,9 +123,7 @@ export interface Rating {
   gameId: string;
   targetType: RatingTargetType;
   targetId: string;
-  targetName: string;
   ratedByUid: string;
-  ratedByName: string;
   ratedByRole: "assignor" | "school";
   stars: number;
   comment?: string;

@@ -17,12 +17,16 @@ import {
   type Unsubscribe
 } from "firebase/firestore";
 import { db, dbFallback } from "./firebase";
+import { getCoordinatesForAddress } from "./googlePlaces";
 import type {
   Bid,
   Crew,
   CrewMember,
+  Evaluation,
+  FootballPosition,
   Game,
   GameAssignment,
+  GeoPoint,
   Level,
   OfficiatingLevel,
   Rating,
@@ -35,6 +39,7 @@ const GAMES_COLLECTION = "games";
 const BIDS_COLLECTION = "bids";
 const CREWS_COLLECTION = "crews";
 const RATINGS_COLLECTION = "ratings";
+const EVALUATIONS_COLLECTION = "evaluations";
 const USER_PROFILES_COLLECTION = "userProfiles";
 const OFFICIATING_LEVELS: OfficiatingLevel[] = [
   "Varsity",
@@ -42,6 +47,19 @@ const OFFICIATING_LEVELS: OfficiatingLevel[] = [
   "NCAA DI",
   "NCAA DII",
   "NCAA DIII"
+];
+const FOOTBALL_POSITIONS: FootballPosition[] = [
+  "R",
+  "U",
+  "C",
+  "H",
+  "L",
+  "S",
+  "F",
+  "B",
+  "RO",
+  "RC",
+  "ALT"
 ];
 
 function isMissingDatabaseError(error: unknown): boolean {
@@ -72,6 +90,64 @@ async function runWithDbFallback<T>(
     }
     throw error;
   }
+}
+
+function buildAddressString(contactInfo: UpdateOfficialProfileInput["contactInfo"]): string {
+  return [
+    contactInfo.addressLine1 ?? "",
+    contactInfo.addressLine2 ?? "",
+    contactInfo.city ?? "",
+    contactInfo.state ?? "",
+    contactInfo.postalCode ?? ""
+  ]
+    .map((value) => value.trim())
+    .filter(Boolean)
+    .join(", ");
+}
+
+async function geocodeAddressSafely(address: string): Promise<GeoPoint | null> {
+  const trimmedAddress = address.trim();
+  if (!trimmedAddress) {
+    return null;
+  }
+
+  try {
+    return await getCoordinatesForAddress(trimmedAddress);
+  } catch {
+    return null;
+  }
+}
+
+function isStringArray(value: unknown): value is string[] {
+  return Array.isArray(value) && value.every((entry) => typeof entry === "string");
+}
+
+function normalizeCrewMemberPositions(
+  rawPositions: Record<string, unknown> | undefined,
+  memberUids: string[]
+): Partial<Record<string, FootballPosition>> {
+  if (!rawPositions) {
+    return {};
+  }
+
+  const allowedPositions = new Set<FootballPosition>(FOOTBALL_POSITIONS);
+  const memberUidSet = new Set(memberUids);
+  const normalized: Partial<Record<string, FootballPosition>> = {};
+
+  Object.entries(rawPositions).forEach(([uid, rawPosition]) => {
+    if (!memberUidSet.has(uid) || typeof rawPosition !== "string") {
+      return;
+    }
+
+    const position = rawPosition as FootballPosition;
+    if (!allowedPositions.has(position)) {
+      return;
+    }
+
+    normalized[uid] = position;
+  });
+
+  return normalized;
 }
 
 export interface NewGameInput {
@@ -119,6 +195,7 @@ export interface UpdateBidInput {
 export interface NewCrewInput {
   name: string;
   members: CrewMember[];
+  memberPositions?: Partial<Record<string, FootballPosition>>;
 }
 
 export interface UpsertGameRatingInput {
@@ -127,6 +204,12 @@ export interface UpsertGameRatingInput {
   targetId: string;
   stars: number;
   comment?: string;
+}
+
+export interface UpsertGameEvaluationInput {
+  gameId: string;
+  overallScore: number;
+  notes?: string;
 }
 
 export interface UpdateOfficialProfileInput {
@@ -212,12 +295,23 @@ export async function updateOfficialProfile(
   };
 
   const hasContactInfo = Object.values(normalizedContactInfo).some(Boolean);
+  const locationCoordinates = hasContactInfo
+    ? await geocodeAddressSafely(buildAddressString(normalizedContactInfo))
+    : null;
+
+  const profileUpdatePayload: Record<string, unknown> = {
+    levelsOfficiated: normalizedLevels,
+    contactInfo: hasContactInfo ? normalizedContactInfo : deleteField()
+  };
+
+  if (!hasContactInfo) {
+    profileUpdatePayload.locationCoordinates = deleteField();
+  } else if (locationCoordinates) {
+    profileUpdatePayload.locationCoordinates = locationCoordinates;
+  }
 
   await runWithDbFallback((database) =>
-    updateDoc(doc(database, USER_PROFILES_COLLECTION, uid), {
-      levelsOfficiated: normalizedLevels,
-      contactInfo: hasContactInfo ? normalizedContactInfo : deleteField()
-    })
+    updateDoc(doc(database, USER_PROFILES_COLLECTION, uid), profileUpdatePayload)
   );
 }
 
@@ -438,10 +532,31 @@ export function subscribeCrews(
       crewsQuery,
       (snapshot) => {
         const crews = snapshot.docs.map((crewDoc) => {
-          const data = crewDoc.data();
+          const data = crewDoc.data() as Partial<Crew>;
+          const fallbackChiefUid =
+            typeof data.createdByUid === "string" ? data.createdByUid : "";
+          const fallbackChiefName =
+            typeof data.createdByName === "string" ? data.createdByName : "Crew Creator";
+          const memberUids = isStringArray(data.memberUids) ? data.memberUids : [];
+          const memberPositions = normalizeCrewMemberPositions(
+            typeof data.memberPositions === "object" && data.memberPositions
+              ? (data.memberPositions as Record<string, unknown>)
+              : undefined,
+            memberUids
+          );
           return {
             id: crewDoc.id,
-            ...data
+            ...data,
+            memberUids,
+            memberPositions,
+            crewChiefUid:
+              typeof data.crewChiefUid === "string" && data.crewChiefUid.trim()
+                ? data.crewChiefUid
+                : fallbackChiefUid,
+            crewChiefName:
+              typeof data.crewChiefName === "string" && data.crewChiefName.trim()
+                ? data.crewChiefName
+                : fallbackChiefName
           } as Crew;
         });
         onChange(crews);
@@ -530,6 +645,61 @@ export function subscribeRatingsForGame(
   return () => unsubscribeCurrent();
 }
 
+export function subscribeEvaluationsForGame(
+  gameId: string,
+  onChange: (evaluations: Evaluation[]) => void,
+  onError?: (error: Error) => void
+): Unsubscribe {
+  let unsubscribeCurrent: Unsubscribe = () => undefined;
+  let hasRetriedWithFallback = false;
+
+  const subscribeToDatabase = (database: Firestore): Unsubscribe => {
+    const evaluationsQuery = query(
+      collection(database, EVALUATIONS_COLLECTION),
+      where("gameId", "==", gameId)
+    );
+
+    return onSnapshot(
+      evaluationsQuery,
+      (snapshot) => {
+        const evaluations = snapshot.docs.map((evaluationDoc) => {
+          const data = evaluationDoc.data();
+          return {
+            id: evaluationDoc.id,
+            ...data
+          } as Evaluation;
+        });
+        onChange(evaluations);
+      },
+      (error) => {
+        if (
+          !hasRetriedWithFallback &&
+          dbFallback &&
+          database === db &&
+          isMissingDatabaseError(error)
+        ) {
+          hasRetriedWithFallback = true;
+          if (import.meta.env.DEV) {
+            console.warn(
+              "Evaluations subscription switched to fallback Firestore database ID."
+            );
+          }
+          unsubscribeCurrent();
+          unsubscribeCurrent = subscribeToDatabase(dbFallback);
+          return;
+        }
+
+        if (onError) {
+          onError(error as Error);
+        }
+      }
+    );
+  };
+
+  unsubscribeCurrent = subscribeToDatabase(db);
+  return () => unsubscribeCurrent();
+}
+
 export function subscribeRatings(
   onChange: (ratings: Rating[]) => void,
   onError?: (error: Error) => void
@@ -588,12 +758,15 @@ export async function createGame(
   input: NewGameInput,
   createdBy: { uid: string; role: "assignor" | "school"; displayName: string }
 ): Promise<void> {
+  const locationCoordinates = await geocodeAddressSafely(input.location);
+
   const gamePayload = {
     schoolName: input.schoolName,
     sport: input.sport,
     level: input.level,
     dateISO: input.dateISO,
     location: input.location,
+    ...(locationCoordinates ? { locationCoordinates } : {}),
     payPosted: input.payPosted,
     createdByUid: createdBy.uid,
     createdByName: createdBy.displayName,
@@ -616,12 +789,15 @@ export async function createAssignedGame(
   input: NewAssignedGameInput,
   createdBy: { uid: string; role: "assignor" | "school"; displayName: string }
 ): Promise<void> {
+  const locationCoordinates = await geocodeAddressSafely(input.location);
+
   const gamePayload = {
     schoolName: input.schoolName,
     sport: input.sport,
     level: input.level,
     dateISO: input.dateISO,
     location: input.location,
+    ...(locationCoordinates ? { locationCoordinates } : {}),
     payPosted: input.payPosted,
     createdByUid: createdBy.uid,
     createdByName: createdBy.displayName,
@@ -639,7 +815,9 @@ export async function createAssignedGame(
 }
 
 export async function updateGame(gameId: string, input: NewGameInput): Promise<void> {
-  const gamePayload = {
+  const locationCoordinates = await geocodeAddressSafely(input.location);
+
+  const gamePayload: Record<string, unknown> = {
     schoolName: input.schoolName,
     sport: input.sport,
     level: input.level,
@@ -651,6 +829,10 @@ export async function updateGame(gameId: string, input: NewGameInput): Promise<v
       : deleteField(),
     notes: input.notes ? input.notes : deleteField()
   };
+
+  if (locationCoordinates) {
+    gamePayload.locationCoordinates = locationCoordinates;
+  }
 
   await runWithDbFallback((database) =>
     updateDoc(doc(database, GAMES_COLLECTION, gameId), gamePayload)
@@ -711,6 +893,11 @@ export async function createCrew(
   const uniqueMembers = Array.from(
     new Map(input.members.map((member) => [member.uid, member])).values()
   );
+  const memberUids = uniqueMembers.map((member) => member.uid);
+  const memberPositions = normalizeCrewMemberPositions(
+    input.memberPositions as Record<string, unknown> | undefined,
+    memberUids
+  );
 
   if (!normalizedName) {
     throw new Error("Crew name is required.");
@@ -726,12 +913,15 @@ export async function createCrew(
     createdByName: createdBy.displayName,
     createdByRole: createdBy.role,
     createdAtISO: new Date().toISOString(),
-    memberUids: uniqueMembers.map((member) => member.uid),
+    crewChiefUid: createdBy.uid,
+    crewChiefName: createdBy.displayName,
+    memberUids,
     members: uniqueMembers.map((member) => ({
       uid: member.uid,
       name: member.name,
       email: member.email
-    }))
+    })),
+    memberPositions
   };
 
   await runWithDbFallback((database) =>
@@ -757,21 +947,77 @@ export async function updateCrewMembers(
     throw new Error("Crew must include between 1 and 15 members.");
   }
 
-  await runWithDbFallback((database) =>
-    updateDoc(doc(database, CREWS_COLLECTION, crewId), {
-      memberUids: uniqueMembers.map((member) => member.uid),
+  await runWithDbFallback(async (database) => {
+    const crewRef = doc(database, CREWS_COLLECTION, crewId);
+    const crewSnapshot = await getDoc(crewRef);
+    if (!crewSnapshot.exists()) {
+      throw new Error("Crew not found.");
+    }
+
+    const existingCrew = crewSnapshot.data() as Partial<Crew>;
+    const memberUids = uniqueMembers.map((member) => member.uid);
+    const memberPositions = normalizeCrewMemberPositions(
+      typeof existingCrew.memberPositions === "object" && existingCrew.memberPositions
+        ? (existingCrew.memberPositions as Record<string, unknown>)
+        : undefined,
+      memberUids
+    );
+
+    await updateDoc(crewRef, {
+      memberUids,
       members: uniqueMembers.map((member) => ({
         uid: member.uid,
         name: member.name,
         email: member.email
-      }))
+      })),
+      memberPositions
+    });
+  });
+}
+
+export async function updateCrewChief(
+  crewId: string,
+  chief: Pick<CrewMember, "uid" | "name">
+): Promise<void> {
+  if (!chief.uid.trim()) {
+    throw new Error("Crew chief is required.");
+  }
+
+  await runWithDbFallback((database) =>
+    updateDoc(doc(database, CREWS_COLLECTION, crewId), {
+      crewChiefUid: chief.uid.trim(),
+      crewChiefName: chief.name.trim() || "Crew Chief"
     })
   );
 }
 
+export async function updateCrewMemberPositions(
+  crewId: string,
+  memberPositions: Partial<Record<string, FootballPosition>>
+): Promise<void> {
+  await runWithDbFallback(async (database) => {
+    const crewRef = doc(database, CREWS_COLLECTION, crewId);
+    const crewSnapshot = await getDoc(crewRef);
+    if (!crewSnapshot.exists()) {
+      throw new Error("Crew not found.");
+    }
+
+    const crew = crewSnapshot.data() as Partial<Crew>;
+    const memberUids = isStringArray(crew.memberUids) ? crew.memberUids : [];
+    const normalizedMemberPositions = normalizeCrewMemberPositions(
+      memberPositions as Record<string, unknown>,
+      memberUids
+    );
+
+    await updateDoc(crewRef, {
+      memberPositions: normalizedMemberPositions
+    });
+  });
+}
+
 export async function upsertGameRating(
   input: UpsertGameRatingInput,
-  ratedBy: { uid: string; role: "assignor" | "school" }
+  ratedBy: { uid: string; role: "assignor" | "school" | "official" }
 ): Promise<void> {
   if (!Number.isInteger(input.stars) || input.stars < 1 || input.stars > 5) {
     throw new Error("Rating must be an integer between 1 and 5.");
@@ -795,6 +1041,30 @@ export async function upsertGameRating(
 
   await runWithDbFallback((database) =>
     setDoc(doc(database, RATINGS_COLLECTION, ratingId), payload, { merge: true })
+  );
+}
+
+export async function upsertGameEvaluation(
+  input: UpsertGameEvaluationInput,
+  evaluator: { uid: string }
+): Promise<void> {
+  if (!Number.isInteger(input.overallScore) || input.overallScore < 1 || input.overallScore > 5) {
+    throw new Error("Overall score must be an integer between 1 and 5.");
+  }
+
+  const nowISO = new Date().toISOString();
+  const evaluationId = `${input.gameId}__${evaluator.uid}`;
+  const payload = {
+    gameId: input.gameId,
+    evaluatorUid: evaluator.uid,
+    overallScore: input.overallScore,
+    updatedAtISO: nowISO,
+    createdAtISO: nowISO,
+    notes: input.notes ? input.notes : deleteField()
+  };
+
+  await runWithDbFallback((database) =>
+    setDoc(doc(database, EVALUATIONS_COLLECTION, evaluationId), payload, { merge: true })
   );
 }
 

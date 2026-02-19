@@ -45,13 +45,15 @@ export function AssignGame() {
   }, [user]);
 
   const availableCrews = useMemo(() => {
-    if (!user || !profile || profile.role === "official") {
+    if (
+      !user ||
+      !profile ||
+      (profile.role !== "assignor" && profile.role !== "school")
+    ) {
       return [];
     }
 
-    return crews
-      .filter((crew) => crew.createdByUid === user.uid)
-      .sort((a, b) => a.name.localeCompare(b.name));
+    return [...crews].sort((a, b) => a.name.localeCompare(b.name));
   }, [crews, profile, user]);
 
   if (loading) {
@@ -93,7 +95,7 @@ export function AssignGame() {
     );
   }
 
-  if (profile.role === "official") {
+  if (profile.role !== "assignor" && profile.role !== "school") {
     return (
       <main className="page">
         <header className="hero">

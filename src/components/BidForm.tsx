@@ -15,6 +15,8 @@ interface BidFormProps {
   defaultOfficialName: string;
   availableCrews: Crew[];
   existingBids: Bid[];
+  singleBidMode?: boolean;
+  forceCrewOnly?: boolean;
   onSubmit: (values: BidFormValues) => Promise<void>;
   onCancel: () => void;
 }
@@ -24,6 +26,8 @@ export function BidForm({
   defaultOfficialName,
   availableCrews,
   existingBids,
+  singleBidMode = false,
+  forceCrewOnly = false,
   onSubmit,
   onCancel
 }: BidFormProps) {
@@ -41,7 +45,7 @@ export function BidForm({
 
   useEffect(() => {
     if (availableCrews.length === 0) {
-      setBidderType("individual");
+      setBidderType(forceCrewOnly ? "crew" : "individual");
       setSelectedCrewId("");
       return;
     }
@@ -52,7 +56,13 @@ export function BidForm({
       }
       return availableCrews[0].id;
     });
-  }, [availableCrews]);
+  }, [availableCrews, forceCrewOnly]);
+
+  useEffect(() => {
+    if (forceCrewOnly && bidderType !== "crew") {
+      setBidderType("crew");
+    }
+  }, [bidderType, forceCrewOnly]);
 
   const individualBid = useMemo(
     () =>
@@ -77,8 +87,16 @@ export function BidForm({
     [availableCrews, selectedCrewId]
   );
 
-  const activeBid =
-    bidderType === "crew" ? crewBidsByCrewId.get(selectedCrewId) ?? null : individualBid;
+  const latestExistingBid = useMemo(
+    () => [...existingBids].sort((a, b) => b.createdAtISO.localeCompare(a.createdAtISO))[0] ?? null,
+    [existingBids]
+  );
+
+  const activeBid = singleBidMode
+    ? latestExistingBid
+    : bidderType === "crew"
+      ? crewBidsByCrewId.get(selectedCrewId) ?? null
+      : individualBid;
 
   useEffect(() => {
     if (activeBid) {
@@ -145,7 +163,7 @@ export function BidForm({
 
   return (
     <form className="bid-form" onSubmit={handleSubmit}>
-      <h4>{activeBid ? "Increase Your Offer" : "Place Your Bid"}</h4>
+      <h4>{activeBid ? "Update Your Bid" : "Place Your Bid"}</h4>
 
       {availableCrews.length > 0 ? (
         <>
@@ -156,8 +174,9 @@ export function BidForm({
               onChange={(event) =>
                 setBidderType(event.target.value as "individual" | "crew")
               }
+              disabled={forceCrewOnly}
             >
-              <option value="individual">Individual</option>
+              {!forceCrewOnly ? <option value="individual">Individual</option> : null}
               <option value="crew">Crew</option>
             </select>
           </label>
@@ -178,6 +197,10 @@ export function BidForm({
             </label>
           ) : null}
         </>
+      ) : null}
+
+      {forceCrewOnly ? (
+        <p className="hint-text">Varsity games require a crew bid.</p>
       ) : null}
 
       <label>
@@ -217,8 +240,7 @@ export function BidForm({
 
       {activeBid ? (
         <p className="hint-text">
-          Current offer for this{" "}
-          {bidderType === "crew" ? `crew (${activeCrew?.name ?? "crew"})` : "identity"}:{" "}
+          Current offer for this game:{" "}
           <strong>${activeBid.amount}</strong>
         </p>
       ) : null}
@@ -230,8 +252,8 @@ export function BidForm({
           {submitting
             ? "Submitting..."
             : activeBid
-              ? "Increase Offer"
-              : "Submit Bid"}
+              ? "Update Bid"
+              : "Place Bid"}
         </button>
         <button type="button" className="button-secondary" onClick={onCancel}>
           Cancel

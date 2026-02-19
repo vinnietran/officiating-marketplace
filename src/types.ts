@@ -7,7 +7,7 @@ export type Level =
   | "Middle School"
   | "Youth";
 
-export type UserRole = "official" | "assignor" | "school";
+export type UserRole = "official" | "assignor" | "school" | "evaluator";
 export type OfficiatingLevel =
   | "Varsity"
   | "Sub Varsity"
@@ -19,7 +19,7 @@ export type GameStatus = "open" | "awarded";
 export type CrewOwnerRole = "official" | "assignor" | "school";
 export type BidderType = "individual" | "crew";
 export type GameMode = "marketplace" | "direct_assignment";
-export type RatingTargetType = "official" | "crew";
+export type RatingTargetType = "official" | "crew" | "school" | "venue";
 export type FootballPosition =
   | "R"
   | "U"
@@ -32,6 +32,11 @@ export type FootballPosition =
   | "RO"
   | "RC"
   | "ALT";
+
+export interface GeoPoint {
+  lat: number;
+  lng: number;
+}
 
 export interface UserProfile {
   uid: string;
@@ -48,6 +53,7 @@ export interface UserProfile {
     state?: string;
     postalCode?: string;
   };
+  locationCoordinates?: GeoPoint;
 }
 
 export interface CrewMember {
@@ -63,8 +69,11 @@ export interface Crew {
   createdByName: string;
   createdByRole: CrewOwnerRole;
   createdAtISO: string;
+  crewChiefUid: string;
+  crewChiefName: string;
   memberUids: string[];
   members: CrewMember[];
+  memberPositions: Partial<Record<string, FootballPosition>>;
 }
 
 export interface IndividualGameAssignment {
@@ -93,6 +102,7 @@ export interface Game {
   dateISO: string;
   acceptingBidsUntilISO?: string;
   location: string;
+  locationCoordinates?: GeoPoint;
   payPosted: number;
   notes?: string;
   createdByUid: string;
@@ -124,9 +134,19 @@ export interface Rating {
   targetType: RatingTargetType;
   targetId: string;
   ratedByUid: string;
-  ratedByRole: "assignor" | "school";
+  ratedByRole: "assignor" | "school" | "official";
   stars: number;
   comment?: string;
+  createdAtISO: string;
+  updatedAtISO: string;
+}
+
+export interface Evaluation {
+  id: string;
+  gameId: string;
+  evaluatorUid: string;
+  overallScore: number;
+  notes?: string;
   createdAtISO: string;
   updatedAtISO: string;
 }

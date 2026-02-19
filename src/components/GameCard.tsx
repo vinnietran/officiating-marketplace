@@ -2,7 +2,12 @@ import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { BidForm } from "./BidForm";
 import { EditGameForm } from "./EditGameForm";
-import { formatCurrency, formatGameDate, getBidWindowInfo } from "../lib/format";
+import {
+  formatCurrency,
+  formatGameDate,
+  getBidWindowInfo,
+  getGameStatusLabel
+} from "../lib/format";
 import type { Bid, Crew, Game, UserRole } from "../types";
 
 interface GameCardProps {
@@ -12,6 +17,8 @@ interface GameCardProps {
   currentUserId: string;
   currentUserName: string;
   availableCrews: Crew[];
+  userDistanceMiles?: number | null;
+  distanceUnavailableLabel?: string;
   canManageGame: boolean;
   onSubmitBid: (
     gameId: string,
@@ -47,6 +54,8 @@ export function GameCard({
   currentUserId,
   currentUserName,
   availableCrews,
+  userDistanceMiles,
+  distanceUnavailableLabel,
   canManageGame,
   onSubmitBid,
   onDeleteBid,
@@ -86,12 +95,15 @@ export function GameCard({
         )
       : null;
   const isDirectAssignment = game.mode === "direct_assignment";
+  const requiresCrewBid = game.level === "Varsity";
   const directAssignmentCount = game.directAssignments?.length ?? 0;
+  const statusLabel = getGameStatusLabel(game.status, game.mode);
 
   const officialBidsForGame = useMemo(
     () => allGameBids.filter((bid) => bid.officialUid === currentUserId),
     [allGameBids, currentUserId]
   );
+  const hasSubmittedBid = officialBidsForGame.length > 0;
 
   const highestUserBid = useMemo(() => {
     if (officialBidsForGame.length === 0) {
@@ -104,8 +116,13 @@ export function GameCard({
   }, [officialBidsForGame]);
 
   const canPlaceBid = useMemo(() => {
-    return role === "official" && game.status === "open" && !isDirectAssignment;
-  }, [role, game.status, isDirectAssignment]);
+    return (
+      role === "official" &&
+      game.status === "open" &&
+      !isDirectAssignment &&
+      (!requiresCrewBid || availableCrews.length > 0)
+    );
+  }, [role, game.status, isDirectAssignment, requiresCrewBid, availableCrews.length]);
 
   const placeBidDisabledReason = useMemo(() => {
     if (role !== "official") {
@@ -117,8 +134,11 @@ export function GameCard({
     if (game.status !== "open") {
       return "Bidding is closed for this game.";
     }
+    if (requiresCrewBid && availableCrews.length === 0) {
+      return "Varsity games require crew bids. Join or create a crew to bid.";
+    }
     return null;
-  }, [role, game.status, isDirectAssignment]);
+  }, [role, game.status, isDirectAssignment, requiresCrewBid, availableCrews.length]);
 
   const gameBids = useMemo(() => {
     if (role === "official") {
@@ -128,10 +148,12 @@ export function GameCard({
     return [];
   }, [officialBidsForGame, role]);
 
-  const canOpenDetailsFromCard = canManageGame && role !== "official";
+  const canOpenDetailsFromCard = true;
 
   function openDetails() {
-    navigate(`/schedule/games/${game.id}`);
+    navigate(`/schedule/games/${game.id}`, {
+      state: { from: "marketplace" }
+    });
   }
 
   function handleCardClick(event: React.MouseEvent<HTMLElement>) {
@@ -202,7 +224,9 @@ export function GameCard({
 
   return (
     <article
-      className={`game-card${canOpenDetailsFromCard ? " clickable-game-card" : ""}`}
+      className={`game-card market-game-card${
+        canOpenDetailsFromCard ? " clickable-game-card" : ""
+      }`}
       role={canOpenDetailsFromCard ? "button" : undefined}
       tabIndex={canOpenDetailsFromCard ? 0 : undefined}
       onClick={handleCardClick}
@@ -213,42 +237,69 @@ export function GameCard({
           : undefined
       }
     >
+      <div className="game-card-flags">
+        <span
+          className={`game-card-flag ${
+            game.mode === "direct_assignment" || game.status === "awarded"
+              ? "game-card-flag-awarded"
+              : "game-card-flag-open"
+          }`}
+        >
+          {statusLabel}
+        </span>
+        {!isDirectAssignment ? (
+          <span className={`game-card-flag game-card-flag-window-${bidWindowInfo.state}`}>
+            {`Bid Window: ${bidWindowInfo.label}`}
+          </span>
+        ) : null}
+      </div>
+
       <div className="game-card-header">
         <h3>{game.schoolName}</h3>
         <span className="pay-pill">Posted: {formatCurrency(game.payPosted)}</span>
       </div>
 
-      <p className="meta-line">
+      <p className="meta-line game-card-sport-line">
         <strong>{game.sport}</strong> • {game.level}
       </p>
-      <p className="meta-line">{formatGameDate(game.dateISO)}</p>
-      {game.acceptingBidsUntilISO ? (
-        <p className="meta-line">
-          Accepting bids until: {formatGameDate(game.acceptingBidsUntilISO)}
-        </p>
-      ) : null}
-      <p className="meta-line">{game.location}</p>
-      <p className="meta-line">Posted by {game.createdByRole}</p>
-      <p className="meta-line status-line">
-        Status: <strong>{game.status === "awarded" ? "Awarded" : "Open"}</strong>
-      </p>
-      {isDirectAssignment ? (
-        <p className="meta-line">
-          Direct assignments: <strong>{directAssignmentCount}</strong>
-        </p>
-      ) : (
-        <>
+      <div className="game-card-meta-grid">
+        <p className="meta-line">{formatGameDate(game.dateISO)}</p>
+        {!isDirectAssignment && game.acceptingBidsUntilISO ? (
           <p className="meta-line">
-            Total bids: <strong>{totalBidCount}</strong>
+            Accepting bids until: {formatGameDate(game.acceptingBidsUntilISO)}
           </p>
-          <p className={`meta-line bid-window bid-window-${bidWindowInfo.state}`}>
-            Bid window: <strong>{bidWindowInfo.label}</strong>
-          </p>
+        ) : null}
+        <p className="meta-line">{game.location}</p>
+        {role === "official" ? (
           <p className="meta-line">
-            Highest bid: <strong>{highestBidAmount ? formatCurrency(highestBidAmount) : "-"}</strong>
+            Distance:{" "}
+            <strong>
+              {typeof userDistanceMiles === "number"
+                && Number.isFinite(userDistanceMiles)
+                ? `${userDistanceMiles.toFixed(1)} mi`
+                : userDistanceMiles === null
+                  ? (distanceUnavailableLabel ?? "N/A")
+                  : "Calculating..."}
+            </strong>
           </p>
-        </>
-      )}
+        ) : null}
+        <p className="meta-line">Posted by {game.createdByRole}</p>
+        {isDirectAssignment ? (
+          <p className="meta-line">
+            Direct assignments: <strong>{directAssignmentCount}</strong>
+          </p>
+        ) : (
+          <>
+            <p className="meta-line">
+              Total bids: <strong>{totalBidCount}</strong>
+            </p>
+            <p className="meta-line">
+              Highest bid:{" "}
+              <strong>{highestBidAmount ? formatCurrency(highestBidAmount) : "-"}</strong>
+            </p>
+          </>
+        )}
+      </div>
       {game.notes ? <p className="notes">Notes: {game.notes}</p> : null}
 
       <div className="card-actions">
@@ -258,7 +309,7 @@ export function GameCard({
             onClick={() => setShowBidForm((prev) => !prev)}
             disabled={!canPlaceBid}
           >
-            {showBidForm ? "Close" : "Place / Update Bid"}
+            {showBidForm ? "Close" : hasSubmittedBid ? "Update Bid" : "Place Bid"}
           </button>
         ) : null}
 
@@ -279,6 +330,8 @@ export function GameCard({
           defaultOfficialName={currentUserName}
           availableCrews={availableCrews}
           existingBids={officialBidsForGame}
+          singleBidMode
+          forceCrewOnly={requiresCrewBid}
           onSubmit={handleBidSubmit}
           onCancel={() => setShowBidForm(false)}
         />
@@ -294,9 +347,7 @@ export function GameCard({
         </p>
       ) : null}
 
-      {canOpenDetailsFromCard ? (
-        <p className="hint-text">Select this card to view full game details.</p>
-      ) : null}
+      <p className="hint-text">Select this card to view full game details.</p>
 
       {showEditForm ? (
         <EditGameForm

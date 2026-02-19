@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useState } from "react";
 import {
   getLocationSuggestions,
   hasGooglePlacesApiKey,
@@ -72,6 +72,13 @@ const FOOTBALL_POSITIONS: Array<{ code: FootballPosition; label: string }> = [
   { code: "RC", label: "Replay Communicator (RC)" },
   { code: "ALT", label: "Alternate (ALT)" }
 ];
+const FOOTBALL_POSITION_LABEL_BY_CODE: Record<FootballPosition, string> = FOOTBALL_POSITIONS.reduce(
+  (acc, position) => {
+    acc[position.code] = position.label;
+    return acc;
+  },
+  {} as Record<FootballPosition, string>
+);
 const MIN_AUTOCOMPLETE_CHARS = 3;
 
 export function AssignGameForm({
@@ -93,6 +100,7 @@ export function AssignGameForm({
   const [officialDirectorySearch, setOfficialDirectorySearch] = useState("");
   const [individualAssignments, setIndividualAssignments] = useState<IndividualAssignee[]>([]);
   const [selectedCrewIds, setSelectedCrewIds] = useState<string[]>([]);
+  const [selectedCrewId, setSelectedCrewId] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const placesEnabled = hasGooglePlacesApiKey();
@@ -106,19 +114,26 @@ export function AssignGameForm({
     () => availableCrews.filter((crew) => selectedCrewIds.includes(crew.id)),
     [availableCrews, selectedCrewIds]
   );
+  const selectableCrews = useMemo(
+    () => availableCrews.filter((crew) => !selectedCrewIds.includes(crew.id)),
+    [availableCrews, selectedCrewIds]
+  );
+  const officialSearchTerm = officialDirectorySearch.trim().toLowerCase();
+  const hasOfficialSearch = officialSearchTerm.length > 0;
   const filteredOfficials = useMemo(() => {
-    const term = officialDirectorySearch.trim().toLowerCase();
-    if (!term) {
-      return availableOfficials.slice(0, 30);
+    if (!hasOfficialSearch) {
+      return [];
     }
     return availableOfficials
       .filter(
         (official) =>
-          official.displayName.toLowerCase().includes(term) ||
-          official.email.toLowerCase().includes(term)
+          official.displayName.toLowerCase().includes(officialSearchTerm) ||
+          official.email.toLowerCase().includes(officialSearchTerm)
       )
       .slice(0, 30);
-  }, [availableOfficials, officialDirectorySearch]);
+  }, [availableOfficials, hasOfficialSearch, officialSearchTerm]);
+  const assignmentRosterCount = individualAssignments.length + selectedCrews.length;
+  const hasAssignmentRosterEntries = assignmentRosterCount > 0;
 
   useEffect(() => {
     const trimmedLocation = location.trim();
@@ -207,12 +222,28 @@ export function AssignGameForm({
     );
   }
 
-  function toggleCrew(crewId: string) {
+  function addCrew(crewId: string) {
+    if (!crewId) {
+      return;
+    }
+
     setSelectedCrewIds((current) =>
-      current.includes(crewId)
-        ? current.filter((id) => id !== crewId)
-        : [...current, crewId]
+      current.includes(crewId) ? current : [...current, crewId]
     );
+    setSelectedCrewId("");
+  }
+
+  function removeCrew(crewId: string) {
+    setSelectedCrewIds((current) => current.filter((id) => id !== crewId));
+  }
+
+  function getCrewMemberPositionLabel(crew: Crew, memberUid: string): string {
+    const positionCode = crew.memberPositions[memberUid];
+    if (!positionCode) {
+      return "Unassigned";
+    }
+
+    return FOOTBALL_POSITION_LABEL_BY_CODE[positionCode] ?? positionCode;
   }
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
@@ -289,6 +320,7 @@ export function AssignGameForm({
       setOfficialDirectorySearch("");
       setIndividualAssignments([]);
       setSelectedCrewIds([]);
+      setSelectedCrewId("");
     } catch (submitError) {
       const submitMessage =
         submitError instanceof Error ? submitError.message : "Unable to assign game.";
@@ -417,7 +449,9 @@ export function AssignGameForm({
             />
           </div>
 
-          {filteredOfficials.length > 0 ? (
+          {!hasOfficialSearch ? (
+            <p className="hint-text">Start typing a name or email to search officials.</p>
+          ) : filteredOfficials.length > 0 ? (
             <div className="assign-match-list">
               {filteredOfficials.map((match) => {
                 const alreadyAdded = individualAssignments.some(
@@ -445,73 +479,6 @@ export function AssignGameForm({
           ) : (
             <p className="empty-text">No matching officials found.</p>
           )}
-
-          <section className="assign-roster-panel">
-            <div className="assign-roster-header">
-              <div>
-                <h4>Assignment Roster</h4>
-                <p className="assign-roster-subtitle">Officials added to this assignment</p>
-              </div>
-              <span className="assign-roster-count">{individualAssignments.length}</span>
-            </div>
-
-            {individualAssignments.length === 0 ? (
-              <p className="assign-roster-empty">No officials assigned yet.</p>
-            ) : (
-              <div className="assign-roster-table-wrapper">
-                <table className="assign-roster-table">
-                  <thead>
-                    <tr>
-                      <th>#</th>
-                      <th>Name</th>
-                      <th>Email</th>
-                      <th>Position</th>
-                      <th>Action</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {individualAssignments.map((assignee, index) => (
-                      <tr key={assignee.officialUid}>
-                        <td>{index + 1}</td>
-                        <td>{assignee.officialName}</td>
-                        <td>{assignee.officialEmail}</td>
-                        <td>
-                          {sport === "Football" ? (
-                            <select
-                              value={assignee.position}
-                              onChange={(event) =>
-                                updateIndividualPosition(
-                                  assignee.officialUid,
-                                  event.target.value as FootballPosition
-                                )
-                              }
-                            >
-                              {FOOTBALL_POSITIONS.map((position) => (
-                                <option key={position.code} value={position.code}>
-                                  {position.label}
-                                </option>
-                              ))}
-                            </select>
-                          ) : (
-                            "N/A"
-                          )}
-                        </td>
-                        <td>
-                          <button
-                            type="button"
-                            className="button-secondary assign-action-button"
-                            onClick={() => removeIndividual(assignee.officialUid)}
-                          >
-                            Remove
-                          </button>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </section>
         </section>
 
         <section className="full-width assign-section">
@@ -519,26 +486,183 @@ export function AssignGameForm({
           {availableCrews.length === 0 ? (
             <p className="empty-text">No crews available. Create crews from the Crews tab.</p>
           ) : (
-            <div className="assign-crew-list">
-              {availableCrews.map((crew) => {
-                const selected = selectedCrewIds.includes(crew.id);
-                return (
-                  <div key={crew.id} className="assign-match-item">
-                    <div>
-                      <strong>{crew.name}</strong>
-                      <div className="meta-line">{crew.memberUids.length} members</div>
+            <>
+              <div className="assign-search-row">
+                <select
+                  value={selectedCrewId}
+                  onChange={(event) => setSelectedCrewId(event.target.value)}
+                >
+                  <option value="">Select a crew</option>
+                  {selectableCrews.map((crew) => (
+                    <option key={crew.id} value={crew.id}>
+                      {crew.name} ({crew.memberUids.length} members)
+                    </option>
+                  ))}
+                </select>
+                <button
+                  type="button"
+                  className="button-secondary"
+                  disabled={!selectedCrewId}
+                  onClick={() => addCrew(selectedCrewId)}
+                >
+                  Add Crew
+                </button>
+              </div>
+
+              {selectedCrews.length === 0 ? (
+                <p className="assign-roster-empty">No crews assigned yet.</p>
+              ) : (
+                <div className="assign-crew-list">
+                  {selectedCrews.map((crew) => (
+                    <div key={crew.id} className="assign-match-item">
+                      <div>
+                        <strong>{crew.name}</strong>
+                        <div className="meta-line">{crew.memberUids.length} members</div>
+                      </div>
+                      <button
+                        type="button"
+                        className="button-secondary"
+                        onClick={() => removeCrew(crew.id)}
+                      >
+                        Remove
+                      </button>
                     </div>
-                    <button
-                      type="button"
-                      className="button-secondary"
-                      onClick={() => toggleCrew(crew.id)}
-                    >
-                      {selected ? "Remove" : "Assign"}
-                    </button>
-                  </div>
-                );
-              })}
+                  ))}
+                </div>
+              )}
+            </>
+          )}
+        </section>
+
+        <section className="full-width assign-roster-panel">
+          <div className="assign-roster-header">
+            <div>
+              <h4>Assignment Roster</h4>
+              <p className="assign-roster-subtitle">
+                Officials and crews added to this assignment
+              </p>
             </div>
+            <span className="assign-roster-count">{assignmentRosterCount}</span>
+          </div>
+
+          {!hasAssignmentRosterEntries ? (
+            <p className="assign-roster-empty">No officials or crews assigned yet.</p>
+          ) : (
+            <>
+              {selectedCrews.length > 0 ? (
+                <div className="assign-roster-table-wrapper">
+                  <table className="assign-roster-table">
+                    <thead>
+                      <tr>
+                        <th>#</th>
+                        <th>Crew</th>
+                        <th>Members</th>
+                        <th>Action</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {selectedCrews.map((crew, index) => (
+                        <Fragment key={crew.id}>
+                          <tr>
+                            <td>{index + 1}</td>
+                            <td>{crew.name}</td>
+                            <td>{crew.memberUids.length}</td>
+                            <td>
+                              <button
+                                type="button"
+                                className="button-secondary assign-action-button"
+                                onClick={() => removeCrew(crew.id)}
+                              >
+                                Remove
+                              </button>
+                            </td>
+                          </tr>
+                          <tr className="assign-roster-detail-row">
+                            <td colSpan={4}>
+                              {crew.members.length === 0 ? (
+                                <p className="assign-roster-empty">No members found in this crew.</p>
+                              ) : (
+                                <table className="assign-crew-member-table">
+                                  <thead>
+                                    <tr>
+                                      <th>Name</th>
+                                      <th>Position</th>
+                                    </tr>
+                                  </thead>
+                                  <tbody>
+                                    {crew.members.map((member) => (
+                                      <tr key={member.uid}>
+                                        <td>{member.name}</td>
+                                        <td>{getCrewMemberPositionLabel(crew, member.uid)}</td>
+                                      </tr>
+                                    ))}
+                                  </tbody>
+                                </table>
+                              )}
+                            </td>
+                          </tr>
+                        </Fragment>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              ) : null}
+
+              {individualAssignments.length > 0 ? (
+                <div className="assign-roster-table-wrapper">
+                  <table className="assign-roster-table">
+                    <thead>
+                      <tr>
+                        <th>#</th>
+                        <th>Name</th>
+                        <th>Email</th>
+                        <th>Position</th>
+                        <th>Action</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {individualAssignments.map((assignee, index) => (
+                        <tr key={assignee.officialUid}>
+                          <td>{index + 1}</td>
+                          <td>{assignee.officialName}</td>
+                          <td>{assignee.officialEmail}</td>
+                          <td>
+                            {sport === "Football" ? (
+                              <select
+                                value={assignee.position}
+                                onChange={(event) =>
+                                  updateIndividualPosition(
+                                    assignee.officialUid,
+                                    event.target.value as FootballPosition
+                                  )
+                                }
+                              >
+                                {FOOTBALL_POSITIONS.map((position) => (
+                                  <option key={position.code} value={position.code}>
+                                    {position.label}
+                                  </option>
+                                ))}
+                              </select>
+                            ) : (
+                              "N/A"
+                            )}
+                          </td>
+                          <td>
+                            <button
+                              type="button"
+                              className="button-secondary assign-action-button"
+                              onClick={() => removeIndividual(assignee.officialUid)}
+                            >
+                              Remove
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              ) : null}
+            </>
           )}
         </section>
 

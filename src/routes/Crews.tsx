@@ -10,11 +10,49 @@ import {
   deleteCrew,
   searchOfficialProfilesByEmail,
   subscribeCrews,
+  updateCrewChief,
+  updateCrewMemberPositions,
   updateCrewMembers
 } from "../lib/firestore";
-import type { Crew, CrewMember, UserProfile } from "../types";
+import type { Crew, CrewMember, FootballPosition, UserProfile } from "../types";
 
 const MAX_CREW_MEMBERS = 15;
+const FOOTBALL_POSITION_OPTIONS: Array<{ code: FootballPosition; label: string }> = [
+  { code: "R", label: "Referee (R)" },
+  { code: "U", label: "Umpire (U)" },
+  { code: "C", label: "Center Judge (C)" },
+  { code: "H", label: "Head Line Judge (H)" },
+  { code: "L", label: "Line Judge (L)" },
+  { code: "S", label: "Side Judge (S)" },
+  { code: "F", label: "Field Judge (F)" },
+  { code: "B", label: "Back Judge (B)" },
+  { code: "RO", label: "Replay Official (RO)" },
+  { code: "RC", label: "Replay Communicator (RC)" },
+  { code: "ALT", label: "Alternate (ALT)" }
+];
+
+function normalizeMemberPositions(
+  memberUids: string[],
+  positionsByUid: Record<string, FootballPosition | "">
+): Partial<Record<string, FootballPosition>> {
+  const memberUidSet = new Set(memberUids);
+  const allowedCodes = new Set(FOOTBALL_POSITION_OPTIONS.map((option) => option.code));
+  const normalized: Partial<Record<string, FootballPosition>> = {};
+
+  Object.entries(positionsByUid).forEach(([uid, value]) => {
+    if (!memberUidSet.has(uid)) {
+      return;
+    }
+
+    if (!value || !allowedCodes.has(value as FootballPosition)) {
+      return;
+    }
+
+    normalized[uid] = value as FootballPosition;
+  });
+
+  return normalized;
+}
 
 function byName(a: CrewMember, b: CrewMember) {
   return a.name.localeCompare(b.name);
@@ -33,6 +71,14 @@ function formatCreatedAt(dateISO: string): string {
   }).format(date);
 }
 
+function getCrewChiefUid(crew: Crew): string {
+  return crew.crewChiefUid?.trim() ? crew.crewChiefUid : crew.createdByUid;
+}
+
+function getCrewChiefName(crew: Crew): string {
+  return crew.crewChiefName?.trim() ? crew.crewChiefName : crew.createdByName;
+}
+
 export function Crews() {
   const { user, profile, loading, profileLoading } = useAuth();
 
@@ -44,6 +90,9 @@ export function Crews() {
   const [searching, setSearching] = useState(false);
   const [searchResultMessage, setSearchResultMessage] = useState<string | null>(null);
   const [selectedMembers, setSelectedMembers] = useState<CrewMember[]>([]);
+  const [selectedMemberPositions, setSelectedMemberPositions] = useState<
+    Record<string, FootballPosition | "">
+  >({});
   const [selectedCrewId, setSelectedCrewId] = useState<string | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
@@ -54,6 +103,12 @@ export function Crews() {
   const [manageSearching, setManageSearching] = useState(false);
   const [manageResultMessage, setManageResultMessage] = useState<string | null>(null);
   const [updatingCrewMembers, setUpdatingCrewMembers] = useState(false);
+  const [manageCrewChiefUid, setManageCrewChiefUid] = useState("");
+  const [updatingCrewChief, setUpdatingCrewChief] = useState(false);
+  const [manageMemberPositions, setManageMemberPositions] = useState<
+    Record<string, FootballPosition | "">
+  >({});
+  const [updatingCrewPositions, setUpdatingCrewPositions] = useState(false);
   const [modalMessage, setModalMessage] = useState<{
     title: string;
     message: string;
@@ -94,6 +149,16 @@ export function Crews() {
         }
       ].sort(byName);
     });
+
+    setSelectedMemberPositions((current) => {
+      if (current[profile.uid] !== undefined) {
+        return current;
+      }
+      return {
+        ...current,
+        [profile.uid]: ""
+      };
+    });
   }, [profile]);
 
   const canAccessCrews =
@@ -122,11 +187,28 @@ export function Crews() {
     () => visibleCrews.find((crew) => crew.id === selectedCrewId) ?? null,
     [selectedCrewId, visibleCrews]
   );
+  const chiefOptions = useMemo(() => {
+    if (!selectedCrew) {
+      return [];
+    }
+
+    const optionsByUid = new Map<string, string>();
+    selectedCrew.members.forEach((member) => {
+      optionsByUid.set(member.uid, member.name);
+    });
+    optionsByUid.set(selectedCrew.createdByUid, selectedCrew.createdByName);
+
+    return Array.from(optionsByUid.entries())
+      .map(([uid, name]) => ({ uid, name }))
+      .sort((a, b) => a.name.localeCompare(b.name));
+  }, [selectedCrew]);
   useEffect(() => {
     if (!selectedCrewId) {
       setManageInviteEmail("");
       setManageMatchedOfficials([]);
       setManageResultMessage(null);
+      setManageCrewChiefUid("");
+      setManageMemberPositions({});
       return;
     }
 
@@ -136,8 +218,26 @@ export function Crews() {
       setManageInviteEmail("");
       setManageMatchedOfficials([]);
       setManageResultMessage(null);
+      setManageCrewChiefUid("");
+      setManageMemberPositions({});
     }
   }, [selectedCrewId, visibleCrews]);
+
+  useEffect(() => {
+    if (!selectedCrew) {
+      setManageCrewChiefUid("");
+      setManageMemberPositions({});
+      return;
+    }
+    setManageCrewChiefUid(getCrewChiefUid(selectedCrew));
+    setManageMemberPositions(() => {
+      const next: Record<string, FootballPosition | ""> = {};
+      selectedCrew.memberUids.forEach((uid) => {
+        next[uid] = selectedCrew.memberPositions[uid] ?? "";
+      });
+      return next;
+    });
+  }, [selectedCrew]);
 
   if (loading) {
     return (
@@ -197,6 +297,17 @@ export function Crews() {
       : activeProfile.role === "assignor"
         ? "assignor"
         : "school";
+  const selectedCrewChiefUid = selectedCrew ? getCrewChiefUid(selectedCrew) : "";
+  const selectedCrewChiefName = selectedCrew ? getCrewChiefName(selectedCrew) : "";
+  const canAssignSelectedCrewPositions =
+    Boolean(selectedCrew) && selectedCrewChiefUid === activeUser.uid;
+  const hasManagePositionChanges = selectedCrew
+    ? selectedCrew.memberUids.some((uid) => {
+        const persisted = selectedCrew.memberPositions[uid] ?? "";
+        const pending = manageMemberPositions[uid] ?? "";
+        return persisted !== pending;
+      })
+    : false;
 
   async function handleSearchInvite() {
     const email = inviteEmail.trim();
@@ -246,6 +357,10 @@ export function Crews() {
         }
       ].sort(byName);
     });
+    setSelectedMemberPositions((current) => ({
+      ...current,
+      [official.uid]: current[official.uid] ?? ""
+    }));
   }
 
   function handleRemoveMember(memberUid: string) {
@@ -254,6 +369,18 @@ export function Crews() {
     }
 
     setSelectedMembers((current) => current.filter((member) => member.uid !== memberUid));
+    setSelectedMemberPositions((current) => {
+      const next = { ...current };
+      delete next[memberUid];
+      return next;
+    });
+  }
+
+  function handleSetSelectedMemberPosition(memberUid: string, position: FootballPosition | "") {
+    setSelectedMemberPositions((current) => ({
+      ...current,
+      [memberUid]: position
+    }));
   }
 
   async function handleCreateCrew(event: React.FormEvent<HTMLFormElement>) {
@@ -276,7 +403,11 @@ export function Crews() {
       await createCrew(
         {
           name: trimmedName,
-          members: selectedMembers
+          members: selectedMembers,
+          memberPositions: normalizeMemberPositions(
+            selectedMembers.map((member) => member.uid),
+            selectedMemberPositions
+          )
         },
         {
           uid: activeUser.uid,
@@ -299,6 +430,9 @@ export function Crews() {
               }
             ]
           : []
+      );
+      setSelectedMemberPositions(
+        activeProfile.role === "official" ? { [activeProfile.uid]: "" } : {}
       );
       setModalMessage({
         title: "Crew Created",
@@ -434,6 +568,14 @@ export function Crews() {
       return;
     }
 
+    if (memberUid === selectedCrewChiefUid) {
+      setModalMessage({
+        title: "Chief Required",
+        message: "Select a new crew chief before removing the current crew chief."
+      });
+      return;
+    }
+
     const nextMembers = selectedCrew.members.filter((member) => member.uid !== memberUid);
     if (nextMembers.length < 1) {
       setModalMessage({
@@ -454,6 +596,94 @@ export function Crews() {
     }
   }
 
+  async function handleUpdateSelectedCrewChief() {
+    if (!selectedCrew) {
+      return;
+    }
+
+    if (selectedCrew.createdByUid !== activeUser.uid) {
+      setModalMessage({
+        title: "Not Allowed",
+        message: "Only the crew creator can update the crew chief."
+      });
+      return;
+    }
+
+    const nextChiefUid = manageCrewChiefUid.trim();
+    if (!nextChiefUid) {
+      setModalMessage({
+        title: "Crew Chief Required",
+        message: "Select a crew chief."
+      });
+      return;
+    }
+
+    const selectedMember = selectedCrew.members.find((member) => member.uid === nextChiefUid);
+    const chiefName =
+      selectedMember?.name ??
+      (nextChiefUid === selectedCrew.createdByUid ? selectedCrew.createdByName : "");
+
+    if (!chiefName) {
+      setModalMessage({
+        title: "Invalid Crew Chief",
+        message: "Crew chief must be a current member or the crew creator."
+      });
+      return;
+    }
+
+    setUpdatingCrewChief(true);
+    try {
+      await updateCrewChief(selectedCrew.id, {
+        uid: nextChiefUid,
+        name: chiefName
+      });
+      setManageResultMessage("Crew chief updated.");
+    } catch (error) {
+      setDataError(getReadableFirestoreError(error, FIRESTORE_DATABASE_ID));
+    } finally {
+      setUpdatingCrewChief(false);
+    }
+  }
+
+  function handleSetManageMemberPosition(memberUid: string, position: FootballPosition | "") {
+    setManageMemberPositions((current) => ({
+      ...current,
+      [memberUid]: position
+    }));
+  }
+
+  async function handleSaveSelectedCrewPositions() {
+    if (!selectedCrew) {
+      return;
+    }
+
+    if (!canAssignSelectedCrewPositions) {
+      setModalMessage({
+        title: "Not Allowed",
+        message: "Only the crew chief can assign crew positions."
+      });
+      return;
+    }
+
+    const normalizedPositions = normalizeMemberPositions(
+      selectedCrew.memberUids,
+      manageMemberPositions
+    );
+
+    setUpdatingCrewPositions(true);
+    try {
+      await updateCrewMemberPositions(selectedCrew.id, normalizedPositions);
+      setModalMessage({
+        title: "Crew Positions Updated",
+        message: "Football positions were saved for this crew."
+      });
+    } catch (error) {
+      setDataError(getReadableFirestoreError(error, FIRESTORE_DATABASE_ID));
+    } finally {
+      setUpdatingCrewPositions(false);
+    }
+  }
+
   return (
     <main className="page">
       <header className="hero">
@@ -466,6 +696,9 @@ export function Crews() {
       <section className="crew-layout">
         <article className="crew-card">
           <h3>Create Crew</h3>
+          <p className="meta-line">
+            Crew chief defaults to the user who creates the crew.
+          </p>
           <form className="crew-form" onSubmit={handleCreateCrew}>
             <label>
               Crew Name
@@ -542,12 +775,32 @@ export function Crews() {
                 {selectedMembers.map((member) => {
                   const cannotRemove =
                     activeProfile.role === "official" && member.uid === activeProfile.uid;
+                  const selectedPosition = selectedMemberPositions[member.uid] ?? "";
 
                   return (
                     <li key={member.uid} className="crew-member-item">
                       <div>
                         <strong>{member.name}</strong>
                         <div className="meta-line">{member.email}</div>
+                        <label className="crew-position-control">
+                          Position
+                          <select
+                            value={selectedPosition}
+                            onChange={(event) =>
+                              handleSetSelectedMemberPosition(
+                                member.uid,
+                                event.target.value as FootballPosition | ""
+                              )
+                            }
+                          >
+                            <option value="">Unassigned</option>
+                            {FOOTBALL_POSITION_OPTIONS.map((option) => (
+                              <option key={option.code} value={option.code}>
+                                {option.label}
+                              </option>
+                            ))}
+                          </select>
+                        </label>
                       </div>
                       <button
                         type="button"
@@ -584,43 +837,50 @@ export function Crews() {
                   <tr>
                     <th>Name</th>
                     <th>Created By</th>
+                    <th>Crew Chief</th>
                     <th>Members</th>
                     <th>Action</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {visibleCrews.map((crew) => (
-                    <tr
-                      key={crew.id}
-                      className={`clickable-row${selectedCrewId === crew.id ? " crew-selected-row" : ""}`}
-                      role="button"
-                      tabIndex={0}
-                      onClick={() => setSelectedCrewId(crew.id)}
-                      onKeyDown={(event) => {
-                        if (event.key === "Enter" || event.key === " ") {
-                          event.preventDefault();
-                          setSelectedCrewId(crew.id);
-                        }
-                      }}
-                      aria-label={`Manage crew ${crew.name}`}
-                    >
-                      <td>{crew.name}</td>
-                      <td>{crew.createdByName}</td>
-                      <td>{crew.memberUids.length}</td>
-                      <td>
-                        <button
-                          type="button"
-                          className="button-secondary"
-                          onClick={(event) => {
-                            event.stopPropagation();
+                  {visibleCrews.map((crew) => {
+                    const canManageCrew = getCrewChiefUid(crew) === activeUser.uid;
+                    const actionLabel = canManageCrew ? "Manage" : "View";
+
+                    return (
+                      <tr
+                        key={crew.id}
+                        className={`clickable-row${selectedCrewId === crew.id ? " crew-selected-row" : ""}`}
+                        role="button"
+                        tabIndex={0}
+                        onClick={() => setSelectedCrewId(crew.id)}
+                        onKeyDown={(event) => {
+                          if (event.key === "Enter" || event.key === " ") {
+                            event.preventDefault();
                             setSelectedCrewId(crew.id);
-                          }}
-                        >
-                          Manage
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
+                          }
+                        }}
+                        aria-label={`${actionLabel} crew ${crew.name}`}
+                      >
+                        <td>{crew.name}</td>
+                        <td>{crew.createdByName}</td>
+                        <td>{getCrewChiefName(crew)}</td>
+                        <td>{crew.memberUids.length}</td>
+                        <td>
+                          <button
+                            type="button"
+                            className="button-secondary"
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              setSelectedCrewId(crew.id);
+                            }}
+                          >
+                            {actionLabel}
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
@@ -628,7 +888,11 @@ export function Crews() {
         </article>
 
         <article className="crew-card">
-          <h3>Manage Crew</h3>
+          <h3>
+            {selectedCrew && getCrewChiefUid(selectedCrew) !== activeUser.uid
+              ? "View Crew"
+              : "Manage Crew"}
+          </h3>
           {!selectedCrew ? (
             <p className="empty-text">Select a crew above to view details and members.</p>
           ) : (
@@ -645,35 +909,118 @@ export function Crews() {
               <p className="meta-line">
                 <strong>Total Members:</strong> {selectedCrew.memberUids.length}
               </p>
+              <p className="meta-line">
+                <strong>Crew Chief:</strong> {selectedCrewChiefName}
+              </p>
 
               <h4>Members</h4>
               {selectedCrew.members.length === 0 ? (
                 <p className="empty-text">No crew members found.</p>
               ) : (
                 <ul className="crew-member-list">
-                  {selectedCrew.members.map((member) => (
-                    <li key={member.uid} className="crew-member-item">
-                      <div>
-                        <strong>{member.name}</strong>
-                        <div className="meta-line">{member.email}</div>
-                      </div>
-                      {selectedCrew.createdByUid === activeUser.uid ? (
-                        <button
-                          type="button"
-                          className="button-link-danger"
-                          onClick={() => handleRemoveMemberFromSelectedCrew(member.uid)}
-                          disabled={updatingCrewMembers}
-                        >
-                          {updatingCrewMembers ? "Saving..." : "Remove"}
-                        </button>
-                      ) : null}
-                    </li>
-                  ))}
+                  {selectedCrew.members.map((member) => {
+                    const isCrewChief = member.uid === selectedCrewChiefUid;
+                    const selectedPosition = manageMemberPositions[member.uid] ?? "";
+                    return (
+                      <li key={member.uid} className="crew-member-item">
+                        <div>
+                          <strong>
+                            {member.name}
+                            {isCrewChief ? " (Crew Chief)" : ""}
+                          </strong>
+                          <div className="meta-line">{member.email}</div>
+                          <label className="crew-position-control">
+                            Position
+                            <select
+                              value={selectedPosition}
+                              onChange={(event) =>
+                                handleSetManageMemberPosition(
+                                  member.uid,
+                                  event.target.value as FootballPosition | ""
+                                )
+                              }
+                              disabled={!canAssignSelectedCrewPositions || updatingCrewPositions}
+                            >
+                              <option value="">Unassigned</option>
+                              {FOOTBALL_POSITION_OPTIONS.map((option) => (
+                                <option key={option.code} value={option.code}>
+                                  {option.label}
+                                </option>
+                              ))}
+                            </select>
+                          </label>
+                        </div>
+                        {selectedCrew.createdByUid === activeUser.uid ? (
+                          <button
+                            type="button"
+                            className="button-link-danger"
+                            onClick={() => handleRemoveMemberFromSelectedCrew(member.uid)}
+                            disabled={
+                              updatingCrewMembers || updatingCrewChief || updatingCrewPositions
+                            }
+                          >
+                            {updatingCrewMembers ? "Saving..." : "Remove"}
+                          </button>
+                        ) : null}
+                      </li>
+                    );
+                  })}
                 </ul>
               )}
 
+              <div className="crew-actions">
+                <button
+                  type="button"
+                  className="button-secondary"
+                  onClick={handleSaveSelectedCrewPositions}
+                  disabled={
+                    !canAssignSelectedCrewPositions ||
+                    updatingCrewPositions ||
+                    updatingCrewMembers ||
+                    updatingCrewChief ||
+                    !hasManagePositionChanges
+                  }
+                >
+                  {updatingCrewPositions ? "Saving..." : "Save Crew Positions"}
+                </button>
+                {!canAssignSelectedCrewPositions ? (
+                  <span className="meta-line">Only the crew chief can assign positions.</span>
+                ) : null}
+              </div>
+
               {selectedCrew.createdByUid === activeUser.uid ? (
                 <>
+                  <div className="crew-invite-row crew-manage-tools">
+                    <label>
+                      Crew Chief
+                      <select
+                        value={manageCrewChiefUid}
+                        onChange={(event) => setManageCrewChiefUid(event.target.value)}
+                        disabled={updatingCrewChief || updatingCrewMembers || updatingCrewPositions}
+                      >
+                        {chiefOptions.map((option) => (
+                          <option key={option.uid} value={option.uid}>
+                            {option.name}
+                            {option.uid === selectedCrew.createdByUid ? " (Creator)" : ""}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <button
+                      type="button"
+                      className="button-secondary"
+                      onClick={handleUpdateSelectedCrewChief}
+                      disabled={
+                        updatingCrewChief ||
+                        updatingCrewMembers ||
+                        !manageCrewChiefUid ||
+                        manageCrewChiefUid === selectedCrewChiefUid
+                      }
+                    >
+                      {updatingCrewChief ? "Saving..." : "Save Crew Chief"}
+                    </button>
+                  </div>
+
                   <div className="crew-invite-row crew-manage-tools">
                     <label>
                       Add Member by Email
@@ -688,7 +1035,12 @@ export function Crews() {
                       type="button"
                       className="button-secondary"
                       onClick={handleSearchManageInvite}
-                      disabled={manageSearching || updatingCrewMembers}
+                      disabled={
+                        manageSearching ||
+                        updatingCrewMembers ||
+                        updatingCrewChief ||
+                        updatingCrewPositions
+                      }
                     >
                       {manageSearching ? "Searching..." : "Search"}
                     </button>
@@ -713,7 +1065,13 @@ export function Crews() {
                             <button
                               type="button"
                               className="button-secondary"
-                              disabled={alreadyMember || atLimit || updatingCrewMembers}
+                              disabled={
+                                alreadyMember ||
+                                atLimit ||
+                                updatingCrewMembers ||
+                                updatingCrewChief ||
+                                updatingCrewPositions
+                              }
                               onClick={() => handleAddMemberToSelectedCrew(official)}
                             >
                               {alreadyMember ? "Added" : atLimit ? "Limit Reached" : "Add"}
@@ -729,7 +1087,12 @@ export function Crews() {
                       type="button"
                       className="button-danger"
                       onClick={() => setDeleteCrewId(selectedCrew.id)}
-                      disabled={deletingCrew || updatingCrewMembers}
+                      disabled={
+                        deletingCrew ||
+                        updatingCrewMembers ||
+                        updatingCrewChief ||
+                        updatingCrewPositions
+                      }
                     >
                       Delete Crew
                     </button>

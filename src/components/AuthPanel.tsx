@@ -1,10 +1,11 @@
 import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import type { UserRole } from "../types";
 
 type AuthMode = "signin" | "signup";
 
-const ROLES: UserRole[] = ["official", "assignor", "school"];
+const ROLES: UserRole[] = ["official", "assignor", "school", "evaluator"];
 
 function formatRoleLabel(role: UserRole): string {
   return role.charAt(0).toUpperCase() + role.slice(1);
@@ -31,6 +32,7 @@ function getErrorMessage(error: unknown): string {
 }
 
 export function AuthPanel() {
+  const navigate = useNavigate();
   const { signIn, signUp } = useAuth();
 
   const [mode, setMode] = useState<AuthMode>("signin");
@@ -63,6 +65,8 @@ export function AuthPanel() {
           role
         });
       }
+
+      navigate("/", { replace: true });
     } catch (submitError) {
       setError(getErrorMessage(submitError));
     } finally {

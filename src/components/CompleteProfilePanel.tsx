@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import { useAuth } from "../context/AuthContext";
 import type { UserRole } from "../types";
 
-const ROLE_OPTIONS: UserRole[] = ["official", "assignor", "school"];
+const ROLE_OPTIONS: UserRole[] = ["official", "assignor", "school", "evaluator"];
 
 function formatRoleLabel(role: UserRole): string {
   return role.charAt(0).toUpperCase() + role.slice(1);

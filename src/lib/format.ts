@@ -33,6 +33,8 @@ export interface BidWindowInfo {
   state: BidWindowState;
 }
 
+export type GameMode = "marketplace" | "direct_assignment";
+
 export function getBidWindowInfo(
   acceptingBidsUntilISO: string | undefined,
   status: "open" | "awarded",
@@ -70,4 +72,15 @@ export function getBidWindowInfo(
     return { label: `${hours}h ${minutes}m left`, state };
   }
   return { label: `${minutes}m left`, state };
+}
+
+export function getGameStatusLabel(
+  status: "open" | "awarded",
+  mode?: GameMode
+): string {
+  if (mode === "direct_assignment") {
+    return "Assigned";
+  }
+
+  return status === "awarded" ? "Awarded" : "Open";
 }

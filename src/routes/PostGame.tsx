@@ -54,7 +54,7 @@ export function PostGame() {
     );
   }
 
-  if (profile.role === "official") {
+  if (profile.role !== "assignor" && profile.role !== "school") {
     return (
       <main className="page">
         <header className="hero">

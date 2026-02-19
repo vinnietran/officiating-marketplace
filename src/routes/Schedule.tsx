@@ -3,11 +3,16 @@ import { useNavigate } from "react-router-dom";
 import { AuthPanel } from "../components/AuthPanel";
 import { CompleteProfilePanel } from "../components/CompleteProfilePanel";
 import { useAuth } from "../context/AuthContext";
-import { formatCurrency, formatGameDate, getBidWindowInfo } from "../lib/format";
-import { subscribeBids, subscribeGames } from "../lib/firestore";
+import {
+  formatCurrency,
+  formatGameDate,
+  getBidWindowInfo,
+  getGameStatusLabel
+} from "../lib/format";
+import { subscribeBids, subscribeCrews, subscribeGames } from "../lib/firestore";
 import { FIRESTORE_DATABASE_ID } from "../lib/firebase";
 import { getReadableFirestoreError } from "../lib/firebaseErrors";
-import type { Bid, Game } from "../types";
+import type { Bid, Crew, Game } from "../types";
 
 function getBidderName(bid: Bid | null): string {
   if (!bid) {
@@ -49,12 +54,38 @@ function isOfficialAssignedToDirectGame(game: Game, officialUid: string): boolea
   });
 }
 
+function isOfficialAssignedToAwardedMarketplaceGame(
+  selectedBid: Bid | null,
+  crewsById: Map<string, Crew>,
+  officialUid: string
+): boolean {
+  if (!selectedBid) {
+    return false;
+  }
+
+  if (selectedBid.officialUid === officialUid) {
+    return true;
+  }
+
+  if (selectedBid.bidderType !== "crew" || !selectedBid.crewId) {
+    return false;
+  }
+
+  const awardedCrew = crewsById.get(selectedBid.crewId);
+  if (!awardedCrew) {
+    return false;
+  }
+
+  return awardedCrew.memberUids.includes(officialUid);
+}
+
 export function Schedule() {
   const navigate = useNavigate();
   const { user, profile, loading, profileLoading } = useAuth();
 
   const [games, setGames] = useState<Game[]>([]);
   const [bids, setBids] = useState<Bid[]>([]);
+  const [crews, setCrews] = useState<Crew[]>([]);
   const [dataError, setDataError] = useState<string | null>(null);
   const [nowMs, setNowMs] = useState(() => Date.now());
 
@@ -70,6 +101,7 @@ export function Schedule() {
     if (!user) {
       setGames([]);
       setBids([]);
+      setCrews([]);
       return;
     }
 
@@ -79,10 +111,14 @@ export function Schedule() {
     const unsubscribeBids = subscribeBids(setBids, (error) =>
       setDataError(getReadableFirestoreError(error, FIRESTORE_DATABASE_ID))
     );
+    const unsubscribeCrews = subscribeCrews(setCrews, (error) =>
+      setDataError(getReadableFirestoreError(error, FIRESTORE_DATABASE_ID))
+    );
 
     return () => {
       unsubscribeGames();
       unsubscribeBids();
+      unsubscribeCrews();
     };
   }, [user]);
 
@@ -91,6 +127,12 @@ export function Schedule() {
     bids.forEach((bid) => result.set(bid.id, bid));
     return result;
   }, [bids]);
+
+  const crewsById = useMemo(() => {
+    const result = new Map<string, Crew>();
+    crews.forEach((crew) => result.set(crew.id, crew));
+    return result;
+  }, [crews]);
 
   const officialScheduleGames = useMemo(() => {
     if (!user || profile?.role !== "official") {
@@ -113,7 +155,11 @@ export function Schedule() {
 
           return (
             entry.game.status === "awarded" &&
-            entry.selectedBid?.officialUid === user.uid
+            isOfficialAssignedToAwardedMarketplaceGame(
+              entry.selectedBid,
+              crewsById,
+              user.uid
+            )
           );
         }
       )
@@ -121,7 +167,7 @@ export function Schedule() {
         (a, b) =>
           new Date(a.game.dateISO).getTime() - new Date(b.game.dateISO).getTime()
       );
-  }, [games, bidsById, profile?.role, user]);
+  }, [games, bidsById, crewsById, profile?.role, user]);
 
   const assignorOrSchoolScheduleGames = useMemo(() => {
     if (!user || (profile?.role !== "assignor" && profile?.role !== "school")) {
@@ -139,6 +185,22 @@ export function Schedule() {
           new Date(a.game.dateISO).getTime() - new Date(b.game.dateISO).getTime()
       );
   }, [games, bidsById, profile?.role, user]);
+
+  const evaluatorScheduleGames = useMemo(() => {
+    if (profile?.role !== "evaluator") {
+      return [];
+    }
+
+    return games
+      .map((game) => ({
+        game,
+        selectedBid: game.selectedBidId ? bidsById.get(game.selectedBidId) ?? null : null
+      }))
+      .sort(
+        (a, b) =>
+          new Date(a.game.dateISO).getTime() - new Date(b.game.dateISO).getTime()
+      );
+  }, [games, bidsById, profile?.role]);
 
   if (loading) {
     return (
@@ -186,6 +248,8 @@ export function Schedule() {
         <p>
           {profile.role === "official"
             ? "Your assigned games"
+            : profile.role === "evaluator"
+              ? "All games across the marketplace."
             : "Games you posted and current award status."}
         </p>
       </header>
@@ -193,11 +257,11 @@ export function Schedule() {
       {dataError ? <p className="error-text">{dataError}</p> : null}
 
       {profile.role === "official" ? (
-        <section className="schedule-table-wrapper">
+        <section className="schedule-table-wrapper schedule-table-wrapper-no-scroll">
           {officialScheduleGames.length === 0 ? (
             <div className="empty-state">No awarded games yet.</div>
           ) : (
-            <table className="schedule-table">
+            <table className="schedule-table schedule-table-wrap">
               <thead>
                 <tr>
                   <th>Date/Time</th>
@@ -221,12 +285,35 @@ export function Schedule() {
                   );
 
                   return (
-                    <tr key={game.id}>
+                    <tr
+                      key={game.id}
+                      className="clickable-row"
+                      role="button"
+                      tabIndex={0}
+                      onClick={() =>
+                        navigate(`/schedule/games/${game.id}`, {
+                          state: { from: "schedule" }
+                        })
+                      }
+                      onKeyDown={(event) => {
+                        if (event.key === "Enter" || event.key === " ") {
+                          event.preventDefault();
+                          navigate(`/schedule/games/${game.id}`, {
+                            state: { from: "schedule" }
+                          });
+                        }
+                      }}
+                      aria-label={`Open details for ${game.schoolName} on ${formatGameDate(game.dateISO)}`}
+                    >
                       <td>{formatGameDate(game.dateISO)}</td>
                       <td>
-                        <span className={`bid-window-label bid-window-${bidWindowInfo.state}`}>
-                          {bidWindowInfo.label}
-                        </span>
+                        {game.mode === "direct_assignment" ? (
+                          "-"
+                        ) : (
+                          <span className={`bid-window-label bid-window-${bidWindowInfo.state}`}>
+                            {bidWindowInfo.label}
+                          </span>
+                        )}
                       </td>
                       <td>{game.schoolName}</td>
                       <td>
@@ -246,12 +333,81 @@ export function Schedule() {
             </table>
           )}
         </section>
+      ) : profile.role === "evaluator" ? (
+        <section className="schedule-table-wrapper schedule-table-wrapper-no-scroll">
+          {evaluatorScheduleGames.length === 0 ? (
+            <div className="empty-state">No games found.</div>
+          ) : (
+            <table className="schedule-table schedule-table-wrap">
+              <thead>
+                <tr>
+                  <th>Date/Time</th>
+                  <th>Bid Window</th>
+                  <th>School</th>
+                  <th>Sport/Level</th>
+                  <th>Location</th>
+                  <th>Status</th>
+                  <th>Current Price</th>
+                </tr>
+              </thead>
+              <tbody>
+                {evaluatorScheduleGames.map(({ game, selectedBid }) => {
+                  const bidWindowInfo = getBidWindowInfo(
+                    game.acceptingBidsUntilISO,
+                    game.status,
+                    nowMs
+                  );
+
+                  const currentPrice =
+                    game.status === "awarded" && selectedBid
+                      ? selectedBid.amount
+                      : game.payPosted;
+
+                  return (
+                    <tr
+                      key={game.id}
+                      className="clickable-row"
+                      role="button"
+                      tabIndex={0}
+                      onClick={() => navigate(`/schedule/games/${game.id}`)}
+                      onKeyDown={(event) => {
+                        if (event.key === "Enter" || event.key === " ") {
+                          event.preventDefault();
+                          navigate(`/schedule/games/${game.id}`);
+                        }
+                      }}
+                      aria-label={`Open details for ${game.schoolName} on ${formatGameDate(game.dateISO)}`}
+                    >
+                      <td>{formatGameDate(game.dateISO)}</td>
+                      <td>
+                        {game.mode === "direct_assignment" ? (
+                          "-"
+                        ) : (
+                          <span className={`bid-window-label bid-window-${bidWindowInfo.state}`}>
+                            {bidWindowInfo.label}
+                          </span>
+                        )}
+                      </td>
+                      <td>{game.schoolName}</td>
+                      <td>
+                        {game.sport} • {game.level}
+                      </td>
+                      <td>{game.location}</td>
+                      <td>{getGameStatusLabel(game.status, game.mode)}</td>
+                      <td>{formatCurrency(currentPrice)}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          )}
+        </section>
       ) : (
-        <section className="schedule-table-wrapper">
+        <section className="schedule-table-wrapper schedule-table-wrapper-no-scroll">
           {assignorOrSchoolScheduleGames.length === 0 ? (
             <div className="empty-state">No posted games yet.</div>
           ) : (
-            <table className="schedule-table">
+            <table className="schedule-table schedule-table-wrap">
               <thead>
                 <tr>
                   <th>Date/Time</th>
@@ -290,16 +446,20 @@ export function Schedule() {
                     >
                       <td>{formatGameDate(game.dateISO)}</td>
                       <td>
-                        <span className={`bid-window-label bid-window-${bidWindowInfo.state}`}>
-                          {bidWindowInfo.label}
-                        </span>
+                        {game.mode === "direct_assignment" ? (
+                          "-"
+                        ) : (
+                          <span className={`bid-window-label bid-window-${bidWindowInfo.state}`}>
+                            {bidWindowInfo.label}
+                          </span>
+                        )}
                       </td>
                       <td>{game.schoolName}</td>
                       <td>
                         {game.sport} • {game.level}
                       </td>
                       <td>{game.location}</td>
-                      <td>{game.status === "awarded" ? "Awarded" : "Open"}</td>
+                      <td>{getGameStatusLabel(game.status, game.mode)}</td>
                       <td>
                         {game.mode === "direct_assignment"
                           ? getDirectAssignmentLabel(game)

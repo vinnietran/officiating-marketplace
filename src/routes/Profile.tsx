@@ -5,7 +5,7 @@ import { CompleteProfilePanel } from "../components/CompleteProfilePanel";
 import { useAuth } from "../context/AuthContext";
 import { FIRESTORE_DATABASE_ID } from "../lib/firebase";
 import { getReadableFirestoreError } from "../lib/firebaseErrors";
-import { formatCurrency, formatGameDate } from "../lib/format";
+import { formatCurrency, formatGameDate, getGameStatusLabel } from "../lib/format";
 import {
   getUserProfile,
   subscribeBids,
@@ -37,12 +37,15 @@ function formatAccountCreatedAt(dateISO: string): string {
   }).format(date);
 }
 
-function formatRoleLabel(role: "official" | "assignor" | "school"): string {
+function formatRoleLabel(role: "official" | "assignor" | "school" | "evaluator"): string {
   if (role === "official") {
     return "Official";
   }
   if (role === "assignor") {
     return "Assignor";
+  }
+  if (role === "evaluator") {
+    return "Evaluator";
   }
   return "School";
 }
@@ -58,6 +61,31 @@ function isOfficialAssignedToDirectGame(game: Game, officialUid: string): boolea
     }
     return assignment.memberUids.includes(officialUid);
   });
+}
+
+function isOfficialAssignedToAwardedMarketplaceGame(
+  selectedBid: Bid | null,
+  crewsById: Map<string, Crew>,
+  officialUid: string
+): boolean {
+  if (!selectedBid) {
+    return false;
+  }
+
+  if (selectedBid.officialUid === officialUid) {
+    return true;
+  }
+
+  if (selectedBid.bidderType !== "crew" || !selectedBid.crewId) {
+    return false;
+  }
+
+  const awardedCrew = crewsById.get(selectedBid.crewId);
+  if (!awardedCrew) {
+    return false;
+  }
+
+  return awardedCrew.memberUids.includes(officialUid);
 }
 
 export function Profile() {
@@ -155,6 +183,12 @@ export function Profile() {
     return result;
   }, [bids]);
 
+  const crewsById = useMemo(() => {
+    const result = new Map<string, Crew>();
+    crews.forEach((crew) => result.set(crew.id, crew));
+    return result;
+  }, [crews]);
+
   const currentUserId = user?.uid ?? "";
   const currentUserBids = useMemo(
     () => bids.filter((bid) => bid.officialUid === currentUserId),
@@ -191,7 +225,11 @@ export function Profile() {
 
           return (
             entry.game.status === "awarded" &&
-            entry.selectedBid?.officialUid === currentUserId
+            isOfficialAssignedToAwardedMarketplaceGame(
+              entry.selectedBid,
+              crewsById,
+              currentUserId
+            )
           );
         }
       )
@@ -199,7 +237,7 @@ export function Profile() {
         (a, b) =>
           new Date(a.game.dateISO).getTime() - new Date(b.game.dateISO).getTime()
       );
-  }, [games, bidsById, currentUserId, profile?.role, user]);
+  }, [games, bidsById, crewsById, currentUserId, profile?.role, user]);
 
   const officialOpenBidGameCount = useMemo(() => {
     const openGameIds = new Set(
@@ -629,7 +667,7 @@ export function Profile() {
                         <td>
                           {game.sport} • {game.level}
                         </td>
-                        <td>{game.status === "awarded" ? "Awarded" : "Open"}</td>
+                        <td>{getGameStatusLabel(game.status, game.mode)}</td>
                         <td>{bidCountByGameId.get(game.id) ?? 0}</td>
                       </tr>
                     ))}

@@ -4,6 +4,12 @@ import { AuthPanel } from "../components/AuthPanel";
 import { CompleteProfilePanel } from "../components/CompleteProfilePanel";
 import { useAuth } from "../context/AuthContext";
 import {
+  getBidderName,
+  getDirectAssignmentLabel,
+  isOfficialAssignedToAwardedMarketplaceGame,
+  isOfficialAssignedToDirectGame
+} from "../lib/gameAssignments";
+import {
   formatCurrency,
   formatGameDate,
   getBidWindowInfo,
@@ -13,71 +19,6 @@ import { subscribeBids, subscribeCrews, subscribeGames } from "../lib/firestore"
 import { FIRESTORE_DATABASE_ID } from "../lib/firebase";
 import { getReadableFirestoreError } from "../lib/firebaseErrors";
 import type { Bid, Crew, Game } from "../types";
-
-function getBidderName(bid: Bid | null): string {
-  if (!bid) {
-    return "-";
-  }
-  if (bid.bidderType === "crew" && bid.crewName) {
-    return `${bid.crewName} (Crew)`;
-  }
-  return bid.officialName;
-}
-
-function getDirectAssignmentLabel(game: Game): string {
-  const assignments = game.directAssignments ?? [];
-  if (assignments.length === 0) {
-    return "-";
-  }
-
-  if (assignments.length === 1) {
-    const assignment = assignments[0];
-    if (assignment.assignmentType === "crew") {
-      return `${assignment.crewName} (Crew)`;
-    }
-    return assignment.officialName;
-  }
-
-  return `${assignments.length} assignees`;
-}
-
-function isOfficialAssignedToDirectGame(game: Game, officialUid: string): boolean {
-  if (game.mode !== "direct_assignment") {
-    return false;
-  }
-
-  return (game.directAssignments ?? []).some((assignment) => {
-    if (assignment.assignmentType === "individual") {
-      return assignment.officialUid === officialUid;
-    }
-    return assignment.memberUids.includes(officialUid);
-  });
-}
-
-function isOfficialAssignedToAwardedMarketplaceGame(
-  selectedBid: Bid | null,
-  crewsById: Map<string, Crew>,
-  officialUid: string
-): boolean {
-  if (!selectedBid) {
-    return false;
-  }
-
-  if (selectedBid.officialUid === officialUid) {
-    return true;
-  }
-
-  if (selectedBid.bidderType !== "crew" || !selectedBid.crewId) {
-    return false;
-  }
-
-  const awardedCrew = crewsById.get(selectedBid.crewId);
-  if (!awardedCrew) {
-    return false;
-  }
-
-  return awardedCrew.memberUids.includes(officialUid);
-}
 
 export function Schedule() {
   const navigate = useNavigate();

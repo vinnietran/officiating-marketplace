@@ -1,35 +1,12 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
+import { formatRoleLabel, getAuthErrorMessage } from "../lib/auth";
 import type { UserRole } from "../types";
 
 type AuthMode = "signin" | "signup";
 
 const ROLES: UserRole[] = ["official", "assignor", "school", "evaluator"];
-
-function formatRoleLabel(role: UserRole): string {
-  return role.charAt(0).toUpperCase() + role.slice(1);
-}
-
-function getErrorMessage(error: unknown): string {
-  if (!error || typeof error !== "object") {
-    return "Something went wrong.";
-  }
-
-  const message = "message" in error ? String(error.message) : "Something went wrong.";
-
-  if (message.includes("auth/email-already-in-use")) {
-    return "This email is already in use.";
-  }
-  if (message.includes("auth/invalid-credential")) {
-    return "Invalid email or password.";
-  }
-  if (message.includes("auth/weak-password")) {
-    return "Password should be at least 6 characters.";
-  }
-
-  return message;
-}
 
 export function AuthPanel() {
   const navigate = useNavigate();
@@ -68,7 +45,7 @@ export function AuthPanel() {
 
       navigate("/", { replace: true });
     } catch (submitError) {
-      setError(getErrorMessage(submitError));
+      setError(getAuthErrorMessage(submitError));
     } finally {
       setSubmitting(false);
     }

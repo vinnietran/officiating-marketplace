@@ -3,6 +3,10 @@ import { Link } from "react-router-dom";
 import { AuthPanel } from "../components/AuthPanel";
 import { CompleteProfilePanel } from "../components/CompleteProfilePanel";
 import { useAuth } from "../context/AuthContext";
+import {
+  isOfficialAssignedToAwardedMarketplaceGame,
+  isOfficialAssignedToDirectGame
+} from "../lib/gameAssignments";
 import { FIRESTORE_DATABASE_ID } from "../lib/firebase";
 import { getReadableFirestoreError } from "../lib/firebaseErrors";
 import { formatCurrency, formatGameDate, getGameStatusLabel } from "../lib/format";
@@ -48,44 +52,6 @@ function formatRoleLabel(role: "official" | "assignor" | "school" | "evaluator")
     return "Evaluator";
   }
   return "School";
-}
-
-function isOfficialAssignedToDirectGame(game: Game, officialUid: string): boolean {
-  if (game.mode !== "direct_assignment") {
-    return false;
-  }
-
-  return (game.directAssignments ?? []).some((assignment) => {
-    if (assignment.assignmentType === "individual") {
-      return assignment.officialUid === officialUid;
-    }
-    return assignment.memberUids.includes(officialUid);
-  });
-}
-
-function isOfficialAssignedToAwardedMarketplaceGame(
-  selectedBid: Bid | null,
-  crewsById: Map<string, Crew>,
-  officialUid: string
-): boolean {
-  if (!selectedBid) {
-    return false;
-  }
-
-  if (selectedBid.officialUid === officialUid) {
-    return true;
-  }
-
-  if (selectedBid.bidderType !== "crew" || !selectedBid.crewId) {
-    return false;
-  }
-
-  const awardedCrew = crewsById.get(selectedBid.crewId);
-  if (!awardedCrew) {
-    return false;
-  }
-
-  return awardedCrew.memberUids.includes(officialUid);
 }
 
 export function Profile() {

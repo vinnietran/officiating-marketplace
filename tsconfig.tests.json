@@ -1,0 +1,27 @@
+{
+  "compilerOptions": {
+    "target": "ES2020",
+    "module": "CommonJS",
+    "moduleResolution": "Node",
+    "outDir": ".test-build",
+    "rootDir": ".",
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "resolveJsonModule": true,
+    "lib": ["ES2020", "DOM"],
+    "types": ["node"]
+  },
+  "include": [
+    "src/types.ts",
+    "src/lib/auth.ts",
+    "src/lib/format.ts",
+    "src/lib/gameForms.ts",
+    "src/lib/assignGame.ts",
+    "src/lib/bids.ts",
+    "src/lib/gameAssignments.ts",
+    "src/lib/marketplace.ts",
+    "tests/app/**/*.ts"
+  ]
+}
+

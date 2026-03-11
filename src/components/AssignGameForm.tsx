@@ -4,6 +4,12 @@ import {
   hasGooglePlacesApiKey,
   type PlaceSuggestion
 } from "../lib/googlePlaces";
+import {
+  buildAssignedGameSubmission,
+  filterAssignableOfficials,
+  getCrewMemberPositionLabel,
+  type IndividualAssignee
+} from "../lib/assignGame";
 import type {
   Crew,
   FootballPosition,
@@ -44,13 +50,6 @@ interface AssignGameFormProps {
   onSubmit: (values: AssignGameFormValues) => Promise<void>;
 }
 
-interface IndividualAssignee {
-  officialUid: string;
-  officialName: string;
-  officialEmail: string;
-  position: FootballPosition;
-}
-
 const SPORTS: Sport[] = ["Football", "Basketball", "Soccer", "Baseball"];
 const LEVELS: Level[] = [
   "NCAA",
@@ -72,13 +71,6 @@ const FOOTBALL_POSITIONS: Array<{ code: FootballPosition; label: string }> = [
   { code: "RC", label: "Replay Communicator (RC)" },
   { code: "ALT", label: "Alternate (ALT)" }
 ];
-const FOOTBALL_POSITION_LABEL_BY_CODE: Record<FootballPosition, string> = FOOTBALL_POSITIONS.reduce(
-  (acc, position) => {
-    acc[position.code] = position.label;
-    return acc;
-  },
-  {} as Record<FootballPosition, string>
-);
 const MIN_AUTOCOMPLETE_CHARS = 3;
 
 export function AssignGameForm({
@@ -120,18 +112,13 @@ export function AssignGameForm({
   );
   const officialSearchTerm = officialDirectorySearch.trim().toLowerCase();
   const hasOfficialSearch = officialSearchTerm.length > 0;
-  const filteredOfficials = useMemo(() => {
-    if (!hasOfficialSearch) {
-      return [];
-    }
-    return availableOfficials
-      .filter(
-        (official) =>
-          official.displayName.toLowerCase().includes(officialSearchTerm) ||
-          official.email.toLowerCase().includes(officialSearchTerm)
-      )
-      .slice(0, 30);
-  }, [availableOfficials, hasOfficialSearch, officialSearchTerm]);
+  const filteredOfficials = useMemo(
+    () =>
+      hasOfficialSearch
+        ? filterAssignableOfficials(availableOfficials, officialDirectorySearch)
+        : [],
+    [availableOfficials, hasOfficialSearch, officialDirectorySearch]
+  );
   const assignmentRosterCount = individualAssignments.length + selectedCrews.length;
   const hasAssignmentRosterEntries = assignmentRosterCount > 0;
 
@@ -237,77 +224,25 @@ export function AssignGameForm({
     setSelectedCrewIds((current) => current.filter((id) => id !== crewId));
   }
 
-  function getCrewMemberPositionLabel(crew: Crew, memberUid: string): string {
-    const positionCode = crew.memberPositions[memberUid];
-    if (!positionCode) {
-      return "Unassigned";
-    }
-
-    return FOOTBALL_POSITION_LABEL_BY_CODE[positionCode] ?? positionCode;
-  }
-
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setError(null);
 
-    const parsedPay = Number(payPosted);
-    const date = new Date(dateLocal);
-
-    if (!schoolName.trim() || !location.trim()) {
-      setError("School and location are required.");
-      return;
-    }
-
-    if (!dateLocal || Number.isNaN(date.getTime())) {
-      setError("A valid game date and time is required.");
-      return;
-    }
-
-    if (!Number.isFinite(parsedPay) || parsedPay <= 0) {
-      setError("Game fee must be greater than 0.");
-      return;
-    }
-
-    if (individualAssignments.length === 0 && selectedCrews.length === 0) {
-      setError("Add at least one individual or one crew.");
-      return;
-    }
-
-    if (sport === "Football") {
-      const missingPosition = individualAssignments.some((assignee) => !assignee.position);
-      if (missingPosition) {
-        setError("Each football official assignment requires a position.");
-        return;
-      }
-    }
-
     try {
-      setSubmitting(true);
-      await onSubmit({
-        schoolName: schoolName.trim(),
+      const submission = buildAssignedGameSubmission({
+        schoolName,
         sport,
         level,
-        dateISO: date.toISOString(),
-        location: location.trim(),
-        payPosted: parsedPay,
-        notes: notes.trim() || undefined,
-        directAssignments: [
-          ...individualAssignments.map((assignee) => ({
-            assignmentType: "individual" as const,
-            officialUid: assignee.officialUid,
-            officialName: assignee.officialName,
-            officialEmail: assignee.officialEmail,
-            ...(sport === "Football" ? { position: assignee.position } : {})
-          })),
-          ...selectedCrews.map((crew) => ({
-            assignmentType: "crew" as const,
-            crewId: crew.id,
-            crewName: crew.name,
-            memberUids: crew.memberUids,
-            memberNames: crew.members.map((member) => member.name)
-          }))
-        ]
+        dateLocal,
+        location,
+        payPosted,
+        notes,
+        individualAssignments,
+        selectedCrews
       });
+
+      setSubmitting(true);
+      await onSubmit(submission);
 
       setSchoolName("");
       setSport("Football");

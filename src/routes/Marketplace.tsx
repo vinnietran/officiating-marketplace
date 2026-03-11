@@ -6,7 +6,6 @@ import { Filters, type FilterValues } from "../components/Filters";
 import { GameCard } from "../components/GameCard";
 import { MessageModal } from "../components/MessageModal";
 import { useAuth } from "../context/AuthContext";
-import { getBidWindowInfo } from "../lib/format";
 import {
   getCoordinatesForAddress,
   getDistanceMilesBetweenAddresses,
@@ -26,6 +25,14 @@ import {
 } from "../lib/firestore";
 import { FIRESTORE_DATABASE_ID } from "../lib/firebase";
 import { getReadableFirestoreError } from "../lib/firebaseErrors";
+import {
+  buildQualifiedGameLevels,
+  filterAvailableMarketplaceGames,
+  getLocationClosenessScore,
+  normalizeForMatch,
+  tokenizeForMatch,
+  type OfficialLocationContext
+} from "../lib/marketplace";
 import type { Bid, Crew, Game, GeoPoint, UserProfile } from "../types";
 
 const DEFAULT_FILTERS: FilterValues = {
@@ -42,25 +49,6 @@ interface FeaturedSuggestion {
   score: number;
   distanceMiles?: number | null;
   badges: Array<"Closest to you" | "Highest Paying" | "Best fit">;
-}
-
-interface OfficialLocationContext {
-  hasLocation: boolean;
-  city: string;
-  state: string;
-  postalCode: string;
-  tokens: string[];
-}
-
-function normalizeForMatch(value: string): string {
-  return value.toLowerCase().replace(/[^a-z0-9 ]+/g, " ").replace(/\s+/g, " ").trim();
-}
-
-function tokenizeForMatch(value: string): string[] {
-  return normalizeForMatch(value)
-    .split(" ")
-    .map((token) => token.trim())
-    .filter((token) => token.length >= 3);
 }
 
 function withTimeout<T>(promise: Promise<T>, timeoutMs: number, fallback: T): Promise<T> {
@@ -106,69 +94,6 @@ function toGeoPoint(value: unknown): GeoPoint | null {
   }
 
   return { lat: parsedLat, lng: parsedLng };
-}
-
-function buildQualifiedGameLevels(officialLevels: Set<string>): Set<Game["level"]> {
-  const qualified = new Set<Game["level"]>();
-
-  // Requested rule: Varsity officials are automatically qualified for lower levels.
-  if (officialLevels.has("Varsity")) {
-    qualified.add("Varsity");
-    qualified.add("Junior Varsity");
-    qualified.add("Middle School");
-    qualified.add("Youth");
-  }
-
-  if (officialLevels.has("Sub Varsity")) {
-    qualified.add("Junior Varsity");
-    qualified.add("Middle School");
-    qualified.add("Youth");
-  }
-
-  // NCAA experience implies highest competition and below.
-  if (
-    officialLevels.has("NCAA DI") ||
-    officialLevels.has("NCAA DII") ||
-    officialLevels.has("NCAA DIII")
-  ) {
-    qualified.add("NCAA");
-    qualified.add("Varsity");
-    qualified.add("Junior Varsity");
-    qualified.add("Middle School");
-    qualified.add("Youth");
-  }
-
-  return qualified;
-}
-
-function getLocationClosenessScore(
-  game: Game,
-  locationContext: OfficialLocationContext | null
-): number {
-  if (!locationContext?.hasLocation) {
-    return 0.5;
-  }
-
-  const locationText = normalizeForMatch(game.location);
-  let score = 0;
-
-  if (locationContext.postalCode && locationText.includes(locationContext.postalCode)) {
-    score += 1;
-  }
-  if (locationContext.city && locationText.includes(locationContext.city)) {
-    score += 0.85;
-  }
-  if (locationContext.state && locationText.includes(locationContext.state)) {
-    score += 0.45;
-  }
-  if (locationContext.tokens.length) {
-    const tokenHits = locationContext.tokens.reduce((hits, token) => {
-      return hits + (locationText.includes(token) ? 1 : 0);
-    }, 0);
-    score += Math.min(tokenHits / Math.max(locationContext.tokens.length, 1), 0.6);
-  }
-
-  return Math.min(score / 1.8, 1);
 }
 
 export function Marketplace() {
@@ -269,23 +194,7 @@ export function Marketplace() {
   }, [freshOfficialProfile, profile]);
 
   const availableGames = useMemo(() => {
-    return games.filter((game) => {
-      const bidWindowInfo = getBidWindowInfo(
-        game.acceptingBidsUntilISO,
-        game.status,
-        nowMs
-      );
-
-      if (bidWindowInfo.state === "closed") {
-        return false;
-      }
-
-      if (profile?.role === "official" && game.mode === "direct_assignment") {
-        return false;
-      }
-
-      return true;
-    });
+    return filterAvailableMarketplaceGames(games, profile?.role, nowMs);
   }, [games, profile?.role, nowMs]);
 
   const officialOpenBidGames = useMemo(() => {

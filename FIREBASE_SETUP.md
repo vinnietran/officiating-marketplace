@@ -5,10 +5,24 @@
 3. Go to Firestore Database -> create database (Native mode).
    - Recommended database ID: `(default)`.
    - If you created a custom DB ID instead, set `VITE_FIRESTORE_DATABASE_ID=<your-db-id>` in `.env.local`.
-4. In Firestore Rules, paste contents of `firestore.rules` and publish.
-5. Run the app:
+4. Deploy the callable Functions API from this repo:
+   - `npm install`
+   - `npm --prefix functions install`
+   - `firebase deploy --only functions`
+5. Run the web app:
    - `npm install`
    - `npm run dev`
+
+## Functions Configuration
+
+- The web client now talks to Firebase Functions instead of reading or writing Firestore directly.
+- The Functions package lives in `functions/`.
+- If you use a non-default Firestore database ID in production, set `FIRESTORE_DATABASE_ID=<your-db-id>` for the Functions runtime and `VITE_FIRESTORE_DATABASE_ID=<your-db-id>` for the web client.
+- If you want to use the local Functions emulator in development, set these in `.env.local`:
+  - `VITE_USE_FUNCTIONS_EMULATOR=true`
+  - `VITE_FUNCTIONS_EMULATOR_HOST=127.0.0.1`
+  - `VITE_FUNCTIONS_EMULATOR_PORT=5001`
+  - `VITE_FIREBASE_FUNCTIONS_REGION=us-central1`
 
 ## Optional: Google Places Autocomplete
 
@@ -32,3 +46,8 @@ If you want address autocomplete on `Post a Game`:
 
 - `bids/{bidId}`
   - `gameId`, `officialUid`, `officialName`, `amount`, `message?`, `createdAtISO`
+
+## Notes
+
+- `firestore.rules` is no longer the primary enforcement point for application authorization. The callable Functions layer now validates roles and ownership before every read and write.
+- Mobile and other clients can reuse the same callable Functions endpoints introduced in this repo.

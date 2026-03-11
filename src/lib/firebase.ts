@@ -1,6 +1,6 @@
 import { initializeApp } from "firebase/app";
 import { getAuth } from "firebase/auth";
-import { getFirestore } from "firebase/firestore";
+import { getFunctions, connectFunctionsEmulator } from "firebase/functions";
 import { getAnalytics, isSupported } from "firebase/analytics";
 
 const firebaseConfig = {
@@ -17,32 +17,37 @@ const configuredDatabaseId =
   typeof import.meta !== "undefined" && import.meta.env.VITE_FIRESTORE_DATABASE_ID
     ? String(import.meta.env.VITE_FIRESTORE_DATABASE_ID).trim()
     : "";
+const functionsRegion =
+  typeof import.meta !== "undefined" && import.meta.env.VITE_FIREBASE_FUNCTIONS_REGION
+    ? String(import.meta.env.VITE_FIREBASE_FUNCTIONS_REGION).trim()
+    : "us-central1";
+const useFunctionsEmulator =
+  typeof import.meta !== "undefined" &&
+  String(import.meta.env.VITE_USE_FUNCTIONS_EMULATOR ?? "").trim().toLowerCase() === "true";
+const functionsEmulatorHost =
+  typeof import.meta !== "undefined" && import.meta.env.VITE_FUNCTIONS_EMULATOR_HOST
+    ? String(import.meta.env.VITE_FUNCTIONS_EMULATOR_HOST).trim()
+    : "127.0.0.1";
+const functionsEmulatorPort =
+  typeof import.meta !== "undefined" && import.meta.env.VITE_FUNCTIONS_EMULATOR_PORT
+    ? Number(import.meta.env.VITE_FUNCTIONS_EMULATOR_PORT)
+    : 5001;
 
-const preferredDatabaseId = configuredDatabaseId || "(default)";
-const fallbackDatabaseId =
-  preferredDatabaseId === "(default)"
-    ? "default"
-    : preferredDatabaseId === "default"
-      ? "(default)"
-      : null;
-
-export const FIRESTORE_DATABASE_ID = preferredDatabaseId;
-export const FIRESTORE_FALLBACK_DATABASE_ID = fallbackDatabaseId;
+export const FIRESTORE_DATABASE_ID = configuredDatabaseId || "(default)";
+export const FIRESTORE_FALLBACK_DATABASE_ID = null;
 
 export const firebaseApp = initializeApp(firebaseConfig);
 export const auth = getAuth(firebaseApp);
-export const db =
-  preferredDatabaseId === "(default)"
-    ? getFirestore(firebaseApp)
-    : getFirestore(firebaseApp, preferredDatabaseId);
-export const dbFallback = fallbackDatabaseId
-  ? getFirestore(firebaseApp, fallbackDatabaseId)
-  : null;
+export const functions = getFunctions(firebaseApp, functionsRegion);
+
+if (useFunctionsEmulator) {
+  connectFunctionsEmulator(functions, functionsEmulatorHost, functionsEmulatorPort);
+}
 
 if (typeof window !== "undefined") {
   if (import.meta.env.DEV) {
     console.info(
-      `[Firebase] project=${firebaseConfig.projectId}, firestoreDatabase=${FIRESTORE_DATABASE_ID}, fallback=${FIRESTORE_FALLBACK_DATABASE_ID ?? "none"}`
+      `[Firebase] project=${firebaseConfig.projectId}, firestoreDatabase=${FIRESTORE_DATABASE_ID}, functionsRegion=${functionsRegion}, functionsEmulator=${useFunctionsEmulator ? `${functionsEmulatorHost}:${functionsEmulatorPort}` : "off"}`
     );
   }
 

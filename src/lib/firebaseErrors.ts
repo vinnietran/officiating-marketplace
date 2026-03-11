@@ -9,5 +9,13 @@ export function getReadableFirestoreError(error: unknown, databaseId: string): s
     return "Firestore permission denied. Publish the rules from firestore.rules.";
   }
 
+  if (message.includes("permission-denied")) {
+    return "Request rejected by the Firebase Functions API. Check the signed-in user role and server-side authorization rules.";
+  }
+
+  if (message.includes("unauthenticated")) {
+    return "You need to sign in again before using the server API.";
+  }
+
   return `Firestore error: ${message}`;
 }

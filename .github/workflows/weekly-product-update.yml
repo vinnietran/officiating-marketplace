@@ -1,0 +1,83 @@
+name: Weekly Product Update
+
+on:
+  schedule:
+    - cron: "0 13 * * 1"
+  workflow_dispatch:
+    inputs:
+      report_start:
+        description: Optional UTC start date (YYYY-MM-DD or ISO-8601)
+        required: false
+        type: string
+      report_end:
+        description: Optional UTC end date (YYYY-MM-DD or ISO-8601)
+        required: false
+        type: string
+      recipient_override:
+        description: Optional comma-separated recipient override
+        required: false
+        type: string
+      dry_run:
+        description: Generate the email and artifact without sending
+        required: false
+        default: true
+        type: boolean
+
+jobs:
+  weekly-product-update:
+    runs-on: ubuntu-latest
+    concurrency:
+      group: weekly-product-update
+      cancel-in-progress: false
+    permissions:
+      contents: read
+      issues: read
+      pull-requests: read
+      actions: read
+    env:
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      PROJECT_NAME: ${{ vars.PRODUCT_UPDATE_PROJECT_NAME || github.event.repository.name }}
+      REPORT_START: ${{ inputs.report_start }}
+      REPORT_END: ${{ inputs.report_end }}
+      RECIPIENT_OVERRIDE: ${{ inputs.recipient_override }}
+      DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && (inputs.dry_run && 'true' || 'false') || vars.PRODUCT_UPDATE_DRY_RUN || 'false' }}
+      REPORT_RECIPIENTS: ${{ vars.PRODUCT_UPDATE_RECIPIENTS }}
+      REPORT_SENDER_NAME: ${{ vars.PRODUCT_UPDATE_SENDER_NAME || 'Product Updates' }}
+      REPORT_SENDER_EMAIL: ${{ vars.PRODUCT_UPDATE_SENDER_EMAIL }}
+      SMTP_HOST: ${{ secrets.PRODUCT_UPDATE_SMTP_HOST }}
+      SMTP_PORT: ${{ secrets.PRODUCT_UPDATE_SMTP_PORT }}
+      SMTP_USERNAME: ${{ secrets.PRODUCT_UPDATE_SMTP_USERNAME }}
+      SMTP_PASSWORD: ${{ secrets.PRODUCT_UPDATE_SMTP_PASSWORD }}
+      SMTP_SECURE: ${{ vars.PRODUCT_UPDATE_SMTP_SECURE || 'true' }}
+      IN_PROGRESS_LABELS: ${{ vars.PRODUCT_UPDATE_IN_PROGRESS_LABELS || 'in-progress,doing,active' }}
+      BLOCKER_LABELS: ${{ vars.PRODUCT_UPDATE_BLOCKER_LABELS || 'blocked,blocker,question,open-question' }}
+      NEXT_FOCUS_LABELS: ${{ vars.PRODUCT_UPDATE_NEXT_FOCUS_LABELS || 'next-up' }}
+      INCLUDE_MERGED_PRS: ${{ vars.PRODUCT_UPDATE_INCLUDE_MERGED_PRS || 'true' }}
+      INCLUDE_TESTS: ${{ vars.PRODUCT_UPDATE_INCLUDE_TESTS || 'true' }}
+      INCLUDE_BLOCKERS: ${{ vars.PRODUCT_UPDATE_INCLUDE_BLOCKERS || 'true' }}
+      INCLUDE_NEXT_FOCUS: ${{ vars.PRODUCT_UPDATE_INCLUDE_NEXT_FOCUS || 'true' }}
+      REPORT_OUTPUT_DIR: artifacts/weekly-product-update
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Generate weekly product update
+        run: node scripts/weekly-product-update/index.mjs
+
+      - name: Upload report artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: weekly-product-update-${{ github.run_number }}
+          path: artifacts/weekly-product-update
+          if-no-files-found: error
+

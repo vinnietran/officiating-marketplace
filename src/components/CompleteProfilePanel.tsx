@@ -1,12 +1,13 @@
 import { useMemo, useState } from "react";
 import { useAuth } from "../context/AuthContext";
+import {
+  formatRoleLabel,
+  getFallbackDisplayName,
+  resolveProfileDisplayName
+} from "../lib/auth";
 import type { UserRole } from "../types";
 
 const ROLE_OPTIONS: UserRole[] = ["official", "assignor", "school", "evaluator"];
-
-function formatRoleLabel(role: UserRole): string {
-  return role.charAt(0).toUpperCase() + role.slice(1);
-}
 
 export function CompleteProfilePanel() {
   const { user, completeProfile, signOut } = useAuth();
@@ -17,17 +18,14 @@ export function CompleteProfilePanel() {
   const [error, setError] = useState<string | null>(null);
 
   const fallbackName = useMemo(() => {
-    if (!user?.email) {
-      return "";
-    }
-    return user.email.split("@")[0] ?? "";
+    return getFallbackDisplayName(user?.email);
   }, [user]);
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setError(null);
 
-    const nameToSave = displayName.trim() || fallbackName;
+    const nameToSave = resolveProfileDisplayName(displayName, user?.email);
     if (!nameToSave) {
       setError("Display name is required.");
       return;

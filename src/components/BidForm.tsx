@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { buildBidSubmission, findActiveBid, getBidFormDefaults } from "../lib/bids";
 import type { Bid, Crew } from "../types";
 
 interface BidFormValues {
@@ -64,93 +65,46 @@ export function BidForm({
     }
   }, [bidderType, forceCrewOnly]);
 
-  const individualBid = useMemo(
-    () =>
-      existingBids.find(
-        (bid) => !bid.bidderType || bid.bidderType === "individual"
-      ) ?? null,
-    [existingBids]
-  );
-
-  const crewBidsByCrewId = useMemo(() => {
-    const result = new Map<string, Bid>();
-    existingBids.forEach((bid) => {
-      if (bid.bidderType === "crew" && bid.crewId && !result.has(bid.crewId)) {
-        result.set(bid.crewId, bid);
-      }
-    });
-    return result;
-  }, [existingBids]);
-
   const activeCrew = useMemo(
     () => availableCrews.find((crew) => crew.id === selectedCrewId) ?? null,
     [availableCrews, selectedCrewId]
   );
-
-  const latestExistingBid = useMemo(
-    () => [...existingBids].sort((a, b) => b.createdAtISO.localeCompare(a.createdAtISO))[0] ?? null,
-    [existingBids]
+  const activeBid = useMemo(
+    () =>
+      findActiveBid({
+        bidderType,
+        existingBids,
+        selectedCrewId,
+        singleBidMode
+      }),
+    [bidderType, existingBids, selectedCrewId, singleBidMode]
   );
 
-  const activeBid = singleBidMode
-    ? latestExistingBid
-    : bidderType === "crew"
-      ? crewBidsByCrewId.get(selectedCrewId) ?? null
-      : individualBid;
-
   useEffect(() => {
-    if (activeBid) {
-      setAmount(String(Math.max(activeBid.amount + 1, postedPay)));
-      setMessage(activeBid.message ?? "");
-      return;
-    }
-
-    setAmount(String(postedPay));
-    setMessage("");
+    const defaults = getBidFormDefaults(postedPay, activeBid);
+    setAmount(defaults.amount);
+    setMessage(defaults.message);
   }, [activeBid, postedPay]);
-
-  const trimmedName = useMemo(() => officialName.trim(), [officialName]);
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
-    const numericAmount = Number(amount);
-
-    if (!trimmedName) {
-      setError("Official name is required.");
-      return;
-    }
-
-    if (!Number.isFinite(numericAmount) || numericAmount <= 0) {
-      setError("Bid amount must be greater than 0.");
-      return;
-    }
-
-    if (message.length > 200) {
-      setError("Message cannot exceed 200 characters.");
-      return;
-    }
-
-    if (bidderType === "crew" && !selectedCrewId) {
-      setError("Select a crew to submit a crew bid.");
-      return;
-    }
-
-    if (activeBid && numericAmount <= activeBid.amount) {
-      setError("New offer must be higher than your current bid.");
-      return;
-    }
-
     try {
+      const submission = buildBidSubmission({
+        officialName,
+        bidderType,
+        selectedCrewId,
+        amount,
+        message,
+        activeBid,
+        availableCrews
+      });
+
       setSubmitting(true);
       setError(null);
       await onSubmit({
-        officialName: trimmedName,
-        bidderType,
-        crewId: bidderType === "crew" ? selectedCrewId : undefined,
-        crewName: bidderType === "crew" ? activeCrew?.name : undefined,
-        amount: numericAmount,
-        message: message.trim() || undefined
+        ...submission,
+        crewName: bidderType === "crew" ? activeCrew?.name ?? submission.crewName : undefined
       });
     } catch (submitError) {
       const submitMessage =

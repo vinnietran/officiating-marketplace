@@ -2,6 +2,11 @@ import { useEffect, useMemo, useState } from "react";
 import { Link, Navigate, useNavigate } from "react-router-dom";
 import { CompleteProfilePanel } from "../components/CompleteProfilePanel";
 import { useAuth } from "../context/AuthContext";
+import {
+  getOfficialAssignmentDetails,
+  isOfficialAssignedToAwardedMarketplaceGame,
+  isOfficialAssignedToDirectGame
+} from "../lib/gameAssignments";
 import { FIRESTORE_DATABASE_ID } from "../lib/firebase";
 import { getReadableFirestoreError } from "../lib/firebaseErrors";
 import {
@@ -11,7 +16,7 @@ import {
   getGameStatusLabel
 } from "../lib/format";
 import { subscribeBids, subscribeCrews, subscribeGames } from "../lib/firestore";
-import type { Bid, Crew, FootballPosition, Game } from "../types";
+import type { Bid, Crew, Game } from "../types";
 
 interface OperationsDashboardRow {
   game: Game;
@@ -37,110 +42,8 @@ interface OfficialAssignmentRow {
   awardedFee: number;
 }
 
-const FOOTBALL_POSITION_LABELS: Record<FootballPosition, string> = {
-  R: "Referee",
-  U: "Umpire",
-  C: "Center Judge",
-  H: "Head Line Judge",
-  L: "Line Judge",
-  S: "Side Judge",
-  F: "Field Judge",
-  B: "Back Judge",
-  RO: "Replay Official",
-  RC: "Replay Communicator",
-  ALT: "Alternate"
-};
-
 function isNonOfficialRole(role: string | undefined): role is "assignor" | "school" {
   return role === "assignor" || role === "school";
-}
-
-function isOfficialAssignedToDirectGame(game: Game, officialUid: string): boolean {
-  if (game.mode !== "direct_assignment") {
-    return false;
-  }
-
-  return (game.directAssignments ?? []).some((assignment) => {
-    if (assignment.assignmentType === "individual") {
-      return assignment.officialUid === officialUid;
-    }
-    return assignment.memberUids.includes(officialUid);
-  });
-}
-
-function isOfficialAssignedToAwardedMarketplaceGame(
-  selectedBid: Bid | null,
-  crewsById: Map<string, Crew>,
-  officialUid: string
-): boolean {
-  if (!selectedBid) {
-    return false;
-  }
-
-  if (selectedBid.officialUid === officialUid) {
-    return true;
-  }
-
-  if (selectedBid.bidderType !== "crew" || !selectedBid.crewId) {
-    return false;
-  }
-
-  const awardedCrew = crewsById.get(selectedBid.crewId);
-  if (!awardedCrew) {
-    return false;
-  }
-
-  return awardedCrew.memberUids.includes(officialUid);
-}
-
-function toPositionLabel(position?: FootballPosition): string {
-  if (!position) {
-    return "Unassigned";
-  }
-  return `${FOOTBALL_POSITION_LABELS[position]} (${position})`;
-}
-
-function getOfficialAssignmentDetails(
-  game: Game,
-  selectedBid: Bid | null,
-  crewsById: Map<string, Crew>,
-  officialUid: string
-): { crewLabel: string; positionLabel: string } {
-  if (game.mode === "direct_assignment") {
-    const assignment = (game.directAssignments ?? []).find((candidate) => {
-      if (candidate.assignmentType === "individual") {
-        return candidate.officialUid === officialUid;
-      }
-      return candidate.memberUids.includes(officialUid);
-    });
-
-    if (!assignment) {
-      return { crewLabel: "Assigned", positionLabel: "Unassigned" };
-    }
-    if (assignment.assignmentType === "crew") {
-      const assignedCrew = crewsById.get(assignment.crewId);
-      return {
-        crewLabel: assignment.crewName,
-        positionLabel: toPositionLabel(assignedCrew?.memberPositions?.[officialUid])
-      };
-    }
-    return {
-      crewLabel: "Individual",
-      positionLabel: toPositionLabel(assignment.position)
-    };
-  }
-
-  if (!selectedBid) {
-    return { crewLabel: "Assigned", positionLabel: "Unassigned" };
-  }
-  if (selectedBid.bidderType === "crew") {
-    const awardedCrew = selectedBid.crewId ? crewsById.get(selectedBid.crewId) : null;
-    return {
-      crewLabel: selectedBid.crewName ?? "Crew",
-      positionLabel: toPositionLabel(awardedCrew?.memberPositions?.[officialUid])
-    };
-  }
-  return { crewLabel: "Individual", positionLabel: "Unassigned" };
 }
 
 export function Dashboard() {

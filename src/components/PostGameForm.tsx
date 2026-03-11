@@ -4,6 +4,7 @@ import {
   hasGooglePlacesApiKey,
   type PlaceSuggestion
 } from "../lib/googlePlaces";
+import { buildMarketplaceGameSubmission } from "../lib/gameForms";
 import type { Level, Sport } from "../types";
 
 interface PostGameFormValues {
@@ -101,50 +102,20 @@ export function PostGameForm({ onSubmit }: PostGameFormProps) {
     event.preventDefault();
     setError(null);
 
-    const parsedPay = Number(payPosted);
-    const date = new Date(dateLocal);
-    const acceptingBidsUntil = acceptingBidsUntilLocal
-      ? new Date(acceptingBidsUntilLocal)
-      : null;
-
-    if (!schoolName.trim() || !location.trim()) {
-      setError("School and location are required.");
-      return;
-    }
-
-    if (!dateLocal || Number.isNaN(date.getTime())) {
-      setError("A valid game date and time is required.");
-      return;
-    }
-
-    if (
-      acceptingBidsUntil &&
-      (Number.isNaN(acceptingBidsUntil.getTime()) ||
-        acceptingBidsUntil.getTime() > date.getTime())
-    ) {
-      setError("Accepting bids until must be a valid date/time before game start.");
-      return;
-    }
-
-    if (!Number.isFinite(parsedPay) || parsedPay <= 0) {
-      setError("Posted pay must be greater than 0.");
-      return;
-    }
-
     try {
-      setSubmitting(true);
-      await onSubmit({
-        schoolName: schoolName.trim(),
+      const submission = buildMarketplaceGameSubmission({
+        schoolName,
         sport,
         level,
-        dateISO: date.toISOString(),
-        acceptingBidsUntilISO: acceptingBidsUntil
-          ? acceptingBidsUntil.toISOString()
-          : undefined,
-        location: location.trim(),
-        payPosted: parsedPay,
-        notes: notes.trim() || undefined
+        dateLocal,
+        acceptingBidsUntilLocal,
+        location,
+        payPosted,
+        notes
       });
+
+      setSubmitting(true);
+      await onSubmit(submission);
 
       setSchoolName("");
       setSport("Football");

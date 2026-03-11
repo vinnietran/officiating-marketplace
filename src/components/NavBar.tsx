@@ -1,6 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { NavLink, useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
+import {
+  isOfficialAssignedToAwardedMarketplaceGame,
+  isOfficialAssignedToDirectGame
+} from "../lib/gameAssignments";
 import { formatGameDate } from "../lib/format";
 import { subscribeBids, subscribeCrews, subscribeGames } from "../lib/firestore";
 import type { Bid, Crew, Game } from "../types";
@@ -28,36 +32,6 @@ function getSeenStorageKey(uid: string): string {
 
 function getDismissedStorageKey(uid: string): string {
   return `${DISMISSED_NOTIFICATIONS_STORAGE_PREFIX}${uid}`;
-}
-
-function isAssignedViaDirectAssignment(game: Game, userId: string): boolean {
-  return (game.directAssignments ?? []).some((assignment) => {
-    if (assignment.assignmentType === "individual") {
-      return assignment.officialUid === userId;
-    }
-    return assignment.memberUids.includes(userId);
-  });
-}
-
-function isAssignedViaAwardedBid(
-  selectedBid: Bid,
-  userId: string,
-  crewsById: Map<string, Crew>
-): boolean {
-  if (selectedBid.officialUid === userId) {
-    return true;
-  }
-
-  if (selectedBid.bidderType !== "crew" || !selectedBid.crewId) {
-    return false;
-  }
-
-  const awardedCrew = crewsById.get(selectedBid.crewId);
-  if (!awardedCrew) {
-    return false;
-  }
-
-  return awardedCrew.memberUids.includes(userId);
 }
 
 export function NavBar() {
@@ -230,7 +204,7 @@ export function NavBar() {
       }
 
       if (game.mode === "direct_assignment") {
-        if (!isAssignedViaDirectAssignment(game, user.uid)) {
+        if (!isOfficialAssignedToDirectGame(game, user.uid)) {
           return;
         }
 
@@ -269,7 +243,7 @@ export function NavBar() {
         return;
       }
 
-      if (!isAssignedViaAwardedBid(selectedBid, user.uid, crewsById)) {
+      if (!isOfficialAssignedToAwardedMarketplaceGame(selectedBid, crewsById, user.uid)) {
         return;
       }
 

@@ -1,6 +1,7 @@
 
 const admin = require("firebase-admin");
 const { FieldValue, getFirestore } = require("firebase-admin/firestore");
+const { setGlobalOptions } = require("firebase-functions/v2");
 const { onCall, HttpsError } = require("firebase-functions/v2/https");
 
 admin.initializeApp();
@@ -8,6 +9,7 @@ admin.initializeApp();
 const configuredDatabaseId = (process.env.FIRESTORE_DATABASE_ID || "(default)").trim();
 const firestoreDatabaseId =
   configuredDatabaseId === "default" ? "(default)" : configuredDatabaseId;
+const functionsRegion = trimString(process.env.FUNCTIONS_REGION) || "us-central1";
 const db = getFirestore(undefined, firestoreDatabaseId);
 
 const GAMES_COLLECTION = "games";
@@ -45,6 +47,56 @@ const FOOTBALL_POSITIONS = new Set([
   "RC",
   "ALT"
 ]);
+
+function parseBoolean(value) {
+  return ["1", "true", "yes", "on"].includes(trimString(value).toLowerCase());
+}
+
+function unique(values) {
+  return Array.from(new Set(values.filter(Boolean)));
+}
+
+function parseCallableCorsOrigins() {
+  const configuredOrigins = trimString(process.env.CALLABLE_ALLOWED_ORIGINS);
+  if (configuredOrigins) {
+    return unique(
+      configuredOrigins
+        .split(",")
+        .map((value) => value.trim())
+        .filter(Boolean)
+    );
+  }
+
+  return [
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
+    "http://localhost:4173",
+    "http://127.0.0.1:4173",
+    "http://localhost:5173",
+    "http://127.0.0.1:5173",
+    "http://localhost:5174",
+    "http://127.0.0.1:5174",
+    "https://officiating-marketplace-487319.firebaseapp.com",
+    "https://officiating-marketplace-487319.web.app"
+  ];
+}
+
+const callableCorsOrigins = parseCallableCorsOrigins();
+const enforceCallableAppCheck = parseBoolean(process.env.ENFORCE_CALLABLE_APP_CHECK);
+
+setGlobalOptions({
+  region: functionsRegion,
+  invoker: "public"
+});
+
+const callableOptions = {
+  cors: callableCorsOrigins,
+  enforceAppCheck: enforceCallableAppCheck
+};
+
+function onClientCall(handler) {
+  return onCall(callableOptions, handler);
+}
 
 function assert(condition, code, message) {
   if (!condition) {
@@ -373,7 +425,7 @@ function canManageCrew(crew, uid) {
   return crew.createdByUid === uid || crew.crewChiefUid === uid;
 }
 
-exports.createUserProfile = onCall(async (request) => {
+exports.createUserProfile = onClientCall(async (request) => {
   const uid = requireAuth(request);
   const input = request.data && request.data.profile;
   assert(input && typeof input === "object", "invalid-argument", "Profile payload is required.");
@@ -398,7 +450,7 @@ exports.createUserProfile = onCall(async (request) => {
   return { ok: true };
 });
 
-exports.getUserProfile = onCall(async (request) => {
+exports.getUserProfile = onClientCall(async (request) => {
   const requesterUid = requireAuth(request);
   const requestedUid = trimString(request.data && request.data.uid) || requesterUid;
 
@@ -413,7 +465,7 @@ exports.getUserProfile = onCall(async (request) => {
   return normalizeUserProfile(snapshot.id, snapshot.data());
 });
 
-exports.getUserProfilesByUids = onCall(async (request) => {
+exports.getUserProfilesByUids = onClientCall(async (request) => {
   await getRequesterProfile(request);
   const uids = Array.isArray(request.data && request.data.uids)
     ? request.data.uids.map((uid) => trimString(uid)).filter(Boolean)
@@ -436,7 +488,7 @@ exports.getUserProfilesByUids = onCall(async (request) => {
   }, {});
 });
 
-exports.updateOfficialProfile = onCall(async (request) => {
+exports.updateOfficialProfile = onClientCall(async (request) => {
   const profile = await getRequesterProfile(request);
   const uid = trimString(request.data && request.data.uid);
   assert(uid === profile.uid, "permission-denied", "You can only update your own profile.");
@@ -469,7 +521,7 @@ exports.updateOfficialProfile = onCall(async (request) => {
   return { ok: true };
 });
 
-exports.searchOfficialProfilesByEmail = onCall(async (request) => {
+exports.searchOfficialProfilesByEmail = onClientCall(async (request) => {
   const profile = await getRequesterProfile(request);
   assert(
     profile.role === "official" || profile.role === "assignor" || profile.role === "school",
@@ -505,25 +557,25 @@ exports.searchOfficialProfilesByEmail = onCall(async (request) => {
   );
 });
 
-exports.listGames = onCall(async (request) => {
+exports.listGames = onClientCall(async (request) => {
   await getRequesterProfile(request);
   const snapshot = await db.collection(GAMES_COLLECTION).orderBy("dateISO", "asc").get();
   return snapshot.docs.map((doc) => normalizeGameDocument(doc.id, doc.data()));
 });
 
-exports.listBids = onCall(async (request) => {
+exports.listBids = onClientCall(async (request) => {
   await getRequesterProfile(request);
   const snapshot = await db.collection(BIDS_COLLECTION).orderBy("createdAtISO", "desc").get();
   return snapshot.docs.map((doc) => normalizeBidDocument(doc.id, doc.data()));
 });
 
-exports.listCrews = onCall(async (request) => {
+exports.listCrews = onClientCall(async (request) => {
   await getRequesterProfile(request);
   const snapshot = await db.collection(CREWS_COLLECTION).orderBy("createdAtISO", "desc").get();
   return snapshot.docs.map((doc) => normalizeCrewDocument(doc.id, doc.data()));
 });
 
-exports.listOfficialProfiles = onCall(async (request) => {
+exports.listOfficialProfiles = onClientCall(async (request) => {
   await getRequesterProfile(request);
   const snapshot = await db.collection(USER_PROFILES_COLLECTION).get();
   return snapshot.docs
@@ -532,13 +584,13 @@ exports.listOfficialProfiles = onCall(async (request) => {
     .sort((left, right) => left.displayName.localeCompare(right.displayName));
 });
 
-exports.listRatings = onCall(async (request) => {
+exports.listRatings = onClientCall(async (request) => {
   await getRequesterProfile(request);
   const snapshot = await db.collection(RATINGS_COLLECTION).orderBy("updatedAtISO", "desc").get();
   return snapshot.docs.map((doc) => normalizeRatingDocument(doc.id, doc.data()));
 });
 
-exports.listRatingsForGame = onCall(async (request) => {
+exports.listRatingsForGame = onClientCall(async (request) => {
   await getRequesterProfile(request);
   const gameId = trimString(request.data && request.data.gameId);
   assert(gameId, "invalid-argument", "gameId is required.");
@@ -546,7 +598,7 @@ exports.listRatingsForGame = onCall(async (request) => {
   return snapshot.docs.map((doc) => normalizeRatingDocument(doc.id, doc.data()));
 });
 
-exports.listEvaluationsForGame = onCall(async (request) => {
+exports.listEvaluationsForGame = onClientCall(async (request) => {
   await getRequesterProfile(request);
   const gameId = trimString(request.data && request.data.gameId);
   assert(gameId, "invalid-argument", "gameId is required.");
@@ -557,7 +609,7 @@ exports.listEvaluationsForGame = onCall(async (request) => {
   return snapshot.docs.map((doc) => normalizeEvaluationDocument(doc.id, doc.data()));
 });
 
-exports.createGame = onCall(async (request) => {
+exports.createGame = onClientCall(async (request) => {
   const profile = await getRequesterProfile(request);
   assertRole(profile, ["assignor", "school"]);
 
@@ -584,7 +636,7 @@ exports.createGame = onCall(async (request) => {
   return { ok: true };
 });
 
-exports.createAssignedGame = onCall(async (request) => {
+exports.createAssignedGame = onClientCall(async (request) => {
   const profile = await getRequesterProfile(request);
   assertRole(profile, ["assignor", "school"]);
 
@@ -620,7 +672,7 @@ exports.createAssignedGame = onCall(async (request) => {
   return { ok: true };
 });
 
-exports.updateGame = onCall(async (request) => {
+exports.updateGame = onClientCall(async (request) => {
   const profile = await getRequesterProfile(request);
   assertRole(profile, ["assignor", "school"]);
   const gameId = trimString(request.data && request.data.gameId);
@@ -645,7 +697,7 @@ exports.updateGame = onCall(async (request) => {
   return { ok: true };
 });
 
-exports.createBid = onCall(async (request) => {
+exports.createBid = onClientCall(async (request) => {
   const profile = await getRequesterProfile(request);
   assert(profile.role === "official", "permission-denied", "Only officials can place bids.");
 
@@ -685,7 +737,7 @@ exports.createBid = onCall(async (request) => {
   return { ok: true };
 });
 
-exports.updateBid = onCall(async (request) => {
+exports.updateBid = onClientCall(async (request) => {
   const profile = await getRequesterProfile(request);
   assert(profile.role === "official", "permission-denied", "Only officials can update bids.");
 
@@ -728,7 +780,7 @@ exports.updateBid = onCall(async (request) => {
   return { ok: true };
 });
 
-exports.deleteBid = onCall(async (request) => {
+exports.deleteBid = onClientCall(async (request) => {
   const profile = await getRequesterProfile(request);
   assert(profile.role === "official", "permission-denied", "Only officials can delete bids.");
 
@@ -741,7 +793,7 @@ exports.deleteBid = onCall(async (request) => {
   return { ok: true };
 });
 
-exports.createCrew = onCall(async (request) => {
+exports.createCrew = onClientCall(async (request) => {
   const profile = await getRequesterProfile(request);
   assertRole(profile, ["official", "assignor", "school"]);
 
@@ -772,7 +824,7 @@ exports.createCrew = onCall(async (request) => {
   return { ok: true };
 });
 
-exports.deleteCrew = onCall(async (request) => {
+exports.deleteCrew = onClientCall(async (request) => {
   const profile = await getRequesterProfile(request);
   const crewId = trimString(request.data && request.data.crewId);
   assert(crewId, "invalid-argument", "crewId is required.");
@@ -783,7 +835,7 @@ exports.deleteCrew = onCall(async (request) => {
   return { ok: true };
 });
 
-exports.updateCrewMembers = onCall(async (request) => {
+exports.updateCrewMembers = onClientCall(async (request) => {
   const profile = await getRequesterProfile(request);
   const crewId = trimString(request.data && request.data.crewId);
   assert(crewId, "invalid-argument", "crewId is required.");
@@ -806,7 +858,7 @@ exports.updateCrewMembers = onCall(async (request) => {
   return { ok: true };
 });
 
-exports.updateCrewChief = onCall(async (request) => {
+exports.updateCrewChief = onClientCall(async (request) => {
   const profile = await getRequesterProfile(request);
   const crewId = trimString(request.data && request.data.crewId);
   const chief = request.data && request.data.chief;
@@ -829,7 +881,7 @@ exports.updateCrewChief = onCall(async (request) => {
   return { ok: true };
 });
 
-exports.updateCrewMemberPositions = onCall(async (request) => {
+exports.updateCrewMemberPositions = onClientCall(async (request) => {
   const profile = await getRequesterProfile(request);
   const crewId = trimString(request.data && request.data.crewId);
   assert(crewId, "invalid-argument", "crewId is required.");
@@ -846,7 +898,7 @@ exports.updateCrewMemberPositions = onCall(async (request) => {
   return { ok: true };
 });
 
-exports.upsertGameRating = onCall(async (request) => {
+exports.upsertGameRating = onClientCall(async (request) => {
   const profile = await getRequesterProfile(request);
   assert(profile.role !== "evaluator", "permission-denied", "Evaluators cannot submit game ratings.");
 
@@ -876,7 +928,7 @@ exports.upsertGameRating = onCall(async (request) => {
   return { ok: true };
 });
 
-exports.upsertGameEvaluation = onCall(async (request) => {
+exports.upsertGameEvaluation = onClientCall(async (request) => {
   const profile = await getRequesterProfile(request);
   assert(profile.role === "evaluator", "permission-denied", "Only evaluators can submit game evaluations.");
 
@@ -901,7 +953,7 @@ exports.upsertGameEvaluation = onCall(async (request) => {
   return { ok: true };
 });
 
-exports.selectBid = onCall(async (request) => {
+exports.selectBid = onClientCall(async (request) => {
   const profile = await getRequesterProfile(request);
   assertRole(profile, ["assignor", "school"]);
 
@@ -922,7 +974,7 @@ exports.selectBid = onCall(async (request) => {
   return { ok: true };
 });
 
-exports.deleteGame = onCall(async (request) => {
+exports.deleteGame = onClientCall(async (request) => {
   const profile = await getRequesterProfile(request);
   assertRole(profile, ["assignor", "school"]);
 
@@ -938,4 +990,3 @@ exports.deleteGame = onCall(async (request) => {
   await db.collection(GAMES_COLLECTION).doc(gameId).delete();
   return { ok: true };
 });
-

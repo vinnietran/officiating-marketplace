@@ -1,6 +1,7 @@
 import { Navigate, Route, Routes } from "react-router-dom";
 import { NavBar } from "./components/NavBar";
 import { useAuth } from "./context/AuthContext";
+import { getHomeRouteRedirect } from "./lib/auth";
 import { AssignGame } from "./routes/AssignGame";
 import { Crews } from "./routes/Crews";
 import { Dashboard } from "./routes/Dashboard";
@@ -14,7 +15,14 @@ import { ScheduleGameDetails } from "./routes/ScheduleGameDetails";
 function HomeRoute() {
   const { user, profile, loading, profileLoading } = useAuth();
 
-  if (loading || (user && profileLoading)) {
+  const redirect = getHomeRouteRedirect({
+    loading,
+    hasUser: Boolean(user),
+    profileLoading,
+    role: profile?.role
+  });
+
+  if (!redirect) {
     return (
       <main className="page">
         <p>Loading...</p>
@@ -22,15 +30,7 @@ function HomeRoute() {
     );
   }
 
-  if (user && profile && profile.role === "evaluator") {
-    return <Navigate to="/schedule" replace />;
-  }
-
-  if (user) {
-    return <Navigate to="/dashboard" replace />;
-  }
-
-  return <Navigate to="/login" replace />;
+  return <Navigate to={redirect} replace />;
 }
 
 export default function App() {

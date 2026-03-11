@@ -8,7 +8,10 @@
     "build": "tsc -b && vite build",
     "preview": "vite preview",
     "seed:pittsburgh": "node scripts/seedPittsburghMarketplaceGames.mjs",
-    "test": "node --test scripts/weekly-product-update/tests/*.test.mjs",
+    "test": "npm run test:app && npm run test:weekly",
+    "test:app": "node scripts/run-app-tests.mjs",
+    "test:weekly": "node --test scripts/weekly-product-update/tests/*.test.mjs",
+    "ci": "npm run test && npm run build && node --check functions/index.js",
     "weekly-product-update:example": "node scripts/weekly-product-update/generate-example.mjs",
     "weekly-product-update:dry-run": "node scripts/weekly-product-update/index.mjs"
   },

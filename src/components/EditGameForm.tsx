@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { buildMarketplaceGameSubmission, toDateTimeLocalValue } from "../lib/gameForms";
 import type { Game, Level, Sport } from "../types";
 
 interface EditGameFormValues {
@@ -19,32 +20,7 @@ interface EditGameFormProps {
 }
 
 const SPORTS: Sport[] = ["Football", "Basketball", "Soccer", "Baseball"];
-const LEVELS: Level[] = [
-  "NCAA",
-  "Varsity",
-  "Junior Varsity",
-  "Middle School",
-  "Youth"
-];
-
-function toDateTimeLocalValue(dateISO?: string): string {
-  if (!dateISO) {
-    return "";
-  }
-
-  const date = new Date(dateISO);
-  if (Number.isNaN(date.getTime())) {
-    return "";
-  }
-
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const day = String(date.getDate()).padStart(2, "0");
-  const hours = String(date.getHours()).padStart(2, "0");
-  const minutes = String(date.getMinutes()).padStart(2, "0");
-
-  return `${year}-${month}-${day}T${hours}:${minutes}`;
-}
+const LEVELS: Level[] = ["NCAA", "Varsity", "Junior Varsity", "Middle School", "Youth"];
 
 export function EditGameForm({ game, onSubmit, onCancel }: EditGameFormProps) {
   const [schoolName, setSchoolName] = useState(game.schoolName);
@@ -64,48 +40,20 @@ export function EditGameForm({ game, onSubmit, onCancel }: EditGameFormProps) {
     event.preventDefault();
     setError(null);
 
-    const parsedPay = Number(payPosted);
-    const gameDate = new Date(dateLocal);
-    const bidsUntilDate = acceptingBidsUntilLocal
-      ? new Date(acceptingBidsUntilLocal)
-      : null;
-
-    if (!schoolName.trim() || !location.trim()) {
-      setError("School and location are required.");
-      return;
-    }
-
-    if (!dateLocal || Number.isNaN(gameDate.getTime())) {
-      setError("A valid game date and time is required.");
-      return;
-    }
-
-    if (
-      bidsUntilDate &&
-      (Number.isNaN(bidsUntilDate.getTime()) ||
-        bidsUntilDate.getTime() > gameDate.getTime())
-    ) {
-      setError("Accepting bids until must be a valid date/time before game start.");
-      return;
-    }
-
-    if (!Number.isFinite(parsedPay) || parsedPay <= 0) {
-      setError("Posted pay must be greater than 0.");
-      return;
-    }
-
     try {
-      setSaving(true);
-      await onSubmit({
-        schoolName: schoolName.trim(),
+      const submission = buildMarketplaceGameSubmission({
+        schoolName,
         sport,
         level,
-        dateISO: gameDate.toISOString(),
-        acceptingBidsUntilISO: bidsUntilDate ? bidsUntilDate.toISOString() : undefined,
-        location: location.trim(),
-        payPosted: parsedPay,
-        notes: notes.trim() || undefined
+        dateLocal,
+        acceptingBidsUntilLocal,
+        location,
+        payPosted,
+        notes
       });
+
+      setSaving(true);
+      await onSubmit(submission);
     } catch (submitError) {
       const submitMessage =
         submitError instanceof Error ? submitError.message : "Unable to save game updates.";

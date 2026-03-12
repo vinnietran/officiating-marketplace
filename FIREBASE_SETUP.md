@@ -18,6 +18,7 @@
 - The web client now talks to Firebase Functions instead of reading or writing Firestore directly.
 - The Functions package lives in `functions/`.
 - If you use a non-default Firestore database ID in production, set `FIRESTORE_DATABASE_ID=<your-db-id>` for the Functions runtime and `VITE_FIRESTORE_DATABASE_ID=<your-db-id>` for the web client.
+- This project may be using a named Firestore database called `default`. If `gcloud firestore databases list` shows `name: .../databases/default`, set `FIRESTORE_DATABASE_ID=default` for Functions instead of leaving it unset.
 - Callable functions are deployed with a public invoker policy so browser clients can reach them. Authentication and authorization still happen inside the function handlers.
 - Callable CORS is restricted to an allowlist. By default the allowlist includes local development origins (`localhost` / `127.0.0.1` on common Vite ports) plus the default Firebase Hosting domains for this project.
 - To override the callable origin allowlist in production, set:

@@ -1,16 +1,18 @@
-
 const admin = require("firebase-admin");
-const { FieldValue, getFirestore } = require("firebase-admin/firestore");
+const { FieldValue, initializeFirestore } = require("firebase-admin/firestore");
 const { setGlobalOptions } = require("firebase-functions/v2");
 const { onCall, HttpsError } = require("firebase-functions/v2/https");
 
 admin.initializeApp();
 
 const configuredDatabaseId = (process.env.FIRESTORE_DATABASE_ID || "(default)").trim();
-const firestoreDatabaseId =
-  configuredDatabaseId === "default" ? "(default)" : configuredDatabaseId;
 const functionsRegion = trimString(process.env.FUNCTIONS_REGION) || "us-central1";
-const db = getFirestore(undefined, firestoreDatabaseId);
+const useDefaultFirestoreDatabase =
+  !configuredDatabaseId ||
+  configuredDatabaseId === "(default)";
+const db = useDefaultFirestoreDatabase
+  ? initializeFirestore(admin.app(), { preferRest: true })
+  : initializeFirestore(admin.app(), { preferRest: true }, configuredDatabaseId);
 
 const GAMES_COLLECTION = "games";
 const BIDS_COLLECTION = "bids";

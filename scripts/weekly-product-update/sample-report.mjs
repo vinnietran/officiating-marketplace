@@ -11,6 +11,10 @@ export function createSampleReport() {
     reportWindow,
     generatedAt: "2026-03-10T14:30:00.000Z",
     subject: buildEmailSubject("Officiating Marketplace", reportWindow),
+    branding: {
+      companyName: "V&S Ventures LLC",
+      email: "team@vs-venturesllc.com",
+    },
     completedStories: [
       {
         number: 24,
@@ -90,4 +94,3 @@ export function createSampleReport() {
     ],
   };
 }
-

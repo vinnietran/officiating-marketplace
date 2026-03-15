@@ -13,7 +13,7 @@ function buildPersonalizations(recipients) {
   ];
 }
 
-export async function sendEmail({ config, subject, html, text }) {
+export async function sendEmail({ config, subject, html, text, attachments = [] }) {
   const response = await fetch("https://api.sendgrid.com/v3/mail/send", {
     method: "POST",
     headers: {
@@ -28,6 +28,7 @@ export async function sendEmail({ config, subject, html, text }) {
         { type: "text/plain", value: text },
         { type: "text/html", value: html },
       ],
+      ...(attachments.length ? { attachments } : {}),
     }),
   });
 

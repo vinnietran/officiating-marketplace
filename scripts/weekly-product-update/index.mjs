@@ -54,9 +54,36 @@ async function writeArtifacts(outputDir, report, html, text) {
   );
 }
 
+async function loadLogoAsset(config) {
+  try {
+    const logoBuffer = await fs.readFile(config.logoPath);
+    const base64Content = logoBuffer.toString("base64");
+    const fileName = path.basename(config.logoPath);
+
+    return {
+      previewSrc: `data:image/png;base64,${base64Content}`,
+      emailSrc: "cid:weekly-product-update-logo",
+      attachment: {
+        content: base64Content,
+        filename: fileName,
+        type: "image/png",
+        disposition: "inline",
+        content_id: "weekly-product-update-logo",
+      },
+    };
+  } catch {
+    return {
+      previewSrc: "",
+      emailSrc: "",
+      attachment: null,
+    };
+  }
+}
+
 async function main() {
   const config = loadConfig();
   validateRuntimeConfig(config);
+  const logoAsset = await loadLogoAsset(config);
 
   const repository = await fetchRepository(config);
   const openIssuesPromise = fetchOpenIssues(config);
@@ -84,6 +111,10 @@ async function main() {
     reportWindow: config.reportWindow,
     generatedAt: new Date().toISOString(),
     subject: buildEmailSubject(config.projectName, config.reportWindow),
+    branding: {
+      companyName: config.senderName || config.projectName,
+      email: config.senderEmail,
+    },
     completedStories: closedIssues.map(parseStoryDetails),
     inProgressItems: selectIssuesByLabels(openIssues, config.labels.inProgress).map(summarizeIssue),
     mergedPullRequests: mergedPullRequests.map(summarizePullRequest),
@@ -97,8 +128,9 @@ async function main() {
     repositoryUrl: `${config.serverUrl}/${config.repository}`,
   };
 
-  const html = renderEmailHtml(report);
+  const html = renderEmailHtml(report, { logoSrc: logoAsset.previewSrc });
   const text = renderEmailText(report);
+  const emailHtml = renderEmailHtml(report, { logoSrc: logoAsset.emailSrc });
 
   await writeArtifacts(config.outputDir, report, html, text);
 
@@ -112,8 +144,9 @@ async function main() {
   const result = await sendEmail({
     config,
     subject: report.subject,
-    html,
+    html: emailHtml,
     text,
+    attachments: logoAsset.attachment ? [logoAsset.attachment] : [],
   });
 
   console.log(`Email sent successfully (${result.messageId}).`);
@@ -123,4 +156,3 @@ main().catch((error) => {
   console.error(error.stack || error.message || error);
   process.exitCode = 1;
 });
-

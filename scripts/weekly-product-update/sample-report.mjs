@@ -22,6 +22,8 @@ export function createSampleReport() {
         url: "https://github.com/example/officiating-marketplace/issues/24",
         story:
           "Schools can create and publish open games that need to be filled by qualified officials.",
+        inProgressAt: "2026-03-03T15:00:00.000Z",
+        completedAt: "2026-03-07T19:25:00.000Z",
         completedOutcome:
           "School users can now create and publish a game posting visible in the marketplace.",
         validation: "Manually tested end-to-end in the development environment.",
@@ -32,6 +34,8 @@ export function createSampleReport() {
         url: "https://github.com/example/officiating-marketplace/issues/31",
         story:
           "Assigners needed a clearer way to review crew availability before confirming game coverage.",
+        inProgressAt: "2026-03-04T13:30:00.000Z",
+        completedAt: "2026-03-09T17:10:00.000Z",
         completedOutcome:
           "Assigners can now review availability and finalize a crew assignment from one workflow.",
         validation: "Reviewed against the issue acceptance criteria and smoke tested locally.",

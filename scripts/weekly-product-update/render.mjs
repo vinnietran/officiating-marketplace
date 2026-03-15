@@ -55,9 +55,15 @@ function renderStoryCard(story) {
   return `
     <article class="story-card">
       <h3>${escapeHtml(story.title)}</h3>
-      <p><strong>What was delivered:</strong> ${escapeHtml(story.completedOutcome)}</p>
-      <p><strong>Why it matters:</strong> ${escapeHtml(story.story)}</p>
-      <p><strong>Validation:</strong> ${escapeHtml(story.validation)}</p>
+      <p>${escapeHtml(story.story)}</p>
+      <div class="story-dates">
+        <span><strong>Moved to in progress:</strong> ${
+          story.inProgressAt ? escapeHtml(formatLongDisplayDate(story.inProgressAt)) : "Not tracked"
+        }</span>
+        <span><strong>Marked done:</strong> ${
+          story.completedAt ? escapeHtml(formatLongDisplayDate(story.completedAt)) : "Not tracked"
+        }</span>
+      </div>
     </article>
   `;
 }
@@ -129,7 +135,6 @@ export function buildEmailSubject(projectName, reportWindow) {
 
 export function renderEmailHtml(report, options = {}) {
   const companyName = report.branding?.companyName || report.projectName;
-  const companyEmail = report.branding?.email || "";
   const logoSrc = options.logoSrc || "";
   const completedSection = report.completedStories.length
     ? report.completedStories.map(renderStoryCard).join("")
@@ -326,6 +331,13 @@ export function renderEmailHtml(report, options = {}) {
       .summary-item p + p {
         margin-top: 8px;
       }
+      .story-dates {
+        margin-top: 14px;
+        display: grid;
+        gap: 6px;
+        font-size: 14px;
+        color: #5f7090;
+      }
       .quality-summary {
         margin-bottom: 12px;
       }
@@ -438,11 +450,6 @@ export function renderEmailHtml(report, options = {}) {
                   <td>
                     <h1 class="brand-name">${escapeHtml(companyName)}</h1>
                     <p class="brand-project">${escapeHtml(report.projectName)} weekly product update</p>
-                    ${
-                      companyEmail
-                        ? `<p class="brand-contact">Email: ${escapeHtml(companyEmail)}</p>`
-                        : ""
-                    }
                   </td>
                 </tr>
               </table>
@@ -534,9 +541,17 @@ export function renderEmailText(report) {
   } else {
     for (const story of report.completedStories) {
       lines.push(`- ${story.title}`);
-      lines.push(`  What was delivered: ${story.completedOutcome}`);
-      lines.push(`  Why it matters: ${story.story}`);
-      lines.push(`  Validation: ${story.validation}`);
+      lines.push(`  Story: ${story.story}`);
+      lines.push(
+        `  Moved to in progress: ${
+          story.inProgressAt ? formatLongDisplayDate(story.inProgressAt) : "Not tracked"
+        }`,
+      );
+      lines.push(
+        `  Marked done: ${
+          story.completedAt ? formatLongDisplayDate(story.completedAt) : "Not tracked"
+        }`,
+      );
     }
   }
 

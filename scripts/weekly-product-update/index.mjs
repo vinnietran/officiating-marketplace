@@ -4,6 +4,7 @@ import path from "node:path";
 import { loadConfig, validateRuntimeConfig } from "./config.mjs";
 import {
   fetchClosedIssues,
+  fetchIssueEvents,
   fetchMergedPullRequests,
   fetchOpenIssues,
   fetchRepository,
@@ -25,6 +26,38 @@ function summarizeIssue(issue) {
     title: issue.title,
     url: issue.html_url,
     summary: details.story,
+  };
+}
+
+function matchesAnyLabel(labelName, configuredLabels) {
+  const normalizedLabel = String(labelName || "").trim().toLowerCase();
+  return configuredLabels.some((candidate) => candidate.toLowerCase() === normalizedLabel);
+}
+
+async function buildCompletedStory(issue, config) {
+  const details = parseStoryDetails(issue);
+  let inProgressAt = null;
+
+  try {
+    const events = await fetchIssueEvents(config, issue.number);
+    const matchingLabelEvents = events
+      .filter(
+        (event) =>
+          event.event === "labeled" &&
+          matchesAnyLabel(event.label?.name, config.labels.inProgress) &&
+          event.created_at,
+      )
+      .sort((left, right) => new Date(left.created_at) - new Date(right.created_at));
+
+    inProgressAt = matchingLabelEvents[0]?.created_at ?? null;
+  } catch {
+    inProgressAt = null;
+  }
+
+  return {
+    ...details,
+    inProgressAt,
+    completedAt: issue.closed_at || null,
   };
 }
 
@@ -106,6 +139,10 @@ async function main() {
     workflowStatusPromise,
   ]);
 
+  const completedStories = await Promise.all(
+    closedIssues.map((issue) => buildCompletedStory(issue, config)),
+  );
+
   const report = {
     projectName: config.projectName,
     reportWindow: config.reportWindow,
@@ -115,7 +152,7 @@ async function main() {
       companyName: config.senderName || config.projectName,
       email: config.senderEmail,
     },
-    completedStories: closedIssues.map(parseStoryDetails),
+    completedStories,
     inProgressItems: selectIssuesByLabels(openIssues, config.labels.inProgress).map(summarizeIssue),
     mergedPullRequests: mergedPullRequests.map(summarizePullRequest),
     workflowStatus,

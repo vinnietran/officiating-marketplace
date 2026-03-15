@@ -5,13 +5,13 @@ Generated: March 10, 2026
 
 Completed this period:
 - Build game posting flow
-  What was delivered: School users can now create and publish a game posting visible in the marketplace.
-  Why it matters: Schools can create and publish open games that need to be filled by qualified officials.
-  Validation: Manually tested end-to-end in the development environment.
+  Story: Schools can create and publish open games that need to be filled by qualified officials.
+  Moved to in progress: March 3, 2026
+  Marked done: March 7, 2026
 - Improve crew assignment review
-  What was delivered: Assigners can now review availability and finalize a crew assignment from one workflow.
-  Why it matters: Assigners needed a clearer way to review crew availability before confirming game coverage.
-  Validation: Reviewed against the issue acceptance criteria and smoke tested locally.
+  Story: Assigners needed a clearer way to review crew availability before confirming game coverage.
+  Moved to in progress: March 4, 2026
+  Marked done: March 9, 2026
 
 Currently in progress:
 - Refine profile completion prompts: Improving the onboarding prompts so officials finish profiles with less back-and-forth.

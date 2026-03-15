@@ -21,7 +21,8 @@ test("renderEmailHtml renders client-facing content without GitHub links", () =>
 
   assert.match(html, /V&amp;S Ventures LLC/);
   assert.match(html, /Build game posting flow/);
-  assert.match(html, /What was delivered:/);
+  assert.match(html, /Moved to in progress:/);
+  assert.match(html, /Marked done:/);
   assert.doesNotMatch(html, /View issue/);
   assert.doesNotMatch(html, /github\.com/);
 });
@@ -33,5 +34,7 @@ test("renderEmailText includes the key stakeholder sections", () => {
   assert.match(text, /Completed this period:/);
   assert.match(text, /Currently in progress:/);
   assert.match(text, /Quality check:/);
+  assert.match(text, /Moved to in progress:/);
+  assert.match(text, /Marked done:/);
   assert.doesNotMatch(text, /https:\/\/github\.com/);
 });

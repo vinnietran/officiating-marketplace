@@ -1,5 +1,7 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { Button } from "./ui/Button";
+import { Select } from "./ui/Select";
 import { useAuth } from "../context/AuthContext";
 import { formatRoleLabel, getAuthErrorMessage } from "../lib/auth";
 import type { UserRole } from "../types";
@@ -53,12 +55,17 @@ export function AuthPanel() {
 
   return (
     <section className="auth-panel">
-      <h2>{mode === "signin" ? "Sign In" : "Create Account"}</h2>
-      <p className="meta-line">
-        {mode === "signin"
-          ? "Access the marketplace with your existing account."
-          : "Choose your role to unlock role-based actions."}
-      </p>
+      <div className="auth-panel-header">
+        <span className="hero-eyebrow">
+          {mode === "signin" ? "Secure access" : "Account setup"}
+        </span>
+        <h2>{mode === "signin" ? "Sign In" : "Create Account"}</h2>
+        <p className="meta-line">
+          {mode === "signin"
+            ? "Access the marketplace with your existing account."
+            : "Choose your role to unlock role-based actions."}
+        </p>
+      </div>
 
       <form className="auth-form" onSubmit={handleSubmit}>
         <label>
@@ -96,16 +103,14 @@ export function AuthPanel() {
 
             <label>
               Role
-              <select
+              <Select
                 value={role}
-                onChange={(event) => setRole(event.target.value as UserRole)}
-              >
-                {ROLES.map((roleOption) => (
-                  <option key={roleOption} value={roleOption}>
-                    {formatRoleLabel(roleOption)}
-                  </option>
-                ))}
-              </select>
+                onValueChange={(value) => setRole(value)}
+                options={ROLES.map((roleOption) => ({
+                  value: roleOption,
+                  label: formatRoleLabel(roleOption)
+                }))}
+              />
             </label>
           </>
         ) : null}
@@ -113,16 +118,16 @@ export function AuthPanel() {
         {error ? <p className="error-text">{error}</p> : null}
 
         <div className="auth-actions">
-          <button type="submit" disabled={submitting}>
+          <Button type="submit" disabled={submitting}>
             {submitting
               ? "Please wait..."
               : mode === "signin"
                 ? "Sign In"
                 : "Create Account"}
-          </button>
-          <button
+          </Button>
+          <Button
             type="button"
-            className="button-secondary"
+            variant="secondary"
             onClick={() => {
               setMode((currentMode) =>
                 currentMode === "signin" ? "signup" : "signin"
@@ -131,8 +136,14 @@ export function AuthPanel() {
             }}
           >
             {mode === "signin" ? "Need an account?" : "Have an account?"}
-          </button>
+          </Button>
         </div>
+
+        <p className="auth-panel-footer">
+          {mode === "signin"
+            ? "Real-time game activity, crew coordination, and role-based workflows."
+            : "Accounts are provisioned with role-specific navigation and access controls."}
+        </p>
       </form>
     </section>
   );

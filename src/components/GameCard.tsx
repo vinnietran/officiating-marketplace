@@ -1,3 +1,4 @@
+import { CalendarDays, Clock3, Gavel, MapPin, Shield, Wallet } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { BidForm } from "./BidForm";
@@ -45,6 +46,7 @@ interface GameCardProps {
       notes?: string;
     }
   ) => Promise<void>;
+  layout?: "grid" | "list";
 }
 
 export function GameCard({
@@ -59,7 +61,8 @@ export function GameCard({
   canManageGame,
   onSubmitBid,
   onDeleteBid,
-  onUpdateGame
+  onUpdateGame,
+  layout = "grid"
 }: GameCardProps) {
   const navigate = useNavigate();
   const [showBidForm, setShowBidForm] = useState(false);
@@ -149,6 +152,12 @@ export function GameCard({
   }, [officialBidsForGame, role]);
 
   const canOpenDetailsFromCard = true;
+  const schoolMonogram = game.schoolName
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part.charAt(0).toUpperCase())
+    .join("");
 
   function openDetails() {
     navigate(`/schedule/games/${game.id}`, {
@@ -162,7 +171,7 @@ export function GameCard({
     }
 
     const target = event.target as HTMLElement;
-    if (target.closest("button, input, textarea, select, form, a")) {
+    if (target.closest("button, input, textarea, [role='combobox'], form, a")) {
       return;
     }
 
@@ -179,7 +188,7 @@ export function GameCard({
     }
 
     const target = event.target as HTMLElement;
-    if (target.closest("button, input, textarea, select, form, a")) {
+    if (target.closest("button, input, textarea, [role='combobox'], form, a")) {
       return;
     }
 
@@ -226,7 +235,7 @@ export function GameCard({
     <article
       className={`game-card market-game-card${
         canOpenDetailsFromCard ? " clickable-game-card" : ""
-      }`}
+      }${layout === "list" ? " market-game-card-list" : ""}`}
       role={canOpenDetailsFromCard ? "button" : undefined}
       tabIndex={canOpenDetailsFromCard ? 0 : undefined}
       onClick={handleCardClick}
@@ -237,91 +246,181 @@ export function GameCard({
           : undefined
       }
     >
-      <div className="game-card-flags">
-        <span
-          className={`game-card-flag ${
-            game.mode === "direct_assignment" || game.status === "awarded"
-              ? "game-card-flag-awarded"
-              : "game-card-flag-open"
-          }`}
-        >
-          {statusLabel}
-        </span>
-        {!isDirectAssignment ? (
-          <span className={`game-card-flag game-card-flag-window-${bidWindowInfo.state}`}>
-            {`Bid Window: ${bidWindowInfo.label}`}
-          </span>
-        ) : null}
-      </div>
+      <div className={layout === "list" ? "game-card-list-shell" : ""}>
+        {layout === "list" ? (
+          <div className="game-card-list-brand">
+            <div className="game-card-school-mark">{schoolMonogram || "GM"}</div>
+            <div className="game-card-list-main">
+              <div className="game-card-flags">
+                <span
+                  className={`game-card-flag ${
+                    game.mode === "direct_assignment" || game.status === "awarded"
+                      ? "game-card-flag-awarded"
+                      : "game-card-flag-open"
+                  }`}
+                >
+                  {statusLabel}
+                </span>
+                {!isDirectAssignment ? (
+                  <span className={`game-card-flag game-card-flag-window-${bidWindowInfo.state}`}>
+                    {`Bid Window: ${bidWindowInfo.label}`}
+                  </span>
+                ) : null}
+              </div>
 
-      <div className="game-card-header">
-        <h3>{game.schoolName}</h3>
-        <span className="pay-pill">Posted: {formatCurrency(game.payPosted)}</span>
-      </div>
+              <div className="game-card-header">
+                <div>
+                  <h3>{game.schoolName}</h3>
+                  <p className="meta-line game-card-sport-line">
+                    <strong>{game.sport}</strong> • {game.level}
+                  </p>
+                </div>
+              </div>
 
-      <p className="meta-line game-card-sport-line">
-        <strong>{game.sport}</strong> • {game.level}
-      </p>
-      <div className="game-card-meta-grid">
-        <p className="meta-line">{formatGameDate(game.dateISO)}</p>
-        {!isDirectAssignment && game.acceptingBidsUntilISO ? (
-          <p className="meta-line">
-            Accepting bids until: {formatGameDate(game.acceptingBidsUntilISO)}
-          </p>
-        ) : null}
-        <p className="meta-line">{game.location}</p>
-        {role === "official" ? (
-          <p className="meta-line">
-            Distance:{" "}
-            <strong>
-              {typeof userDistanceMiles === "number"
-                && Number.isFinite(userDistanceMiles)
-                ? `${userDistanceMiles.toFixed(1)} mi`
-                : userDistanceMiles === null
-                  ? (distanceUnavailableLabel ?? "N/A")
-                  : "Calculating..."}
-            </strong>
-          </p>
-        ) : null}
-        <p className="meta-line">Posted by {game.createdByRole}</p>
-        {isDirectAssignment ? (
-          <p className="meta-line">
-            Direct assignments: <strong>{directAssignmentCount}</strong>
-          </p>
+              <div className="game-card-market-meta">
+                <p className="meta-line">
+                  <CalendarDays aria-hidden="true" /> {formatGameDate(game.dateISO)}
+                </p>
+                {!isDirectAssignment && game.acceptingBidsUntilISO ? (
+                  <p className="meta-line">
+                    <Clock3 aria-hidden="true" /> {formatGameDate(game.acceptingBidsUntilISO)}
+                  </p>
+                ) : null}
+                <p className="meta-line">
+                  <MapPin aria-hidden="true" /> {game.location}
+                </p>
+                {role === "official" ? (
+                  <p className="meta-line">
+                    <Shield aria-hidden="true" />{" "}
+                    {typeof userDistanceMiles === "number" && Number.isFinite(userDistanceMiles)
+                      ? `${userDistanceMiles.toFixed(1)} mi away`
+                      : userDistanceMiles === null
+                        ? (distanceUnavailableLabel ?? "N/A")
+                        : "Calculating distance"}
+                  </p>
+                ) : null}
+                <p className="meta-line">
+                  <Gavel aria-hidden="true" />{" "}
+                  {isDirectAssignment
+                    ? `${directAssignmentCount} direct assignment(s)`
+                    : `${totalBidCount} bid(s) • Highest ${
+                        highestBidAmount ? formatCurrency(highestBidAmount) : "-"
+                      }`}
+                </p>
+              </div>
+
+              {game.notes ? <p className="notes">{game.notes}</p> : null}
+            </div>
+          </div>
         ) : (
           <>
-            <p className="meta-line">
-              Total bids: <strong>{totalBidCount}</strong>
+            <div className="game-card-flags">
+              <span
+                className={`game-card-flag ${
+                  game.mode === "direct_assignment" || game.status === "awarded"
+                    ? "game-card-flag-awarded"
+                    : "game-card-flag-open"
+                }`}
+              >
+                {statusLabel}
+              </span>
+              {!isDirectAssignment ? (
+                <span className={`game-card-flag game-card-flag-window-${bidWindowInfo.state}`}>
+                  {`Bid Window: ${bidWindowInfo.label}`}
+                </span>
+              ) : null}
+            </div>
+
+            <div className="game-card-header">
+              <h3>{game.schoolName}</h3>
+              <span className="pay-pill">Posted: {formatCurrency(game.payPosted)}</span>
+            </div>
+
+            <p className="meta-line game-card-sport-line">
+              <strong>{game.sport}</strong> • {game.level}
             </p>
-            <p className="meta-line">
-              Highest bid:{" "}
-              <strong>{highestBidAmount ? formatCurrency(highestBidAmount) : "-"}</strong>
-            </p>
+            <div className="game-card-meta-grid">
+              <p className="meta-line">{formatGameDate(game.dateISO)}</p>
+              {!isDirectAssignment && game.acceptingBidsUntilISO ? (
+                <p className="meta-line">
+                  Accepting bids until: {formatGameDate(game.acceptingBidsUntilISO)}
+                </p>
+              ) : null}
+              <p className="meta-line">{game.location}</p>
+              {role === "official" ? (
+                <p className="meta-line">
+                  Distance:{" "}
+                  <strong>
+                    {typeof userDistanceMiles === "number" && Number.isFinite(userDistanceMiles)
+                      ? `${userDistanceMiles.toFixed(1)} mi`
+                      : userDistanceMiles === null
+                        ? (distanceUnavailableLabel ?? "N/A")
+                        : "Calculating..."}
+                  </strong>
+                </p>
+              ) : null}
+              <p className="meta-line">Posted by {game.createdByRole}</p>
+              {isDirectAssignment ? (
+                <p className="meta-line">
+                  Direct assignments: <strong>{directAssignmentCount}</strong>
+                </p>
+              ) : (
+                <>
+                  <p className="meta-line">
+                    Total bids: <strong>{totalBidCount}</strong>
+                  </p>
+                  <p className="meta-line">
+                    Highest bid:{" "}
+                    <strong>{highestBidAmount ? formatCurrency(highestBidAmount) : "-"}</strong>
+                  </p>
+                </>
+              )}
+            </div>
+            {game.notes ? <p className="notes">Notes: {game.notes}</p> : null}
           </>
         )}
-      </div>
-      {game.notes ? <p className="notes">Notes: {game.notes}</p> : null}
 
-      <div className="card-actions">
-        {role === "official" ? (
-          <button
-            type="button"
-            onClick={() => setShowBidForm((prev) => !prev)}
-            disabled={!canPlaceBid}
-          >
-            {showBidForm ? "Close" : hasSubmittedBid ? "Update Bid" : "Place Bid"}
-          </button>
-        ) : null}
+        <div className={layout === "list" ? "game-card-list-aside" : ""}>
+          {layout === "list" ? (
+            <div className="game-card-list-price-panel">
+              <span className="game-card-price-label">
+                <Wallet aria-hidden="true" /> Posted pay
+              </span>
+              <strong className="game-card-price-value">
+                {formatCurrency(game.payPosted)}
+              </strong>
+              <span className="game-card-price-subtext">
+                Posted by {game.createdByRole}
+              </span>
+            </div>
+          ) : null}
 
-        {canManageGame ? (
-          <button
-            type="button"
-            className="button-secondary"
-            onClick={() => setShowEditForm((prev) => !prev)}
-          >
-            {showEditForm ? "Close Edit" : "Edit Game"}
-          </button>
-        ) : null}
+          <div className="card-actions">
+            {role === "official" ? (
+              <button
+                type="button"
+                onClick={() => setShowBidForm((prev) => !prev)}
+                disabled={!canPlaceBid}
+              >
+                {showBidForm ? "Close" : hasSubmittedBid ? "Update Bid" : "Place Bid"}
+              </button>
+            ) : null}
+
+            {canManageGame ? (
+              <button
+                type="button"
+                className="button-secondary"
+                onClick={() => setShowEditForm((prev) => !prev)}
+              >
+                {showEditForm ? "Close Edit" : "Edit Game"}
+              </button>
+            ) : null}
+          </div>
+
+          {layout === "list" ? (
+            <p className="hint-text game-card-list-hint">Open listing details for full bid history.</p>
+          ) : null}
+        </div>
       </div>
 
       {showBidForm ? (
@@ -347,7 +446,9 @@ export function GameCard({
         </p>
       ) : null}
 
-      <p className="hint-text">Select this card to view full game details.</p>
+      {layout !== "list" ? (
+        <p className="hint-text">Select this card to view full game details.</p>
+      ) : null}
 
       {showEditForm ? (
         <EditGameForm

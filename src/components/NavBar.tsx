@@ -1,5 +1,18 @@
-import { useEffect, useMemo, useRef, useState } from "react";
-import { NavLink, useNavigate } from "react-router-dom";
+import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
+import * as ScrollArea from "@radix-ui/react-scroll-area";
+import {
+  Bell,
+  CalendarDays,
+  ChevronDown,
+  ClipboardPlus,
+  LayoutDashboard,
+  LogOut,
+  Store,
+  User,
+  Users
+} from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { Link, NavLink, useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import {
   isOfficialAssignedToAwardedMarketplaceGame,
@@ -20,6 +33,14 @@ interface InAppNotification {
   sortISO: string;
   title: string;
   message: string;
+}
+
+function formatRoleLabel(role: string | undefined): string {
+  if (!role) {
+    return "";
+  }
+
+  return role.charAt(0).toUpperCase() + role.slice(1);
 }
 
 const SEEN_NOTIFICATIONS_STORAGE_PREFIX = "officiating-marketplace:seen-notifications:";
@@ -47,9 +68,6 @@ export function NavBar() {
   const [seenNotificationIds, setSeenNotificationIds] = useState<string[]>([]);
   const [dismissedNotificationIds, setDismissedNotificationIds] = useState<string[]>([]);
   const [notificationsMenuOpen, setNotificationsMenuOpen] = useState(false);
-  const [profileMenuOpen, setProfileMenuOpen] = useState(false);
-  const notificationsMenuRef = useRef<HTMLDivElement | null>(null);
-  const profileMenuRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     if (!user) {
@@ -149,41 +167,6 @@ export function NavBar() {
       // Ignore storage failures.
     }
   }, [dismissedNotificationIds, user]);
-
-  useEffect(() => {
-    if (!profileMenuOpen && !notificationsMenuOpen) {
-      return;
-    }
-
-    function handleDocumentClick(event: MouseEvent) {
-      const target = event.target as Node | null;
-      if (
-        target &&
-        ((profileMenuRef.current && profileMenuRef.current.contains(target)) ||
-          (notificationsMenuRef.current && notificationsMenuRef.current.contains(target)))
-      ) {
-        return;
-      }
-
-      setProfileMenuOpen(false);
-      setNotificationsMenuOpen(false);
-    }
-
-    function handleEscape(event: KeyboardEvent) {
-      if (event.key === "Escape") {
-        setProfileMenuOpen(false);
-        setNotificationsMenuOpen(false);
-      }
-    }
-
-    document.addEventListener("mousedown", handleDocumentClick);
-    document.addEventListener("keydown", handleEscape);
-
-    return () => {
-      document.removeEventListener("mousedown", handleDocumentClick);
-      document.removeEventListener("keydown", handleEscape);
-    };
-  }, [notificationsMenuOpen, profileMenuOpen]);
 
   const notifications = useMemo<InAppNotification[]>(() => {
     if (!user) {
@@ -312,7 +295,6 @@ export function NavBar() {
   }
 
   async function handleSignOut() {
-    setProfileMenuOpen(false);
     setNotificationsMenuOpen(false);
     try {
       await signOut();
@@ -324,11 +306,6 @@ export function NavBar() {
         message
       });
     }
-  }
-
-  function handleNotificationMenuToggle() {
-    setNotificationsMenuOpen((current) => !current);
-    setProfileMenuOpen(false);
   }
 
   function handleNotificationClick(notification: InAppNotification) {
@@ -355,85 +332,104 @@ export function NavBar() {
     <>
       <nav className="top-nav">
         <div className="top-nav-inner">
-          <div className="top-nav-links">
-            {user && profile && profile.role !== "evaluator" ? (
+          <div className="top-nav-primary">
+            <Link to="/" className="top-nav-brand" aria-label="Go to home">
+              <span className="top-nav-brand-mark" aria-hidden="true">
+                OM
+              </span>
+              <span className="top-nav-brand-copy">
+                <strong>Officiating Marketplace</strong>
+                <span>Operations platform</span>
+              </span>
+            </Link>
+
+            <div className="top-nav-links">
+              {user && profile && profile.role !== "evaluator" ? (
+                <NavLink
+                  to="/dashboard"
+                  className={({ isActive }) => `nav-link${isActive ? " active" : ""}`}
+                >
+                  <LayoutDashboard aria-hidden="true" />
+                  Dashboard
+                </NavLink>
+              ) : null}
+              {!user || profile?.role !== "evaluator" ? (
+                <NavLink
+                  to="/marketplace"
+                  className={({ isActive }) => `nav-link${isActive ? " active" : ""}`}
+                >
+                  <Store aria-hidden="true" />
+                  Marketplace
+                </NavLink>
+              ) : null}
               <NavLink
-                to="/dashboard"
+                to="/schedule"
                 className={({ isActive }) => `nav-link${isActive ? " active" : ""}`}
               >
-                Dashboard
+                <CalendarDays aria-hidden="true" />
+                Schedule
               </NavLink>
-            ) : null}
-            {!user || profile?.role !== "evaluator" ? (
-              <NavLink
-                to="/marketplace"
-                className={({ isActive }) => `nav-link${isActive ? " active" : ""}`}
-              >
-                Marketplace
-              </NavLink>
-            ) : null}
-            <NavLink
-              to="/schedule"
-              className={({ isActive }) => `nav-link${isActive ? " active" : ""}`}
-            >
-              Schedule
-            </NavLink>
-            {user &&
-            profile &&
-            (profile.role === "official" ||
-              profile.role === "assignor" ||
-              profile.role === "school") ? (
-              <NavLink
-                to="/crews"
-                className={({ isActive }) => `nav-link${isActive ? " active" : ""}`}
-              >
-                Crews
-              </NavLink>
-            ) : null}
-            {user && profile && (profile.role === "assignor" || profile.role === "school") ? (
-              <NavLink
-                to="/assign-game"
-                className={({ isActive }) => `nav-link${isActive ? " active" : ""}`}
-              >
-                Assign Game
-              </NavLink>
-            ) : null}
-            {user && profile && (profile.role === "assignor" || profile.role === "school") ? (
-              <NavLink
-                to="/post-game"
-                className={({ isActive }) => `nav-link${isActive ? " active" : ""}`}
-              >
-                Post a Game
-              </NavLink>
-            ) : null}
+              {user &&
+              profile &&
+              (profile.role === "official" ||
+                profile.role === "assignor" ||
+                profile.role === "school") ? (
+                <NavLink
+                  to="/crews"
+                  className={({ isActive }) => `nav-link${isActive ? " active" : ""}`}
+                >
+                  <Users aria-hidden="true" />
+                  Crews
+                </NavLink>
+              ) : null}
+              {user && profile && (profile.role === "assignor" || profile.role === "school") ? (
+                <NavLink
+                  to="/assign-game"
+                  className={({ isActive }) => `nav-link${isActive ? " active" : ""}`}
+                >
+                  <ClipboardPlus aria-hidden="true" />
+                  Assign Game
+                </NavLink>
+              ) : null}
+              {user && profile && (profile.role === "assignor" || profile.role === "school") ? (
+                <NavLink
+                  to="/post-game"
+                  className={({ isActive }) => `nav-link${isActive ? " active" : ""}`}
+                >
+                  <ClipboardPlus aria-hidden="true" />
+                  Post a Game
+                </NavLink>
+              ) : null}
+            </div>
           </div>
 
           {user ? (
             <div className="top-nav-actions">
-              <div className="notification-menu-container" ref={notificationsMenuRef}>
-                <button
-                  type="button"
-                  className="icon-button nav-icon-button"
-                  aria-label={`Notifications (${unreadNotificationCount} unread)`}
-                  aria-haspopup="menu"
-                  aria-expanded={notificationsMenuOpen}
-                  onClick={handleNotificationMenuToggle}
-                >
-                  <svg viewBox="0 0 24 24" aria-hidden="true">
-                    <path
-                      d="M12 3a5 5 0 0 0-5 5v2.2c0 .7-.2 1.3-.6 1.9L5 14.5V16h14v-1.5l-1.4-2.4a3.8 3.8 0 0 1-.6-1.9V8a5 5 0 0 0-5-5Zm0 18a2.5 2.5 0 0 0 2.4-2h-4.8A2.5 2.5 0 0 0 12 21Z"
-                      fill="currentColor"
-                    />
-                  </svg>
-                  {unreadNotificationCount > 0 ? (
-                    <span className="notification-badge" aria-hidden="true">
-                      {unreadNotificationCount > 99 ? "99+" : unreadNotificationCount}
-                    </span>
-                  ) : null}
-                </button>
+              <DropdownMenu.Root
+                open={notificationsMenuOpen}
+                onOpenChange={setNotificationsMenuOpen}
+              >
+                <DropdownMenu.Trigger asChild>
+                  <button
+                    type="button"
+                    className="icon-button nav-icon-button"
+                    aria-label={`Notifications (${unreadNotificationCount} unread)`}
+                  >
+                    <Bell aria-hidden="true" />
+                    {unreadNotificationCount > 0 ? (
+                      <span className="notification-badge" aria-hidden="true">
+                        {unreadNotificationCount > 99 ? "99+" : unreadNotificationCount}
+                      </span>
+                    ) : null}
+                  </button>
+                </DropdownMenu.Trigger>
 
-                {notificationsMenuOpen ? (
-                  <div className="notification-menu" role="menu" aria-label="Notifications">
+                <DropdownMenu.Portal>
+                  <DropdownMenu.Content
+                    className="notification-menu"
+                    sideOffset={10}
+                    align="end"
+                  >
                     <div className="notification-menu-header">
                       <strong>Notifications</strong>
                       <div className="notification-menu-header-actions">
@@ -452,73 +448,95 @@ export function NavBar() {
                     {visibleNotifications.length === 0 ? (
                       <p className="notification-empty-state">No notifications yet.</p>
                     ) : (
-                      <div className="notification-list">
-                        {visibleNotifications.map((notification) => {
-                          const unread = !seenNotificationIdSet.has(notification.id);
-                          return (
-                            <button
-                              key={notification.id}
-                              type="button"
-                              className={`notification-item${
-                                unread ? " notification-item-unread" : ""
-                              }`}
-                              onClick={() => handleNotificationClick(notification)}
-                            >
-                              <div className="notification-item-head">
-                                <strong>{notification.title}</strong>
-                                <span>{formatGameDate(notification.gameDateISO)}</span>
-                              </div>
-                              <p>{notification.message}</p>
-                            </button>
-                          );
-                        })}
-                      </div>
+                      <ScrollArea.Root className="notification-scroll-area">
+                        <ScrollArea.Viewport className="notification-list">
+                          {visibleNotifications.map((notification) => {
+                            const unread = !seenNotificationIdSet.has(notification.id);
+                            return (
+                              <DropdownMenu.Item
+                                key={notification.id}
+                                className={`notification-item${
+                                  unread ? " notification-item-unread" : ""
+                                }`}
+                                onSelect={() => handleNotificationClick(notification)}
+                              >
+                                <div className="notification-item-head">
+                                  <strong>{notification.title}</strong>
+                                  <span>{formatGameDate(notification.gameDateISO)}</span>
+                                </div>
+                                <p>{notification.message}</p>
+                              </DropdownMenu.Item>
+                            );
+                          })}
+                        </ScrollArea.Viewport>
+                        <ScrollArea.Scrollbar
+                          className="notification-scrollbar"
+                          orientation="vertical"
+                        >
+                          <ScrollArea.Thumb className="notification-scrollbar-thumb" />
+                        </ScrollArea.Scrollbar>
+                      </ScrollArea.Root>
                     )}
-                  </div>
-                ) : null}
-              </div>
+                  </DropdownMenu.Content>
+                </DropdownMenu.Portal>
+              </DropdownMenu.Root>
 
-              <div className="profile-menu-container" ref={profileMenuRef}>
-                <button
-                  type="button"
-                  className="icon-button nav-icon-button profile-avatar-button"
-                  aria-label="Profile menu"
-                  aria-haspopup="menu"
-                  aria-expanded={profileMenuOpen}
-                  onClick={() => {
-                    setProfileMenuOpen((current) => !current);
-                    setNotificationsMenuOpen(false);
-                  }}
-                >
-                  <span className="profile-avatar">{getProfileInitial()}</span>
-                </button>
+              <DropdownMenu.Root>
+                <DropdownMenu.Trigger asChild>
+                  <button
+                    type="button"
+                    className="icon-button nav-icon-button profile-avatar-button"
+                    aria-label="Profile menu"
+                  >
+                    <span className="profile-avatar-shell">
+                      <span className="profile-avatar">{getProfileInitial()}</span>
+                      <span className="profile-status-dot" aria-hidden="true" />
+                    </span>
+                    {profile ? (
+                      <span className="nav-user-copy">
+                        <strong>{profile.displayName}</strong>
+                        <span>{formatRoleLabel(profile.role)}</span>
+                      </span>
+                    ) : null}
+                    <span className="nav-user-chevron-shell" aria-hidden="true">
+                      <ChevronDown className="nav-user-chevron" />
+                    </span>
+                  </button>
+                </DropdownMenu.Trigger>
 
-                {profileMenuOpen ? (
-                  <div className="profile-menu" role="menu" aria-label="Profile menu">
-                    <button
-                      type="button"
+                <DropdownMenu.Portal>
+                  <DropdownMenu.Content className="profile-menu" sideOffset={10} align="end">
+                    {profile ? (
+                      <div className="profile-menu-header">
+                        <div className="profile-menu-header-avatar">{getProfileInitial()}</div>
+                        <div className="profile-menu-header-copy">
+                          <strong>{profile.displayName}</strong>
+                          <span>{profile.email}</span>
+                        </div>
+                        <span className="profile-menu-role-badge">
+                          {formatRoleLabel(profile.role)}
+                        </span>
+                      </div>
+                    ) : null}
+                    <DropdownMenu.Item
                       className="profile-menu-item"
-                      role="menuitem"
-                      onClick={() => {
-                        setProfileMenuOpen(false);
-                        navigate("/profile");
-                      }}
+                      onSelect={() => navigate("/profile")}
                     >
+                      <User aria-hidden="true" />
                       View Profile
-                    </button>
-                    <button
-                      type="button"
+                    </DropdownMenu.Item>
+                    <DropdownMenu.Item
                       className="profile-menu-item profile-menu-item-danger"
-                      role="menuitem"
-                      onClick={() => {
+                      onSelect={() => {
                         void handleSignOut();
                       }}
                     >
+                      <LogOut aria-hidden="true" />
                       Sign Out
-                    </button>
-                  </div>
-                ) : null}
-              </div>
+                    </DropdownMenu.Item>
+                  </DropdownMenu.Content>
+                </DropdownMenu.Portal>
+              </DropdownMenu.Root>
             </div>
           ) : null}
         </div>

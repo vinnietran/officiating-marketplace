@@ -1,6 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
-import { Link, Navigate, useNavigate } from "react-router-dom";
+import { Navigate, useNavigate } from "react-router-dom";
 import { CompleteProfilePanel } from "../components/CompleteProfilePanel";
+import { ButtonLink } from "../components/ui/ButtonLink";
+import { PageHeader } from "../components/ui/PageHeader";
+import { SectionHeader } from "../components/ui/SectionHeader";
 import { useAuth } from "../context/AuthContext";
 import {
   getOfficialAssignmentDetails,
@@ -357,22 +360,20 @@ export function Dashboard() {
   if (!isNonOfficialRole(profile.role)) {
     return (
       <main className="page">
-        <header className="hero">
-          <h1>Official Dashboard</h1>
-          <p>Track your active bids and upcoming assigned games.</p>
-        </header>
-
-        <section className="dashboard-actions">
-          <Link to="/marketplace" className="nav-link active">
-            Browse Games
-          </Link>
-          <Link to="/schedule" className="button-secondary dashboard-link-button">
-            View Full Schedule
-          </Link>
-          <Link to="/profile" className="button-secondary dashboard-link-button">
-            View Profile
-          </Link>
-        </section>
+        <PageHeader
+          eyebrow="Official workspace"
+          title="Official Dashboard"
+          description="Track active bids, awarded work, and upcoming assignments at a glance."
+          actions={
+            <>
+              <ButtonLink to="/marketplace" variant="primary">
+                Browse Games
+              </ButtonLink>
+              <ButtonLink to="/schedule">View Full Schedule</ButtonLink>
+              <ButtonLink to="/profile">View Profile</ButtonLink>
+            </>
+          }
+        />
 
         <section className="dashboard-kpis">
           <article className="dashboard-kpi-card">
@@ -400,10 +401,11 @@ export function Dashboard() {
         {dataError ? <p className="error-text">{dataError}</p> : null}
 
         <section className="dashboard-panel">
-          <div className="results-header">
-            <h2>Open Bid Activity</h2>
-            <span>{officialOpenBidRows.length} game(s)</span>
-          </div>
+          <SectionHeader
+            title="Open Bid Activity"
+            meta={`${officialOpenBidRows.length} game(s)`}
+            className="results-header"
+          />
 
           {officialOpenBidRows.length === 0 ? (
             <p className="empty-state">No active bid games right now.</p>
@@ -459,10 +461,11 @@ export function Dashboard() {
         </section>
 
         <section className="dashboard-panel">
-          <div className="results-header">
-            <h2>Upcoming Assignments</h2>
-            <span>{officialUpcomingAssignments.length} game(s)</span>
-          </div>
+          <SectionHeader
+            title="Upcoming Assignments"
+            meta={`${officialUpcomingAssignments.length} game(s)`}
+            className="results-header"
+          />
 
           {officialUpcomingAssignments.length === 0 ? (
             <p className="empty-state">No upcoming assigned games yet.</p>
@@ -518,22 +521,22 @@ export function Dashboard() {
 
   return (
     <main className="page">
-      <header className="hero">
-        <h1>Operations Dashboard</h1>
-        <p>Track games needing action and upcoming assignments.</p>
-      </header>
-
-      <section className="dashboard-actions">
-        <Link to="/post-game" className="nav-link active">
-          Post a Game
-        </Link>
-        <Link to="/assign-game" className="nav-link active">
-          Assign Game
-        </Link>
-        <Link to="/schedule" className="button-secondary dashboard-link-button">
-          View Full Schedule
-        </Link>
-      </section>
+      <PageHeader
+        eyebrow="Operations center"
+        title="Operations Dashboard"
+        description="Monitor posted games, open bidding windows, and upcoming staffing decisions."
+        actions={
+          <>
+            <ButtonLink to="/post-game" variant="primary">
+              Post a Game
+            </ButtonLink>
+            <ButtonLink to="/assign-game" variant="primary">
+              Assign Game
+            </ButtonLink>
+            <ButtonLink to="/schedule">View Full Schedule</ButtonLink>
+          </>
+        }
+      />
 
       <section className="dashboard-kpis">
         <article className="dashboard-kpi-card">
@@ -553,10 +556,11 @@ export function Dashboard() {
       {dataError ? <p className="error-text">{dataError}</p> : null}
 
       <section className="dashboard-panel">
-        <div className="results-header">
-          <h2>Needs Action</h2>
-          <span>{needsActionRows.length} game(s)</span>
-        </div>
+        <SectionHeader
+          title="Needs Action"
+          meta={`${needsActionRows.length} game(s)`}
+          className="results-header"
+        />
 
         {needsActionRows.length === 0 ? (
           <p className="empty-state">No open games need attention right now.</p>
@@ -610,10 +614,11 @@ export function Dashboard() {
       </section>
 
       <section className="dashboard-panel">
-        <div className="results-header">
-          <h2>Upcoming Games</h2>
-          <span>{upcomingRows.length} game(s)</span>
-        </div>
+        <SectionHeader
+          title="Upcoming Games"
+          meta={`${upcomingRows.length} game(s)`}
+          className="results-header"
+        />
 
         {upcomingRows.length === 0 ? (
           <p className="empty-state">No upcoming games posted yet.</p>

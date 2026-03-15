@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { buildMarketplaceGameSubmission, toDateTimeLocalValue } from "../lib/gameForms";
 import type { Game, Level, Sport } from "../types";
+import { Select } from "./ui/Select";
 
 interface EditGameFormValues {
   schoolName: string;
@@ -80,30 +81,26 @@ export function EditGameForm({ game, onSubmit, onCancel }: EditGameFormProps) {
 
         <label>
           Sport
-          <select
+          <Select
             value={sport}
-            onChange={(event) => setSport(event.target.value as Sport)}
-          >
-            {SPORTS.map((sportOption) => (
-              <option key={sportOption} value={sportOption}>
-                {sportOption}
-              </option>
-            ))}
-          </select>
+            onValueChange={(value) => setSport(value)}
+            options={SPORTS.map((sportOption) => ({
+              value: sportOption,
+              label: sportOption
+            }))}
+          />
         </label>
 
         <label>
           Level
-          <select
+          <Select
             value={level}
-            onChange={(event) => setLevel(event.target.value as Level)}
-          >
-            {LEVELS.map((levelOption) => (
-              <option key={levelOption} value={levelOption}>
-                {levelOption}
-              </option>
-            ))}
-          </select>
+            onValueChange={(value) => setLevel(value)}
+            options={LEVELS.map((levelOption) => ({
+              value: levelOption,
+              label: levelOption
+            }))}
+          />
         </label>
 
         <label>

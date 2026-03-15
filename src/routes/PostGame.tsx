@@ -4,6 +4,7 @@ import { AuthPanel } from "../components/AuthPanel";
 import { CompleteProfilePanel } from "../components/CompleteProfilePanel";
 import { MessageModal } from "../components/MessageModal";
 import { PostGameForm } from "../components/PostGameForm";
+import { PageHeader } from "../components/ui/PageHeader";
 import { useAuth } from "../context/AuthContext";
 import { createGame } from "../lib/firestore";
 import type { Game } from "../types";
@@ -97,10 +98,15 @@ export function PostGame() {
 
   return (
     <main className="page post-game-page">
-      <header className="hero">
-        <h1>Post a Game</h1>
-        <p>Create a new assignment in a full-page posting workflow.</p>
-      </header>
+      <PageHeader
+        eyebrow="Game intake"
+        title="Post a Game"
+        description="Create a polished listing with clear timing, location, and bidding rules."
+        stats={[
+          { label: "Workflow", value: "Marketplace bidding" },
+          { label: "Recommended", value: "Set a bid deadline" }
+        ]}
+      />
 
       <section className="session-bar">
         <div>
@@ -115,15 +121,11 @@ export function PostGame() {
       <section className="post-game-layout">
         <article className="post-game-info-card">
           <h3>Posting Tips</h3>
-          <p className="meta-line">
-            Include a precise location and a realistic posted pay to attract the right officials.
-          </p>
-          <p className="meta-line">
-            Set an <strong>Accepting bids until</strong> date to control the auction window.
-          </p>
-          <p className="meta-line">
-            You can edit this game later from Marketplace or Schedule.
-          </p>
+          <ul className="support-list">
+            <li>Include a precise location and realistic posted pay to attract qualified officials.</li>
+            <li>Set an accepting-bids deadline to keep the auction window predictable.</li>
+            <li>Edit the game later from Marketplace or Schedule if operations change.</li>
+          </ul>
         </article>
 
         <PostGameForm onSubmit={handlePostGame} />

@@ -1,30 +1,42 @@
-import nodemailer from "nodemailer";
+function buildSender(config) {
+  return {
+    email: config.senderEmail,
+    ...(config.senderName ? { name: config.senderName } : {}),
+  };
+}
 
-function formatFromAddress(config) {
-  return config.senderName
-    ? `${config.senderName} <${config.senderEmail}>`
-    : config.senderEmail;
+function buildPersonalizations(recipients) {
+  return [
+    {
+      to: recipients.map((email) => ({ email })),
+    },
+  ];
 }
 
 export async function sendEmail({ config, subject, html, text }) {
-  const transport = nodemailer.createTransport({
-    host: config.smtp.host,
-    port: config.smtp.port,
-    secure: config.smtp.secure,
-    auth: {
-      user: config.smtp.username,
-      pass: config.smtp.password,
+  const response = await fetch("https://api.sendgrid.com/v3/mail/send", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${config.sendgridApiKey}`,
+      "Content-Type": "application/json",
     },
+    body: JSON.stringify({
+      personalizations: buildPersonalizations(config.recipients),
+      from: buildSender(config),
+      subject,
+      content: [
+        { type: "text/plain", value: text },
+        { type: "text/html", value: html },
+      ],
+    }),
   });
 
-  await transport.verify();
+  if (!response.ok) {
+    const responseBody = await response.text();
+    throw new Error(`SendGrid API request failed (${response.status}): ${responseBody}`);
+  }
 
-  return transport.sendMail({
-    from: formatFromAddress(config),
-    to: config.recipients.join(", "),
-    subject,
-    html,
-    text,
-  });
+  return {
+    messageId: response.headers.get("x-message-id") ?? "sendgrid-accepted",
+  };
 }
-

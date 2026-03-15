@@ -4,6 +4,7 @@ import { AssignGameForm } from "../components/AssignGameForm";
 import { AuthPanel } from "../components/AuthPanel";
 import { CompleteProfilePanel } from "../components/CompleteProfilePanel";
 import { MessageModal } from "../components/MessageModal";
+import { PageHeader } from "../components/ui/PageHeader";
 import { useAuth } from "../context/AuthContext";
 import { FIRESTORE_DATABASE_ID } from "../lib/firebase";
 import { getReadableFirestoreError } from "../lib/firebaseErrors";
@@ -138,10 +139,15 @@ export function AssignGame() {
 
   return (
     <main className="page post-game-page">
-      <header className="hero">
-        <h1>Assign Game</h1>
-        <p>Create a game and assign crews or individuals with no bidding workflow.</p>
-      </header>
+      <PageHeader
+        eyebrow="Direct staffing"
+        title="Assign Game"
+        description="Create a game and assign crews or individuals without a bidding workflow."
+        stats={[
+          { label: "Workflow", value: "Immediate assignment" },
+          { label: "Supports", value: "Crews and individuals" }
+        ]}
+      />
 
       <section className="session-bar">
         <div>
@@ -158,15 +164,13 @@ export function AssignGame() {
       <section className="post-game-layout">
         <article className="post-game-info-card">
           <h3>Assignment Tips</h3>
-          <p className="meta-line">
-            This mode creates a game as already assigned. Officials cannot bid on it.
-          </p>
-          <p className="meta-line">
-            For football, set a position for each individual assignment.
-          </p>
-          <p className="meta-line">
-            Need crews first? Create them in the <Link to="/crews">Crews</Link> tab.
-          </p>
+          <ul className="support-list">
+            <li>This mode creates a game as already assigned, so bidding is disabled.</li>
+            <li>For football, set a position for each individual assignee to avoid ambiguity.</li>
+            <li>
+              Need crews first? Create them in the <Link to="/crews">Crews</Link> tab.
+            </li>
+          </ul>
         </article>
 
         <AssignGameForm

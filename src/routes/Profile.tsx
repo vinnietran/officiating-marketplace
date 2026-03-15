@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { Link } from "react-router-dom";
 import { AuthPanel } from "../components/AuthPanel";
 import { CompleteProfilePanel } from "../components/CompleteProfilePanel";
+import { PageHeader } from "../components/ui/PageHeader";
 import { useAuth } from "../context/AuthContext";
 import {
   isOfficialAssignedToAwardedMarketplaceGame,
@@ -403,10 +404,34 @@ export function Profile() {
 
   return (
     <main className="page">
-      <header className="hero">
-        <h1>Profile</h1>
-        <p>Account details and quick stats for your marketplace activity.</p>
-      </header>
+      <PageHeader
+        eyebrow="Account and performance"
+        title="Profile"
+        description="Account details, activity metrics, and profile settings for your role."
+        badges={
+          <>
+            <span className="hero-badge">{roleLabel}</span>
+            <span className="hero-badge">
+              Member since {formatAccountCreatedAt(profile.createdAtISO)}
+            </span>
+          </>
+        }
+        stats={[
+          {
+            label: profile.role === "official" ? "Total Bids" : "Games Posted",
+            value: profile.role === "official" ? currentUserBids.length : postedGames.length
+          },
+          {
+            label: profile.role === "official" ? "Awarded Games" : "Bids Received",
+            value:
+              profile.role === "official" ? officialAwardedGames.length : postedGamesBidCount
+          },
+          {
+            label: "Average Rating",
+            value: averageRating === null ? "-" : averageRating.toFixed(2)
+          }
+        ]}
+      />
 
       {dataError ? <p className="error-text">{dataError}</p> : null}
 

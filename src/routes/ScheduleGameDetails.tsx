@@ -4,6 +4,7 @@ import { AuthPanel } from "../components/AuthPanel";
 import { BidForm } from "../components/BidForm";
 import { CompleteProfilePanel } from "../components/CompleteProfilePanel";
 import { MessageModal } from "../components/MessageModal";
+import { Select } from "../components/ui/Select";
 import { useAuth } from "../context/AuthContext";
 import {
   formatCurrency,
@@ -822,11 +823,22 @@ export function ScheduleGameDetails() {
 
   return (
     <main className="page">
-      <header className="hero">
-        <h1>Game Details</h1>
-        <p>
-          {activeGame.schoolName} • {activeGame.sport} • {activeGame.level}
-        </p>
+      <header className="hero page-header">
+        <div className="page-header-content">
+          <div>
+            <span className="hero-eyebrow">Game record</span>
+            <h1>Game Details</h1>
+            <p>
+              {activeGame.schoolName} • {activeGame.sport} • {activeGame.level}
+            </p>
+          </div>
+          <div className="hero-badges">
+            <span className="hero-badge">{statusLabel}</span>
+            {!isDirectAssignment ? (
+              <span className="hero-badge">Bid Window: {bidWindowInfo.label}</span>
+            ) : null}
+          </div>
+        </div>
       </header>
 
       <div className="details-top-actions">
@@ -1060,17 +1072,18 @@ export function ScheduleGameDetails() {
             <form className="bid-form" onSubmit={handleSubmitEvaluation}>
               <label>
                 Overall Score
-                <select
+                <Select
                   value={evaluationScore}
-                  onChange={(event) => setEvaluationScore(event.target.value)}
                   disabled={savingEvaluation}
-                >
-                  <option value="5">5 - Excellent</option>
-                  <option value="4">4 - Strong</option>
-                  <option value="3">3 - Meets expectations</option>
-                  <option value="2">2 - Needs improvement</option>
-                  <option value="1">1 - Poor</option>
-                </select>
+                  onValueChange={setEvaluationScore}
+                  options={[
+                    { value: "5", label: "5 - Excellent" },
+                    { value: "4", label: "4 - Strong" },
+                    { value: "3", label: "3 - Meets expectations" },
+                    { value: "2", label: "2 - Needs improvement" },
+                    { value: "1", label: "1 - Poor" }
+                  ]}
+                />
               </label>
 
               <label>
@@ -1165,17 +1178,18 @@ export function ScheduleGameDetails() {
                               <div className="rating-edit-grid">
                                 <label>
                                   Stars
-                                  <select
+                                  <Select
                                     value={ratingStars}
-                                    onChange={(event) => setRatingStars(event.target.value)}
                                     disabled={savingRating}
-                                  >
-                                    <option value="5">5</option>
-                                    <option value="4">4</option>
-                                    <option value="3">3</option>
-                                    <option value="2">2</option>
-                                    <option value="1">1</option>
-                                  </select>
+                                    onValueChange={setRatingStars}
+                                    options={[
+                                      { value: "5", label: "5" },
+                                      { value: "4", label: "4" },
+                                      { value: "3", label: "3" },
+                                      { value: "2", label: "2" },
+                                      { value: "1", label: "1" }
+                                    ]}
+                                  />
                                 </label>
                                 <label>
                                   Comment (Optional)

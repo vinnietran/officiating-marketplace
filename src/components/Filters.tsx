@@ -1,4 +1,5 @@
 import type { Level, Sport } from "../types";
+import { Select } from "./ui/Select";
 
 export interface FilterValues {
   search: string;
@@ -32,7 +33,10 @@ const LEVEL_OPTIONS: Array<"All" | Level> = [
 export function Filters({ values, onChange }: FiltersProps) {
   return (
     <section className="filters">
-      <h2>Find Games</h2>
+      <div className="filters-header">
+        <span className="hero-eyebrow">Search and refine</span>
+        <h2>Find Games</h2>
+      </div>
       <div className="filters-grid">
         <label>
           School
@@ -46,34 +50,26 @@ export function Filters({ values, onChange }: FiltersProps) {
 
         <label>
           Sport
-          <select
+          <Select
             value={values.sport}
-            onChange={(event) =>
-              onChange({ ...values, sport: event.target.value as FilterValues["sport"] })
-            }
-          >
-            {SPORT_OPTIONS.map((option) => (
-              <option key={option} value={option}>
-                {option}
-              </option>
-            ))}
-          </select>
+            onValueChange={(sport) => onChange({ ...values, sport })}
+            options={SPORT_OPTIONS.map((option) => ({
+              value: option,
+              label: option
+            }))}
+          />
         </label>
 
         <label>
           Level
-          <select
+          <Select
             value={values.level}
-            onChange={(event) =>
-              onChange({ ...values, level: event.target.value as FilterValues["level"] })
-            }
-          >
-            {LEVEL_OPTIONS.map((option) => (
-              <option key={option} value={option}>
-                {option}
-              </option>
-            ))}
-          </select>
+            onValueChange={(level) => onChange({ ...values, level })}
+            options={LEVEL_OPTIONS.map((option) => ({
+              value: option,
+              label: option
+            }))}
+          />
         </label>
 
         <label>

@@ -1,3 +1,6 @@
+import * as Dialog from "@radix-ui/react-dialog";
+import { Button } from "./ui/Button";
+
 interface MessageModalProps {
   title: string;
   message: string;
@@ -21,46 +24,36 @@ export function MessageModal({
   confirmDisabled = false,
   cancelDisabled = false
 }: MessageModalProps) {
-  const confirmClassName = confirmTone === "danger" ? "button-danger" : undefined;
-
   return (
-    <div className="modal-overlay" role="presentation" onClick={onClose}>
-      <div
-        className="modal-content"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="modal-title"
-        onClick={(event) => event.stopPropagation()}
-      >
-        <h3 id="modal-title">{title}</h3>
-        <p>{message}</p>
-        <div className="modal-actions">
-          {onConfirm ? (
-            <>
-              <button
-                type="button"
-                className="button-secondary"
-                onClick={onClose}
-                disabled={cancelDisabled}
-              >
-                {cancelLabel}
-              </button>
-              <button
-                type="button"
-                className={confirmClassName}
-                onClick={onConfirm}
-                disabled={confirmDisabled}
-              >
-                {confirmLabel}
-              </button>
-            </>
-          ) : (
-            <button type="button" onClick={onClose}>
-              OK
-            </button>
-          )}
-        </div>
-      </div>
-    </div>
+    <Dialog.Root open onOpenChange={(open) => (!open ? onClose() : undefined)}>
+      <Dialog.Portal>
+        <Dialog.Overlay className="modal-overlay" />
+        <Dialog.Content className="modal-content">
+          <Dialog.Title className="modal-title">{title}</Dialog.Title>
+          <Dialog.Description className="modal-description">{message}</Dialog.Description>
+          <div className="modal-actions">
+            {onConfirm ? (
+              <>
+                <Button type="button" variant="secondary" onClick={onClose} disabled={cancelDisabled}>
+                  {cancelLabel}
+                </Button>
+                <Button
+                  type="button"
+                  variant={confirmTone === "danger" ? "danger" : "primary"}
+                  onClick={onConfirm}
+                  disabled={confirmDisabled}
+                >
+                  {confirmLabel}
+                </Button>
+              </>
+            ) : (
+              <Button type="button" onClick={onClose}>
+                OK
+              </Button>
+            )}
+          </div>
+        </Dialog.Content>
+      </Dialog.Portal>
+    </Dialog.Root>
   );
 }

@@ -10,6 +10,7 @@ import {
   getCrewMemberPositionLabel,
   type IndividualAssignee
 } from "../lib/assignGame";
+import { Select } from "./ui/Select";
 import type {
   Crew,
   FootballPosition,
@@ -267,7 +268,13 @@ export function AssignGameForm({
 
   return (
     <section className="post-game-panel post-game-panel-full">
-      <h2>Assign Game</h2>
+      <div className="form-section-header">
+        <span className="hero-eyebrow">Assignment builder</span>
+        <h2>Assign Game</h2>
+        <p className="meta-line">
+          Capture the game details and build the assignment roster before publishing.
+        </p>
+      </div>
       <form className="post-game-form-grid" onSubmit={handleSubmit}>
         <label>
           School Name
@@ -281,24 +288,26 @@ export function AssignGameForm({
 
         <label>
           Sport
-          <select value={sport} onChange={(event) => setSport(event.target.value as Sport)}>
-            {SPORTS.map((sportOption) => (
-              <option key={sportOption} value={sportOption}>
-                {sportOption}
-              </option>
-            ))}
-          </select>
+          <Select
+            value={sport}
+            onValueChange={(value) => setSport(value)}
+            options={SPORTS.map((sportOption) => ({
+              value: sportOption,
+              label: sportOption
+            }))}
+          />
         </label>
 
         <label>
           Level
-          <select value={level} onChange={(event) => setLevel(event.target.value as Level)}>
-            {LEVELS.map((levelOption) => (
-              <option key={levelOption} value={levelOption}>
-                {levelOption}
-              </option>
-            ))}
-          </select>
+          <Select
+            value={level}
+            onValueChange={(value) => setLevel(value)}
+            options={LEVELS.map((levelOption) => ({
+              value: levelOption,
+              label: levelOption
+            }))}
+          />
         </label>
 
         <label>
@@ -423,17 +432,17 @@ export function AssignGameForm({
           ) : (
             <>
               <div className="assign-search-row">
-                <select
+                <Select
                   value={selectedCrewId}
-                  onChange={(event) => setSelectedCrewId(event.target.value)}
-                >
-                  <option value="">Select a crew</option>
-                  {selectableCrews.map((crew) => (
-                    <option key={crew.id} value={crew.id}>
-                      {crew.name} ({crew.memberUids.length} members)
-                    </option>
-                  ))}
-                </select>
+                  onValueChange={setSelectedCrewId}
+                  options={[
+                    { value: "", label: "Select a crew" },
+                    ...selectableCrews.map((crew) => ({
+                      value: crew.id,
+                      label: `${crew.name} (${crew.memberUids.length} members)`
+                    }))
+                  ]}
+                />
                 <button
                   type="button"
                   className="button-secondary"
@@ -563,21 +572,16 @@ export function AssignGameForm({
                           <td>{assignee.officialEmail}</td>
                           <td>
                             {sport === "Football" ? (
-                              <select
+                              <Select
                                 value={assignee.position}
-                                onChange={(event) =>
-                                  updateIndividualPosition(
-                                    assignee.officialUid,
-                                    event.target.value as FootballPosition
-                                  )
+                                onValueChange={(value) =>
+                                  updateIndividualPosition(assignee.officialUid, value as FootballPosition)
                                 }
-                              >
-                                {FOOTBALL_POSITIONS.map((position) => (
-                                  <option key={position.code} value={position.code}>
-                                    {position.label}
-                                  </option>
-                                ))}
-                              </select>
+                                options={FOOTBALL_POSITIONS.map((position) => ({
+                                  value: position.code,
+                                  label: position.label
+                                }))}
+                              />
                             ) : (
                               "N/A"
                             )}

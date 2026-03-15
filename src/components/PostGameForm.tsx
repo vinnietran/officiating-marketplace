@@ -6,6 +6,7 @@ import {
 } from "../lib/googlePlaces";
 import { buildMarketplaceGameSubmission } from "../lib/gameForms";
 import type { Level, Sport } from "../types";
+import { Select } from "./ui/Select";
 
 interface PostGameFormValues {
   schoolName: string;
@@ -137,7 +138,13 @@ export function PostGameForm({ onSubmit }: PostGameFormProps) {
 
   return (
     <section className="post-game-panel post-game-panel-full">
-      <h2>Create Assignment</h2>
+      <div className="form-section-header">
+        <span className="hero-eyebrow">Listing builder</span>
+        <h2>Create Assignment</h2>
+        <p className="meta-line">
+          Provide complete game details so officials can evaluate the opportunity quickly.
+        </p>
+      </div>
       <form className="post-game-form-grid" onSubmit={handleSubmit}>
         <label>
           School Name
@@ -151,30 +158,26 @@ export function PostGameForm({ onSubmit }: PostGameFormProps) {
 
         <label>
           Sport
-          <select
+          <Select
             value={sport}
-            onChange={(event) => setSport(event.target.value as Sport)}
-          >
-            {SPORTS.map((sportOption) => (
-              <option key={sportOption} value={sportOption}>
-                {sportOption}
-              </option>
-            ))}
-          </select>
+            onValueChange={(value) => setSport(value)}
+            options={SPORTS.map((sportOption) => ({
+              value: sportOption,
+              label: sportOption
+            }))}
+          />
         </label>
 
         <label>
           Level
-          <select
+          <Select
             value={level}
-            onChange={(event) => setLevel(event.target.value as Level)}
-          >
-            {LEVELS.map((levelOption) => (
-              <option key={levelOption} value={levelOption}>
-                {levelOption}
-              </option>
-            ))}
-          </select>
+            onValueChange={(value) => setLevel(value)}
+            options={LEVELS.map((levelOption) => ({
+              value: levelOption,
+              label: levelOption
+            }))}
+          />
         </label>
 
         <label>

@@ -1,10 +1,11 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import { Navigate, useNavigate } from "react-router-dom";
 import { AuthPanel } from "../components/AuthPanel";
 import { CompleteProfilePanel } from "../components/CompleteProfilePanel";
 import { Filters, type FilterValues } from "../components/Filters";
 import { GameCard } from "../components/GameCard";
 import { MessageModal } from "../components/MessageModal";
+import { Select } from "../components/ui/Select";
 import { useAuth } from "../context/AuthContext";
 import {
   getCoordinatesForAddress,
@@ -25,6 +26,7 @@ import {
 } from "../lib/firestore";
 import { FIRESTORE_DATABASE_ID } from "../lib/firebase";
 import { getReadableFirestoreError } from "../lib/firebaseErrors";
+import { formatCurrency, formatGameDate } from "../lib/format";
 import {
   buildQualifiedGameLevels,
   filterAvailableMarketplaceGames,
@@ -43,6 +45,13 @@ const DEFAULT_FILTERS: FilterValues = {
 };
 
 type OfficialQuickFilter = "all" | "open_bids" | "won_bids";
+type MarketplaceSortOption =
+  | "best_match"
+  | "date_soonest"
+  | "pay_high"
+  | "pay_low"
+  | "bid_deadline"
+  | "closest";
 
 interface FeaturedSuggestion {
   game: Game;
@@ -104,6 +113,7 @@ export function Marketplace() {
   const [filters, setFilters] = useState<FilterValues>(DEFAULT_FILTERS);
   const [officialQuickFilter, setOfficialQuickFilter] =
     useState<OfficialQuickFilter>("all");
+  const [sortBy, setSortBy] = useState<MarketplaceSortOption>("best_match");
   const [games, setGames] = useState<Game[]>([]);
   const [bids, setBids] = useState<Bid[]>([]);
   const [crews, setCrews] = useState<Crew[]>([]);
@@ -115,6 +125,8 @@ export function Marketplace() {
     title: string;
     message: string;
   } | null>(null);
+  const deferredFilters = useDeferredValue(filters);
+  const isOfficial = profile?.role === "official";
 
   useEffect(() => {
     const timerId = window.setInterval(() => {
@@ -155,6 +167,12 @@ export function Marketplace() {
       setOfficialQuickFilter("all");
     }
   }, [officialQuickFilter, profile?.role]);
+
+  useEffect(() => {
+    if (profile?.role !== "official" && sortBy === "closest") {
+      setSortBy("best_match");
+    }
+  }, [profile?.role, sortBy]);
 
   useEffect(() => {
     if (!user || profile?.role !== "official") {
@@ -254,20 +272,23 @@ export function Marketplace() {
   ]);
 
   const filteredGames = useMemo(() => {
-    const minPay = filters.minPay.trim() === "" ? null : Number(filters.minPay);
+    const minPay =
+      deferredFilters.minPay.trim() === "" ? null : Number(deferredFilters.minPay);
 
     return listingPoolGames.filter((game) => {
       const matchesSearch = game.schoolName
         .toLowerCase()
-        .includes(filters.search.trim().toLowerCase());
-      const matchesSport = filters.sport === "All" || game.sport === filters.sport;
-      const matchesLevel = filters.level === "All" || game.level === filters.level;
+        .includes(deferredFilters.search.trim().toLowerCase());
+      const matchesSport =
+        deferredFilters.sport === "All" || game.sport === deferredFilters.sport;
+      const matchesLevel =
+        deferredFilters.level === "All" || game.level === deferredFilters.level;
       const matchesPay =
         minPay === null || Number.isNaN(minPay) ? true : game.payPosted >= minPay;
 
       return matchesSearch && matchesSport && matchesLevel && matchesPay;
     });
-  }, [filters, listingPoolGames]);
+  }, [deferredFilters, listingPoolGames]);
 
   const officialCrews = useMemo(() => {
     if (!user || profile?.role !== "official") {
@@ -653,6 +674,134 @@ export function Marketplace() {
     });
   }, [availableGames, distanceByGameId, officialLocationContext, profile]);
 
+  const bestMatchScoreByGameId = useMemo(() => {
+    if (!profile || profile.role !== "official") {
+      return new Map<string, number>();
+    }
+
+    const officialLevels = new Set<string>(profile.levelsOfficiated ?? []);
+    const qualifiedGameLevels = buildQualifiedGameLevels(officialLevels);
+    const pays = listingPoolGames.map((game) => game.payPosted);
+    const minPay = pays.length > 0 ? Math.min(...pays) : 0;
+    const maxPay = pays.length > 0 ? Math.max(...pays) : 0;
+    const scoreById = new Map<string, number>();
+
+    listingPoolGames.forEach((game) => {
+      const distanceMiles = distanceByGameId[game.id];
+      const distanceBasedCloseness =
+        typeof distanceMiles === "number" && Number.isFinite(distanceMiles)
+          ? Math.max(0, 1 - Math.min(distanceMiles, 40) / 40)
+          : null;
+      const closenessScore =
+        distanceBasedCloseness ?? getLocationClosenessScore(game, officialLocationContext);
+      const payScore =
+        maxPay > minPay ? (game.payPosted - minPay) / (maxPay - minPay) : 1;
+      const levelScore =
+        qualifiedGameLevels.size === 0
+          ? 0.6
+          : qualifiedGameLevels.has(game.level)
+            ? 1
+            : 0;
+      scoreById.set(game.id, closenessScore * 55 + payScore * 25 + levelScore * 20);
+    });
+
+    return scoreById;
+  }, [distanceByGameId, listingPoolGames, officialLocationContext, profile]);
+
+  const sortedGames = useMemo(() => {
+    const gamesToSort = [...filteredGames];
+
+    function dateValue(game: Game): number {
+      return new Date(game.dateISO).getTime();
+    }
+
+    function bidDeadlineValue(game: Game): number {
+      return game.acceptingBidsUntilISO
+        ? new Date(game.acceptingBidsUntilISO).getTime()
+        : Number.MAX_SAFE_INTEGER;
+    }
+
+    function closestValue(game: Game): number {
+      const distance = distanceByGameId[game.id];
+      return typeof distance === "number" && Number.isFinite(distance)
+        ? distance
+        : Number.MAX_SAFE_INTEGER;
+    }
+
+    gamesToSort.sort((a, b) => {
+      if (sortBy === "pay_high") {
+        return b.payPosted - a.payPosted || dateValue(a) - dateValue(b);
+      }
+      if (sortBy === "pay_low") {
+        return a.payPosted - b.payPosted || dateValue(a) - dateValue(b);
+      }
+      if (sortBy === "date_soonest") {
+        return dateValue(a) - dateValue(b) || b.payPosted - a.payPosted;
+      }
+      if (sortBy === "bid_deadline") {
+        return bidDeadlineValue(a) - bidDeadlineValue(b) || dateValue(a) - dateValue(b);
+      }
+      if (sortBy === "closest") {
+        return closestValue(a) - closestValue(b) || b.payPosted - a.payPosted;
+      }
+
+      if (profile?.role === "official") {
+        const scoreDiff =
+          (bestMatchScoreByGameId.get(b.id) ?? 0) - (bestMatchScoreByGameId.get(a.id) ?? 0);
+        if (scoreDiff !== 0) {
+          return scoreDiff;
+        }
+      }
+
+      const aClosingSoon = bidDeadlineValue(a);
+      const bClosingSoon = bidDeadlineValue(b);
+      if (aClosingSoon !== bClosingSoon) {
+        return aClosingSoon - bClosingSoon;
+      }
+
+      return b.payPosted - a.payPosted || dateValue(a) - dateValue(b);
+    });
+
+    return gamesToSort;
+  }, [bestMatchScoreByGameId, distanceByGameId, filteredGames, profile?.role, sortBy]);
+
+  const featuredListing = sortedGames[0] ?? null;
+  const endingSoonGame = useMemo(() => {
+    return [...listingPoolGames]
+      .filter((game) => Boolean(game.acceptingBidsUntilISO))
+      .sort((a, b) => {
+        const aTime = a.acceptingBidsUntilISO
+          ? new Date(a.acceptingBidsUntilISO).getTime()
+          : Number.MAX_SAFE_INTEGER;
+        const bTime = b.acceptingBidsUntilISO
+          ? new Date(b.acceptingBidsUntilISO).getTime()
+          : Number.MAX_SAFE_INTEGER;
+        return aTime - bTime;
+      })[0] ?? null;
+  }, [listingPoolGames]);
+  const highestPayGame = useMemo(() => {
+    return [...listingPoolGames].sort((a, b) => b.payPosted - a.payPosted)[0] ?? null;
+  }, [listingPoolGames]);
+  const closestGame = useMemo(() => {
+    if (!isOfficial) {
+      return null;
+    }
+
+    return [...listingPoolGames].sort((a, b) => {
+      const aDistance = distanceByGameId[a.id];
+      const bDistance = distanceByGameId[b.id];
+      const aValue =
+        typeof aDistance === "number" && Number.isFinite(aDistance)
+          ? aDistance
+          : Number.MAX_SAFE_INTEGER;
+      const bValue =
+        typeof bDistance === "number" && Number.isFinite(bDistance)
+          ? bDistance
+          : Number.MAX_SAFE_INTEGER;
+      return aValue - bValue;
+    })[0] ?? null;
+  }, [distanceByGameId, isOfficial, listingPoolGames]);
+
   if (loading) {
     return (
       <main className="page">
@@ -829,9 +978,33 @@ export function Marketplace() {
 
   return (
     <main className="page marketplace-page">
-      <header className="hero marketplace-hero">
+      <header className="hero marketplace-hero marketplace-hero-compact">
+        <span className="hero-eyebrow">Live marketplace</span>
         <h1>Officiating Marketplace</h1>
-        <p>Modern game board for bidding, staffing, and managing assignments.</p>
+        <p>
+          Search, compare, and act on live game listings with marketplace-style ranking and
+          listing intelligence.
+        </p>
+        <div className="hero-actions">
+          {canPostGames ? (
+            <>
+              <button type="button" onClick={() => navigate("/post-game")}>
+                Post a Game
+              </button>
+              <button
+                type="button"
+                className="button-secondary"
+                onClick={() => navigate("/assign-game")}
+              >
+                Assign Directly
+              </button>
+            </>
+          ) : (
+            <button type="button" className="button-secondary" onClick={() => navigate("/schedule")}>
+              View Schedule
+            </button>
+          )}
+        </div>
         <div className="marketplace-hero-stats">
           <article className="marketplace-hero-stat">
             <span className="marketplace-hero-stat-label">Open Listings</span>
@@ -868,83 +1041,248 @@ export function Marketplace() {
         </div>
       </header>
 
-      <section className="marketplace-toolbar">
-        <Filters values={filters} onChange={setFilters} />
-        {activeProfile.role === "official" ? (
-          <div className="marketplace-quick-filters">
-            <button
-              type="button"
-              className={`marketplace-quick-filter${
-                officialQuickFilter === "all" ? " marketplace-quick-filter-active" : ""
-              }`}
-              onClick={() => setOfficialQuickFilter("all")}
-            >
-              All Games ({availableGames.length})
-            </button>
-            <button
-              type="button"
-              className={`marketplace-quick-filter${
-                officialQuickFilter === "open_bids"
-                  ? " marketplace-quick-filter-active"
-                  : ""
-              }`}
-              onClick={() => setOfficialQuickFilter("open_bids")}
-            >
-              Open Bids ({officialOpenBidGames.length})
-            </button>
-            <button
-              type="button"
-              className={`marketplace-quick-filter${
-                officialQuickFilter === "won_bids"
-                  ? " marketplace-quick-filter-active"
-                  : ""
-              }`}
-              onClick={() => setOfficialQuickFilter("won_bids")}
-            >
-              Won Bids ({officialWonBidGames.length})
-            </button>
-          </div>
-        ) : null}
-        <div className="marketplace-toolbar-actions">
-          <span className="meta-line">
-            {filteredGames.length} of {listingPoolGames.length} listing(s) shown
-          </span>
-          {hasActiveFilters ? (
-            <button
-              type="button"
-              className="button-secondary"
-              onClick={handleResetFilters}
-            >
-              Clear Filters
-            </button>
-          ) : null}
-        </div>
-      </section>
-
       {dataError ? <p className="error-text">{dataError}</p> : null}
 
-      <div
-        className={`marketplace-content-grid${
-          activeProfile.role === "official" ? " marketplace-content-grid-official" : ""
-        }`}
-      >
-        <section ref={listingsRef} className="marketplace-listings">
-          <div className="results-header marketplace-results-header">
-            <h2>
-              {activeProfile.role === "official" && officialQuickFilter === "open_bids"
-                ? "Open Bid Games"
-                : activeProfile.role === "official" && officialQuickFilter === "won_bids"
-                  ? "Won Bid Games"
-                  : "Available Games"}
-            </h2>
-            <span>{filteredGames.length} result(s)</span>
+      <div className="marketplace-shell">
+        <aside className="marketplace-sidebar">
+          <section className="marketplace-toolbar marketplace-sidebar-card marketplace-sidebar-sticky">
+            <Filters values={filters} onChange={setFilters} />
+            {activeProfile.role === "official" ? (
+              <div className="marketplace-quick-filters">
+                <button
+                  type="button"
+                  className={`marketplace-quick-filter${
+                    officialQuickFilter === "all" ? " marketplace-quick-filter-active" : ""
+                  }`}
+                  onClick={() => setOfficialQuickFilter("all")}
+                >
+                  All Games ({availableGames.length})
+                </button>
+                <button
+                  type="button"
+                  className={`marketplace-quick-filter${
+                    officialQuickFilter === "open_bids"
+                      ? " marketplace-quick-filter-active"
+                      : ""
+                  }`}
+                  onClick={() => setOfficialQuickFilter("open_bids")}
+                >
+                  Open Bids ({officialOpenBidGames.length})
+                </button>
+                <button
+                  type="button"
+                  className={`marketplace-quick-filter${
+                    officialQuickFilter === "won_bids"
+                      ? " marketplace-quick-filter-active"
+                      : ""
+                  }`}
+                  onClick={() => setOfficialQuickFilter("won_bids")}
+                >
+                  Won Bids ({officialWonBidGames.length})
+                </button>
+              </div>
+            ) : null}
+            <div className="marketplace-toolbar-actions marketplace-toolbar-actions-sidebar">
+              <span className="meta-line">
+                {sortedGames.length} of {listingPoolGames.length} listing(s) shown
+              </span>
+              {hasActiveFilters ? (
+                <button
+                  type="button"
+                  className="button-secondary"
+                  onClick={handleResetFilters}
+                >
+                  Clear Filters
+                </button>
+              ) : null}
+            </div>
+          </section>
+
+          <section className="marketplace-featured marketplace-sidebar-card">
+            <div className="results-header marketplace-results-header">
+              <h2>Market Snapshot</h2>
+              <span>Live signals</span>
+            </div>
+            <div className="marketplace-insights">
+              <article className="marketplace-insight-card">
+                <span className="marketplace-insight-label">Highest pay</span>
+                <strong>
+                  {highestPayGame ? formatCurrency(highestPayGame.payPosted) : "-"}
+                </strong>
+                <p>{highestPayGame ? highestPayGame.schoolName : "No listings yet"}</p>
+              </article>
+              <article className="marketplace-insight-card">
+                <span className="marketplace-insight-label">Closing soon</span>
+                <strong>
+                  {endingSoonGame?.acceptingBidsUntilISO
+                    ? new Date(endingSoonGame.acceptingBidsUntilISO).toLocaleDateString("en-US", {
+                        month: "short",
+                        day: "numeric"
+                      })
+                    : "-"}
+                </strong>
+                <p>{endingSoonGame ? endingSoonGame.schoolName : "No active bid windows"}</p>
+              </article>
+              {activeProfile.role === "official" ? (
+                <article className="marketplace-insight-card">
+                  <span className="marketplace-insight-label">Closest game</span>
+                  <strong>
+                    {closestGame
+                      && typeof distanceByGameId[closestGame.id] === "number"
+                      && Number.isFinite(distanceByGameId[closestGame.id])
+                      ? `${distanceByGameId[closestGame.id]?.toFixed(1)} mi`
+                      : noAddressDistanceLabel ?? "-"}
+                  </strong>
+                  <p>{closestGame ? closestGame.schoolName : "No location match yet"}</p>
+                </article>
+              ) : null}
+            </div>
+          </section>
+
+          {activeProfile.role === "official" ? (
+            <aside className="marketplace-featured marketplace-sidebar-card">
+              <div className="results-header marketplace-results-header">
+                <h2>Recommended</h2>
+                <span>{featuredSuggestions.length} picks</span>
+              </div>
+              <p className="meta-line marketplace-featured-subtitle">
+                {officialLocationContext?.hasLocation
+                  ? "Ranked by fit, pay, and travel distance."
+                  : "Add your address in Profile to improve location-based recommendations."}
+              </p>
+              {featuredSuggestions.length === 0 ? (
+                <p className="empty-state">No featured games available right now.</p>
+              ) : (
+                <div className="marketplace-featured-stack">
+                  {featuredSuggestions.map((suggestion, index) => (
+                    <article
+                      key={suggestion.game.id}
+                      className="marketplace-featured-card clickable-game-card"
+                      role="button"
+                      tabIndex={0}
+                      onClick={(event) => {
+                        const target = event.target as HTMLElement;
+                        if (target.closest("button, input, textarea, [role='combobox'], form, a")) {
+                          return;
+                        }
+                        handleOpenGameDetails(suggestion.game);
+                      }}
+                      onKeyDown={(event) => {
+                        if (event.key !== "Enter" && event.key !== " ") {
+                          return;
+                        }
+
+                        const target = event.target as HTMLElement;
+                        if (target.closest("button, input, textarea, [role='combobox'], form, a")) {
+                          return;
+                        }
+
+                        event.preventDefault();
+                        handleOpenGameDetails(suggestion.game);
+                      }}
+                      aria-label={`Open details for ${suggestion.game.schoolName}`}
+                    >
+                      <div className="marketplace-featured-card-head">
+                        <span className="marketplace-featured-rank">#{index + 1}</span>
+                        <span className="pay-pill">{formatCurrency(suggestion.game.payPosted)}</span>
+                      </div>
+                      <h3>{suggestion.game.schoolName}</h3>
+                      <p className="meta-line">
+                        <strong>{suggestion.game.sport}</strong> • {suggestion.game.level}
+                      </p>
+                      <div className="marketplace-featured-badges">
+                        {suggestion.badges.map((badge) => (
+                          <span key={badge} className="marketplace-featured-badge">
+                            {badge}
+                          </span>
+                        ))}
+                      </div>
+                    </article>
+                  ))}
+                </div>
+              )}
+            </aside>
+          ) : null}
+        </aside>
+
+        <section ref={listingsRef} className="marketplace-listings marketplace-results-column">
+          <div className="marketplace-results-toolbar">
+            <div className="marketplace-results-copy">
+              <span className="hero-eyebrow">Browse listings</span>
+              <h2>
+                {activeProfile.role === "official" && officialQuickFilter === "open_bids"
+                  ? "Open Bid Games"
+                  : activeProfile.role === "official" && officialQuickFilter === "won_bids"
+                    ? "Won Bid Games"
+                    : "Available Games"}
+              </h2>
+              <p className="meta-line">
+                Showing {sortedGames.length} results sorted for{" "}
+                {sortBy === "best_match"
+                  ? "best match"
+                  : sortBy === "date_soonest"
+                    ? "soonest game date"
+                    : sortBy === "pay_high"
+                      ? "highest pay"
+                      : sortBy === "pay_low"
+                        ? "lowest pay"
+                        : sortBy === "bid_deadline"
+                          ? "nearest bid deadline"
+                          : "closest distance"}
+                .
+              </p>
+            </div>
+
+            <label className="marketplace-sort-control">
+              Sort By
+              <Select
+                value={sortBy}
+                onValueChange={setSortBy}
+                options={[
+                  { value: "best_match", label: "Best Match" },
+                  { value: "date_soonest", label: "Game Date: Soonest" },
+                  { value: "pay_high", label: "Pay: Highest First" },
+                  { value: "pay_low", label: "Pay: Lowest First" },
+                  { value: "bid_deadline", label: "Bid Deadline: Ending Soon" },
+                  ...(activeProfile.role === "official"
+                    ? [{ value: "closest" as const, label: "Closest First" }]
+                    : [])
+                ]}
+              />
+            </label>
           </div>
 
-          <section className="game-list marketplace-game-list">
-            {filteredGames.length === 0 ? (
+          {featuredListing ? (
+            <section className="marketplace-spotlight">
+              <div className="marketplace-spotlight-copy">
+                <span className="hero-eyebrow">Top listing</span>
+                <h3>{featuredListing.schoolName}</h3>
+                <p>
+                  {featuredListing.sport} • {featuredListing.level} •{" "}
+                  {formatGameDate(featuredListing.dateISO)}
+                </p>
+              </div>
+              <div className="marketplace-spotlight-metrics">
+                <div>
+                  <span>Posted pay</span>
+                  <strong>{formatCurrency(featuredListing.payPosted)}</strong>
+                </div>
+                <div>
+                  <span>Status</span>
+                  <strong>{featuredListing.status}</strong>
+                </div>
+                <button type="button" onClick={() => handleOpenGameDetails(featuredListing)}>
+                  View Listing
+                </button>
+              </div>
+            </section>
+          ) : null}
+
+          <section className="game-list marketplace-game-list marketplace-game-list-list">
+            {sortedGames.length === 0 ? (
               <div className="empty-state">No games match your filters.</div>
             ) : (
-              filteredGames.map((game) => (
+              sortedGames.map((game) => (
                 <GameCard
                   key={game.id}
                   game={game}
@@ -963,99 +1301,12 @@ export function Marketplace() {
                   onSubmitBid={handleSubmitBid}
                   onDeleteBid={handleDeleteBid}
                   onUpdateGame={handleUpdateGame}
+                  layout="list"
                 />
               ))
             )}
           </section>
         </section>
-
-        {activeProfile.role === "official" ? (
-          <aside className="marketplace-featured marketplace-featured-rail">
-            <div className="results-header marketplace-results-header">
-              <h2>Featured Near You</h2>
-              <span>{featuredSuggestions.length} suggestion(s)</span>
-            </div>
-            <p className="meta-line marketplace-featured-subtitle">
-              {officialLocationContext?.hasLocation
-                ? "Suggestions rank games by closest location, highest pay, and level fit."
-                : "Add your address in Profile to improve location-based recommendations."}
-            </p>
-            {featuredSuggestions.length === 0 ? (
-              <p className="empty-state">No featured games available right now.</p>
-            ) : (
-              <div className="marketplace-featured-carousel">
-                {featuredSuggestions.map((suggestion, index) => (
-                  <article
-                    key={suggestion.game.id}
-                    className="marketplace-featured-card clickable-game-card"
-                    role="button"
-                    tabIndex={0}
-                    onClick={(event) => {
-                      const target = event.target as HTMLElement;
-                      if (target.closest("button, input, textarea, select, form, a")) {
-                        return;
-                      }
-                      handleOpenGameDetails(suggestion.game);
-                    }}
-                    onKeyDown={(event) => {
-                      if (event.key !== "Enter" && event.key !== " ") {
-                        return;
-                      }
-
-                      const target = event.target as HTMLElement;
-                      if (target.closest("button, input, textarea, select, form, a")) {
-                        return;
-                      }
-
-                      event.preventDefault();
-                      handleOpenGameDetails(suggestion.game);
-                    }}
-                    aria-label={`Open details for ${suggestion.game.schoolName}`}
-                  >
-                    <div className="marketplace-featured-card-head">
-                      <span className="marketplace-featured-rank">#{index + 1}</span>
-                      <span className="pay-pill">
-                        {suggestion.game.payPosted >= 0
-                          ? `$${suggestion.game.payPosted}`
-                          : "$0"}
-                      </span>
-                    </div>
-                    <h3>{suggestion.game.schoolName}</h3>
-                    <p className="meta-line">
-                      <strong>{suggestion.game.sport}</strong> • {suggestion.game.level}
-                    </p>
-                    <p className="meta-line">{suggestion.game.location}</p>
-                    <p className="meta-line">
-                      Distance:{" "}
-                      <strong>
-                        {typeof suggestion.distanceMiles === "number"
-                          && Number.isFinite(suggestion.distanceMiles)
-                          ? `${suggestion.distanceMiles.toFixed(1)} mi`
-                          : suggestion.distanceMiles === null
-                            ? (noAddressDistanceLabel ?? "N/A")
-                            : "Calculating..."}
-                      </strong>
-                    </p>
-                    <div className="marketplace-featured-badges">
-                      {suggestion.badges.map((badge) => (
-                        <span key={badge} className="marketplace-featured-badge">
-                          {badge}
-                        </span>
-                      ))}
-                    </div>
-                    <button
-                      type="button"
-                      className="button-secondary"
-                      onClick={() => handleOpenGameDetails(suggestion.game)}
-                    >
-                      View Details
-                    </button>
-                  </article>
-                ))}
-              </div>
-            )}
-          </aside>
-        ) : null}
       </div>
 
       {modalMessage ? (

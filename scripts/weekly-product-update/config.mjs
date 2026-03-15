@@ -90,13 +90,7 @@ export function loadConfig(env = process.env) {
     outputDir: path.resolve(env.REPORT_OUTPUT_DIR ?? "artifacts/weekly-product-update"),
     senderName: env.REPORT_SENDER_NAME || "Product Updates",
     senderEmail: env.REPORT_SENDER_EMAIL || "",
-    smtp: {
-      host: env.SMTP_HOST || "",
-      port: Number(env.SMTP_PORT || 465),
-      secure: parseBoolean(env.SMTP_SECURE, true),
-      username: env.SMTP_USERNAME || "",
-      password: env.SMTP_PASSWORD || "",
-    },
+    sendgridApiKey: env.SENDGRID_API_KEY || "",
     labels: {
       inProgress: splitCsv(env.IN_PROGRESS_LABELS || "in-progress,doing,active"),
       blockers: splitCsv(env.BLOCKER_LABELS || "blocked,blocker,question,open-question"),
@@ -128,14 +122,7 @@ export function validateRuntimeConfig(config) {
     throw new Error("REPORT_SENDER_EMAIL must be configured when dry-run is disabled.");
   }
 
-  if (!config.smtp.host || !config.smtp.username || !config.smtp.password) {
-    throw new Error(
-      "SMTP_HOST, SMTP_USERNAME, and SMTP_PASSWORD must be configured when dry-run is disabled.",
-    );
-  }
-
-  if (!Number.isFinite(config.smtp.port) || config.smtp.port <= 0) {
-    throw new Error("SMTP_PORT must be a valid positive number.");
+  if (!config.sendgridApiKey) {
+    throw new Error("SENDGRID_API_KEY must be configured when dry-run is disabled.");
   }
 }
-

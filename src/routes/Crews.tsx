@@ -2,6 +2,8 @@ import { useEffect, useMemo, useState } from "react";
 import { AuthPanel } from "../components/AuthPanel";
 import { CompleteProfilePanel } from "../components/CompleteProfilePanel";
 import { MessageModal } from "../components/MessageModal";
+import { PageHeader } from "../components/ui/PageHeader";
+import { Select } from "../components/ui/Select";
 import { useAuth } from "../context/AuthContext";
 import { FIRESTORE_DATABASE_ID } from "../lib/firebase";
 import { getReadableFirestoreError } from "../lib/firebaseErrors";
@@ -686,10 +688,16 @@ export function Crews() {
 
   return (
     <main className="page">
-      <header className="hero">
-        <h1>Crews</h1>
-        <p>Create crews and manage members for team-based bidding.</p>
-      </header>
+      <PageHeader
+        eyebrow="Crew management"
+        title="Crews"
+        description="Create crews, manage membership, and keep football positions organized."
+        stats={[
+          { label: "Visible Crews", value: visibleCrews.length },
+          { label: "Selected Crew Members", value: selectedMembers.length },
+          { label: "Member Limit", value: MAX_CREW_MEMBERS }
+        ]}
+      />
 
       {dataError ? <p className="error-text">{dataError}</p> : null}
 
@@ -784,22 +792,22 @@ export function Crews() {
                         <div className="meta-line">{member.email}</div>
                         <label className="crew-position-control">
                           Position
-                          <select
+                          <Select
                             value={selectedPosition}
-                            onChange={(event) =>
+                            onValueChange={(value) =>
                               handleSetSelectedMemberPosition(
                                 member.uid,
-                                event.target.value as FootballPosition | ""
+                                value as FootballPosition | ""
                               )
                             }
-                          >
-                            <option value="">Unassigned</option>
-                            {FOOTBALL_POSITION_OPTIONS.map((option) => (
-                              <option key={option.code} value={option.code}>
-                                {option.label}
-                              </option>
-                            ))}
-                          </select>
+                            options={[
+                              { value: "", label: "Unassigned" },
+                              ...FOOTBALL_POSITION_OPTIONS.map((option) => ({
+                                value: option.code,
+                                label: option.label
+                              }))
+                            ]}
+                          />
                         </label>
                       </div>
                       <button
@@ -931,23 +939,23 @@ export function Crews() {
                           <div className="meta-line">{member.email}</div>
                           <label className="crew-position-control">
                             Position
-                            <select
+                            <Select
                               value={selectedPosition}
-                              onChange={(event) =>
+                              onValueChange={(value) =>
                                 handleSetManageMemberPosition(
                                   member.uid,
-                                  event.target.value as FootballPosition | ""
+                                  value as FootballPosition | ""
                                 )
                               }
                               disabled={!canAssignSelectedCrewPositions || updatingCrewPositions}
-                            >
-                              <option value="">Unassigned</option>
-                              {FOOTBALL_POSITION_OPTIONS.map((option) => (
-                                <option key={option.code} value={option.code}>
-                                  {option.label}
-                                </option>
-                              ))}
-                            </select>
+                              options={[
+                                { value: "", label: "Unassigned" },
+                                ...FOOTBALL_POSITION_OPTIONS.map((option) => ({
+                                  value: option.code,
+                                  label: option.label
+                                }))
+                              ]}
+                            />
                           </label>
                         </div>
                         {selectedCrew.createdByUid === activeUser.uid ? (
@@ -993,18 +1001,17 @@ export function Crews() {
                   <div className="crew-invite-row crew-manage-tools">
                     <label>
                       Crew Chief
-                      <select
+                      <Select
                         value={manageCrewChiefUid}
-                        onChange={(event) => setManageCrewChiefUid(event.target.value)}
                         disabled={updatingCrewChief || updatingCrewMembers || updatingCrewPositions}
-                      >
-                        {chiefOptions.map((option) => (
-                          <option key={option.uid} value={option.uid}>
-                            {option.name}
-                            {option.uid === selectedCrew.createdByUid ? " (Creator)" : ""}
-                          </option>
-                        ))}
-                      </select>
+                        onValueChange={setManageCrewChiefUid}
+                        options={chiefOptions.map((option) => ({
+                          value: option.uid,
+                          label: `${option.name}${
+                            option.uid === selectedCrew.createdByUid ? " (Creator)" : ""
+                          }`
+                        }))}
+                      />
                     </label>
                     <button
                       type="button"

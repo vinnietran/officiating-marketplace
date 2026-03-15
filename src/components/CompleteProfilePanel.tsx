@@ -1,4 +1,6 @@
 import { useMemo, useState } from "react";
+import { Button } from "./ui/Button";
+import { Select } from "./ui/Select";
 import { useAuth } from "../context/AuthContext";
 import {
   formatRoleLabel,
@@ -48,10 +50,13 @@ export function CompleteProfilePanel() {
 
   return (
     <section className="auth-panel">
-      <h2>Complete Your Profile</h2>
-      <p className="meta-line">
-        Your account exists, but role setup is missing. Choose your role to continue.
-      </p>
+      <div className="auth-panel-header">
+        <span className="hero-eyebrow">Finish onboarding</span>
+        <h2>Complete Your Profile</h2>
+        <p className="meta-line">
+          Your account exists, but role setup is missing. Choose your role to continue.
+        </p>
+      </div>
 
       <form className="auth-form" onSubmit={handleSubmit}>
         <label>
@@ -71,32 +76,34 @@ export function CompleteProfilePanel() {
 
         <label>
           Role
-          <select
+          <Select
             value={role}
-            onChange={(event) => setRole(event.target.value as UserRole)}
-          >
-            {ROLE_OPTIONS.map((roleOption) => (
-              <option key={roleOption} value={roleOption}>
-                {formatRoleLabel(roleOption)}
-              </option>
-            ))}
-          </select>
+            onValueChange={(value) => setRole(value)}
+            options={ROLE_OPTIONS.map((roleOption) => ({
+              value: roleOption,
+              label: formatRoleLabel(roleOption)
+            }))}
+          />
         </label>
 
         {error ? <p className="error-text">{error}</p> : null}
 
         <div className="auth-actions">
-          <button type="submit" disabled={submitting}>
+          <Button type="submit" disabled={submitting}>
             {submitting ? "Saving..." : "Save Profile"}
-          </button>
-          <button
+          </Button>
+          <Button
             type="button"
-            className="button-secondary"
+            variant="secondary"
             onClick={() => signOut()}
           >
             Sign Out
-          </button>
+          </Button>
         </div>
+
+        <p className="auth-panel-footer">
+          Profile completion enables the correct permissions, navigation, and workflows.
+        </p>
       </form>
     </section>
   );

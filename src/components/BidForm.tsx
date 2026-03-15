@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { buildBidSubmission, findActiveBid, getBidFormDefaults } from "../lib/bids";
 import type { Bid, Crew } from "../types";
+import { Select } from "./ui/Select";
 
 interface BidFormValues {
   officialName: string;
@@ -123,31 +124,30 @@ export function BidForm({
         <>
           <label>
             Bid As
-            <select
+            <Select
               value={bidderType}
-              onChange={(event) =>
-                setBidderType(event.target.value as "individual" | "crew")
-              }
+              onValueChange={(value) => setBidderType(value)}
               disabled={forceCrewOnly}
-            >
-              {!forceCrewOnly ? <option value="individual">Individual</option> : null}
-              <option value="crew">Crew</option>
-            </select>
+              options={[
+                ...(!forceCrewOnly
+                  ? [{ value: "individual" as const, label: "Individual" }]
+                  : []),
+                { value: "crew" as const, label: "Crew" }
+              ]}
+            />
           </label>
 
           {bidderType === "crew" ? (
             <label>
               Crew
-              <select
+              <Select
                 value={selectedCrewId}
-                onChange={(event) => setSelectedCrewId(event.target.value)}
-              >
-                {availableCrews.map((crew) => (
-                  <option key={crew.id} value={crew.id}>
-                    {crew.name}
-                  </option>
-                ))}
-              </select>
+                onValueChange={setSelectedCrewId}
+                options={availableCrews.map((crew) => ({
+                  value: crew.id,
+                  label: crew.name
+                }))}
+              />
             </label>
           ) : null}
         </>

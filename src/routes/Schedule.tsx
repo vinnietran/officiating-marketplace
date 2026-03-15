@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { AuthPanel } from "../components/AuthPanel";
 import { CompleteProfilePanel } from "../components/CompleteProfilePanel";
+import { PageHeader } from "../components/ui/PageHeader";
 import { useAuth } from "../context/AuthContext";
 import {
   getBidderName,
@@ -143,6 +144,13 @@ export function Schedule() {
       );
   }, [games, bidsById, profile?.role]);
 
+  const upcomingOfficialGamesCount = officialScheduleGames.filter(
+    ({ game }) => new Date(game.dateISO).getTime() >= nowMs
+  ).length;
+  const openPostedGamesCount = assignorOrSchoolScheduleGames.filter(
+    ({ game }) => game.status === "open"
+  ).length;
+
   if (loading) {
     return (
       <main className="page">
@@ -184,16 +192,47 @@ export function Schedule() {
 
   return (
     <main className="page">
-      <header className="hero">
-        <h1>Schedule</h1>
-        <p>
-          {profile.role === "official"
-            ? "Your assigned games"
+      <PageHeader
+        eyebrow="Calendar and staffing"
+        title="Schedule"
+        description={
+          profile.role === "official"
+            ? "Your assigned games and upcoming work."
             : profile.role === "evaluator"
-              ? "All games across the marketplace."
-            : "Games you posted and current award status."}
-        </p>
-      </header>
+              ? "A complete marketplace view for review and evaluation."
+              : "Every posted game with current award and bid status."
+        }
+        stats={[
+          {
+            label:
+              profile.role === "official"
+                ? "Assigned Games"
+                : profile.role === "evaluator"
+                  ? "Visible Games"
+                  : "Posted Games",
+            value:
+              profile.role === "official"
+                ? officialScheduleGames.length
+                : profile.role === "evaluator"
+                  ? evaluatorScheduleGames.length
+                  : assignorOrSchoolScheduleGames.length
+          },
+          {
+            label:
+              profile.role === "official"
+                ? "Upcoming"
+                : profile.role === "evaluator"
+                  ? "Awarded"
+                  : "Open Games",
+            value:
+              profile.role === "official"
+                ? upcomingOfficialGamesCount
+                : profile.role === "evaluator"
+                  ? evaluatorScheduleGames.filter(({ game }) => game.status === "awarded").length
+                  : openPostedGamesCount
+          }
+        ]}
+      />
 
       {dataError ? <p className="error-text">{dataError}</p> : null}
 

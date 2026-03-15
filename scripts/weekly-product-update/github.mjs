@@ -113,6 +113,12 @@ export async function fetchOpenIssues(config) {
   return filterOutPullRequests(issues);
 }
 
+export async function fetchIssueEvents(config, issueNumber) {
+  return paginate(config, `/repos/${config.owner}/${config.repo}/issues/${issueNumber}/events`, {
+    per_page: 100,
+  });
+}
+
 export function selectIssuesByLabels(issues, labelNames = []) {
   return issues.filter((issue) => hasAnyLabel(issue, labelNames));
 }
@@ -176,4 +182,3 @@ export async function fetchWorkflowStatus(config, defaultBranch) {
     runs,
   };
 }
-

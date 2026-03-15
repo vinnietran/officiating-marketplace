@@ -89,10 +89,13 @@ function truncateGracefully(text, maxLength) {
   return `${clipped.slice(0, wordBoundary > 0 ? wordBoundary : maxLength).trim()}…`;
 }
 
-function firstMeaningfulParagraph(markdown = "") {
+function firstMeaningfulParagraph(markdown = "", maxLength = 220) {
   const paragraphs = markdown
     .split(/\n\s*\n/)
-    .map((paragraph) => truncateGracefully(stripMarkdown(paragraph), 220))
+    .map((paragraph) => {
+      const cleaned = stripMarkdown(paragraph);
+      return Number.isFinite(maxLength) ? truncateGracefully(cleaned, maxLength) : cleaned;
+    })
     .filter((paragraph) => paragraph.length > 20);
 
   return paragraphs[0] ?? "";
@@ -143,6 +146,7 @@ export function parseStoryDetails(issue) {
   const body = issue.body ?? "";
   const sections = extractSections(body);
   const fallbackParagraph = firstMeaningfulParagraph(body);
+  const fullFallbackParagraph = firstMeaningfulParagraph(body, Number.POSITIVE_INFINITY);
   const summarySection = pickFirstSection(sections, [
     "summary",
     "background",
@@ -164,6 +168,9 @@ export function parseStoryDetails(issue) {
   ]);
   const validationSection = pickFirstSection(sections, ["validation", "testing", "qa"]);
   const acceptanceBullets = extractBullets(acceptanceCriteria);
+  const fullStoryDetail = stripMarkdown(
+    summarySection || fullFallbackParagraph || acceptanceBullets[0] || issue.title,
+  ).trim();
 
   const storySummary = summarize(
     summarySection || fallbackParagraph || acceptanceBullets[0] || issue.title,
@@ -175,6 +182,7 @@ export function parseStoryDetails(issue) {
     title: issue.title,
     url: issue.html_url,
     story: ensureSentence(storySummary),
+    storyDetail: ensureSentence(fullStoryDetail || issue.title),
     completedOutcome: deriveOutcome(
       issue.title,
       outcomeSection || acceptanceBullets[0] || summarySection || fallbackParagraph,

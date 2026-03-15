@@ -6,11 +6,13 @@ Generated: March 10, 2026
 Completed this period:
 - Build game posting flow
   Story: Schools can create and publish open games that need to be filled by qualified officials.
-  Moved to in progress: March 3, 2026
+
+This gives assigners a faster way to post open needs and gives officials a clearer stream of opportunities to review.
   Marked done: March 7, 2026
 - Improve crew assignment review
   Story: Assigners needed a clearer way to review crew availability before confirming game coverage.
-  Moved to in progress: March 4, 2026
+
+The goal was to reduce back-and-forth and make it easier to lock coverage decisions in one pass.
   Marked done: March 9, 2026
 
 Currently in progress:

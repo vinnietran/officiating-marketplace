@@ -16,6 +16,15 @@ function formatDisplayDate(value) {
   }).format(new Date(value));
 }
 
+function formatLongDisplayDate(value) {
+  return new Intl.DateTimeFormat("en-US", {
+    month: "long",
+    day: "numeric",
+    year: "numeric",
+    timeZone: "UTC",
+  }).format(new Date(value));
+}
+
 function formatRelativeTimestamp(value) {
   return new Intl.DateTimeFormat("en-US", {
     month: "short",
@@ -26,93 +35,86 @@ function formatRelativeTimestamp(value) {
   }).format(new Date(value));
 }
 
+function buildReportId(generatedAt) {
+  const date = new Date(generatedAt);
+  const year = date.getUTCFullYear();
+  const month = String(date.getUTCMonth() + 1).padStart(2, "0");
+  const day = String(date.getUTCDate()).padStart(2, "0");
+  return `${year}-${month}${day}`;
+}
+
+function renderLogo(logoSrc, companyName) {
+  if (!logoSrc) {
+    return `<div class="brand-mark-fallback">${escapeHtml(companyName.slice(0, 2).toUpperCase())}</div>`;
+  }
+
+  return `<img class="brand-mark" src="${escapeHtml(logoSrc)}" alt="${escapeHtml(companyName)} logo" />`;
+}
+
 function renderStoryCard(story) {
   return `
-    <div class="card">
-      <h3>Issue #${escapeHtml(story.number)} - ${escapeHtml(story.title)}</h3>
-      <p><strong>Story:</strong> ${escapeHtml(story.story)}</p>
-      <p><strong>Completed Outcome:</strong> ${escapeHtml(story.completedOutcome)}</p>
+    <article class="story-card">
+      <h3>${escapeHtml(story.title)}</h3>
+      <p><strong>What was delivered:</strong> ${escapeHtml(story.completedOutcome)}</p>
+      <p><strong>Why it matters:</strong> ${escapeHtml(story.story)}</p>
       <p><strong>Validation:</strong> ${escapeHtml(story.validation)}</p>
-      <p class="meta"><a href="${escapeHtml(story.url)}">View issue</a></p>
-    </div>
+    </article>
   `;
 }
 
-function renderIssueList(items, emptyState) {
+function renderSummaryList(items, emptyState) {
   if (!items.length) {
-    return `<p>${escapeHtml(emptyState)}</p>`;
+    return `<p class="empty-copy">${escapeHtml(emptyState)}</p>`;
   }
 
-  const listItems = items
+  return items
     .map(
       (item) => `
-        <li>
-          <a href="${escapeHtml(item.url)}">${escapeHtml(item.title)}</a>
-          <div class="list-detail">${escapeHtml(item.summary)}</div>
-        </li>
+        <article class="summary-item">
+          <h3>${escapeHtml(item.title)}</h3>
+          <p>${escapeHtml(item.summary)}</p>
+        </article>
       `,
     )
     .join("");
-
-  return `<ul>${listItems}</ul>`;
 }
 
 function renderWorkflowStatus(workflowStatus) {
   if (!workflowStatus.available) {
-    return `<p>${escapeHtml(workflowStatus.summary)}</p>`;
+    return `<p class="empty-copy">${escapeHtml(workflowStatus.summary)}</p>`;
   }
 
-  const items = workflowStatus.runs
+  const runs = workflowStatus.runs
     .map(
       (run) => `
-        <li>
-          <a href="${escapeHtml(run.url)}">${escapeHtml(run.name)}</a>
-          <span class="pill ${escapeHtml(run.conclusion)}">${escapeHtml(run.conclusion)}</span>
-          <div class="list-detail">Updated ${escapeHtml(formatRelativeTimestamp(run.updatedAt))} UTC via ${escapeHtml(run.event)}.</div>
-        </li>
+        <div class="quality-row">
+          <div>
+            <strong>${escapeHtml(run.name)}</strong>
+            <div class="quality-meta">Updated ${escapeHtml(formatRelativeTimestamp(run.updatedAt))} UTC</div>
+          </div>
+          <span class="status-pill status-${escapeHtml(run.conclusion)}">${escapeHtml(run.conclusion)}</span>
+        </div>
       `,
     )
     .join("");
 
   return `
-    <p>${escapeHtml(workflowStatus.summary)}</p>
-    <ul>${items}</ul>
+    <p class="quality-summary">${escapeHtml(workflowStatus.summary)}</p>
+    <div class="quality-list">${runs}</div>
   `;
 }
 
-function renderPullRequests(pullRequests) {
-  if (!pullRequests.length) {
-    return "";
-  }
-
-  const items = pullRequests
-    .map(
-      (pullRequest) => `
-        <li>
-          <a href="${escapeHtml(pullRequest.url)}">PR #${escapeHtml(pullRequest.number)} - ${escapeHtml(pullRequest.title)}</a>
-          <div class="list-detail">Merged ${escapeHtml(formatDisplayDate(pullRequest.mergedAt))} by ${escapeHtml(pullRequest.author)}.</div>
-        </li>
-      `,
-    )
-    .join("");
-
-  return `
-    <section>
-      <h2>Optional Merged PRs</h2>
-      <ul>${items}</ul>
-    </section>
-  `;
-}
-
-function renderOptionalSection(title, items) {
-  if (!items.length) {
+function renderOptionalSection(title, items, emptyState = "") {
+  if (!items.length && !emptyState) {
     return "";
   }
 
   return `
-    <section>
+    <section class="content-section">
       <h2>${escapeHtml(title)}</h2>
-      ${renderIssueList(items, "")}
+      <div class="stack">
+        ${renderSummaryList(items, emptyState)}
+      </div>
     </section>
   `;
 }
@@ -125,10 +127,17 @@ export function buildEmailSubject(projectName, reportWindow) {
   return `Weekly Product Update - ${projectName} - ${formatDateRangeLabel(reportWindow)}`;
 }
 
-export function renderEmailHtml(report) {
+export function renderEmailHtml(report, options = {}) {
+  const companyName = report.branding?.companyName || report.projectName;
+  const companyEmail = report.branding?.email || "";
+  const logoSrc = options.logoSrc || "";
   const completedSection = report.completedStories.length
     ? report.completedStories.map(renderStoryCard).join("")
-    : "<p>No completed stories this period.</p>";
+    : `<p class="empty-copy">No completed milestones were finalized in this reporting period.</p>`;
+
+  const latestQualityState = report.workflowStatus.available
+    ? report.workflowStatus.runs[0]?.conclusion || "tracked"
+    : "tracked";
 
   return `<!DOCTYPE html>
 <html lang="en">
@@ -137,67 +146,374 @@ export function renderEmailHtml(report) {
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>${escapeHtml(report.subject)}</title>
     <style>
-      body { background: #f3f5f8; color: #172033; font-family: "Helvetica Neue", Helvetica, Arial, sans-serif; margin: 0; padding: 24px; }
-      .email { background: #ffffff; border: 1px solid #d8dee8; border-radius: 16px; margin: 0 auto; max-width: 760px; padding: 32px; }
-      h1, h2, h3 { color: #11213c; margin-top: 0; }
-      h1 { font-size: 28px; margin-bottom: 8px; }
-      h2 { border-top: 1px solid #e6ebf2; font-size: 18px; margin-top: 28px; padding-top: 24px; }
-      h3 { font-size: 17px; margin-bottom: 12px; }
-      p, li { font-size: 15px; line-height: 1.55; }
-      .lede { color: #516179; margin-bottom: 24px; }
-      .metrics { display: flex; flex-wrap: wrap; gap: 12px; margin: 20px 0 8px; }
-      .metric { background: #eef3f8; border-radius: 12px; min-width: 130px; padding: 14px 16px; }
-      .metric-label { color: #5d6b81; display: block; font-size: 12px; letter-spacing: 0.04em; text-transform: uppercase; }
-      .metric-value { color: #11213c; display: block; font-size: 24px; font-weight: 700; margin-top: 4px; }
-      .card { border: 1px solid #e1e6ee; border-radius: 14px; margin-bottom: 16px; padding: 18px 18px 6px; }
-      ul { margin: 0; padding-left: 20px; }
-      li { margin-bottom: 12px; }
-      .list-detail, .meta { color: #5d6b81; font-size: 14px; margin-top: 4px; }
-      a { color: #0b57d0; text-decoration: none; }
-      .pill { border-radius: 999px; display: inline-block; font-size: 12px; font-weight: 700; margin-left: 8px; padding: 2px 8px; text-transform: uppercase; }
-      .success { background: #daf5e4; color: #166534; }
-      .failure, .timed_out, .cancelled, .action_required, .startup_failure, .stale { background: #fde2e2; color: #9f1239; }
-      @media (max-width: 640px) { body { padding: 12px; } .email { padding: 20px; } }
+      body {
+        margin: 0;
+        padding: 24px;
+        background: #f5f7fb;
+        color: #13233f;
+        font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+      }
+      .email-shell {
+        max-width: 980px;
+        margin: 0 auto;
+        background: #ffffff;
+        border-radius: 24px;
+        overflow: hidden;
+        box-shadow: 0 18px 48px rgba(15, 23, 42, 0.14);
+      }
+      .hero {
+        background: radial-gradient(circle at 35% 35%, #173d78 0%, #102d5d 38%, #0b1730 100%);
+        color: #f8fbff;
+        padding: 40px 48px 44px;
+      }
+      .hero-grid {
+        width: 100%;
+        border-collapse: collapse;
+      }
+      .hero-grid td {
+        vertical-align: top;
+      }
+      .brand-wrap {
+        padding-right: 24px;
+      }
+      .brand-row {
+        width: 100%;
+        border-collapse: collapse;
+      }
+      .brand-mark-cell {
+        width: 132px;
+        padding-right: 24px;
+      }
+      .brand-mark,
+      .brand-mark-fallback {
+        width: 108px;
+        height: 108px;
+        display: block;
+        border-radius: 20px;
+        background: #0d203e;
+        object-fit: contain;
+      }
+      .brand-mark-fallback {
+        color: #ffbf30;
+        font-size: 34px;
+        font-weight: 800;
+        line-height: 108px;
+        text-align: center;
+      }
+      .brand-name {
+        margin: 0;
+        font-size: 28px;
+        line-height: 1.1;
+        font-weight: 700;
+        color: #ffffff;
+      }
+      .brand-project {
+        margin: 10px 0 0;
+        font-size: 17px;
+        color: rgba(255, 255, 255, 0.84);
+      }
+      .brand-contact {
+        margin: 8px 0 0;
+        font-size: 15px;
+        color: rgba(255, 255, 255, 0.84);
+      }
+      .meta-panel {
+        min-width: 230px;
+        padding-top: 12px;
+      }
+      .meta-label {
+        display: block;
+        font-size: 13px;
+        letter-spacing: 0.16em;
+        text-transform: uppercase;
+        color: rgba(255, 255, 255, 0.72);
+        margin-bottom: 8px;
+      }
+      .meta-value {
+        display: block;
+        font-size: 19px;
+        font-weight: 700;
+        color: #ffffff;
+        margin-bottom: 26px;
+      }
+      .content {
+        padding: 32px 40px 40px;
+      }
+      .overview {
+        background: #f6f9ff;
+        border: 1px solid #dfe8f7;
+        border-radius: 20px;
+        padding: 22px 24px;
+        margin-bottom: 28px;
+      }
+      .overview h2 {
+        margin: 0 0 8px;
+        font-size: 22px;
+        color: #10233e;
+      }
+      .overview p {
+        margin: 0;
+        font-size: 15px;
+        line-height: 1.6;
+        color: #50627f;
+      }
+      .metrics {
+        width: 100%;
+        border-collapse: separate;
+        border-spacing: 12px 0;
+        margin: 18px -12px 0;
+      }
+      .metric-card {
+        background: #ffffff;
+        border: 1px solid #dfe6f2;
+        border-radius: 16px;
+        padding: 18px;
+      }
+      .metric-label {
+        display: block;
+        font-size: 12px;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: #5f7090;
+      }
+      .metric-value {
+        display: block;
+        margin-top: 6px;
+        font-size: 28px;
+        line-height: 1;
+        font-weight: 700;
+        color: #10233e;
+      }
+      .content-section {
+        margin-top: 28px;
+      }
+      .content-section h2 {
+        margin: 0 0 16px;
+        font-size: 20px;
+        color: #10233e;
+      }
+      .stack {
+        display: block;
+      }
+      .story-card,
+      .summary-item,
+      .quality-list {
+        background: #ffffff;
+        border: 1px solid #e2e8f2;
+        border-radius: 18px;
+      }
+      .story-card,
+      .summary-item {
+        padding: 18px 20px;
+        margin-bottom: 14px;
+      }
+      .story-card h3,
+      .summary-item h3 {
+        margin: 0 0 10px;
+        font-size: 17px;
+        color: #122543;
+      }
+      .story-card p,
+      .summary-item p,
+      .quality-summary,
+      .empty-copy {
+        margin: 0;
+        font-size: 15px;
+        line-height: 1.65;
+        color: #4e5f79;
+      }
+      .story-card p + p,
+      .summary-item p + p {
+        margin-top: 8px;
+      }
+      .quality-summary {
+        margin-bottom: 12px;
+      }
+      .quality-row {
+        display: table;
+        width: 100%;
+        box-sizing: border-box;
+        padding: 16px 18px;
+        border-top: 1px solid #e2e8f2;
+      }
+      .quality-row:first-child {
+        border-top: 0;
+      }
+      .quality-row > div,
+      .quality-row > span {
+        display: table-cell;
+        vertical-align: middle;
+      }
+      .quality-row > span {
+        text-align: right;
+      }
+      .quality-meta {
+        margin-top: 4px;
+        font-size: 13px;
+        color: #6b7c95;
+      }
+      .status-pill {
+        display: inline-block;
+        padding: 6px 12px;
+        border-radius: 999px;
+        font-size: 12px;
+        font-weight: 700;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+      }
+      .status-success {
+        background: #dbf5e6;
+        color: #17633c;
+      }
+      .status-failure,
+      .status-timed_out,
+      .status-cancelled,
+      .status-action_required,
+      .status-startup_failure,
+      .status-stale {
+        background: #fde4e6;
+        color: #9f1f39;
+      }
+      @media (max-width: 760px) {
+        body {
+          padding: 12px;
+        }
+        .hero,
+        .content {
+          padding: 24px 20px;
+        }
+        .hero-grid,
+        .hero-grid tbody,
+        .hero-grid tr,
+        .hero-grid td,
+        .brand-row,
+        .brand-row tbody,
+        .brand-row tr,
+        .brand-row td,
+        .metrics,
+        .metrics tbody,
+        .metrics tr,
+        .metrics td {
+          display: block;
+          width: 100%;
+        }
+        .brand-mark-cell,
+        .brand-wrap {
+          padding-right: 0;
+        }
+        .brand-mark,
+        .brand-mark-fallback {
+          margin-bottom: 18px;
+        }
+        .meta-panel {
+          margin-top: 24px;
+        }
+        .metrics {
+          margin: 18px 0 0;
+        }
+        .metric-card {
+          margin-bottom: 12px;
+        }
+        .quality-row,
+        .quality-row > div,
+        .quality-row > span {
+          display: block;
+          text-align: left;
+        }
+        .quality-row > span {
+          margin-top: 12px;
+        }
+      }
     </style>
   </head>
   <body>
-    <div class="email">
-      <h1>${escapeHtml(report.subject)}</h1>
-      <p class="lede">Reporting period: ${escapeHtml(formatDateRangeLabel(report.reportWindow))}. Generated ${escapeHtml(formatRelativeTimestamp(report.generatedAt))} UTC.</p>
-
-      <div class="metrics">
-        <div class="metric">
-          <span class="metric-label">Completed Stories</span>
-          <span class="metric-value">${escapeHtml(report.completedStories.length)}</span>
-        </div>
-        <div class="metric">
-          <span class="metric-label">In Progress</span>
-          <span class="metric-value">${escapeHtml(report.inProgressItems.length)}</span>
-        </div>
-        <div class="metric">
-          <span class="metric-label">Merged PRs</span>
-          <span class="metric-value">${escapeHtml(report.mergedPullRequests.length)}</span>
-        </div>
+    <div class="email-shell">
+      <div class="hero">
+        <table class="hero-grid" role="presentation">
+          <tr>
+            <td class="brand-wrap">
+              <table class="brand-row" role="presentation">
+                <tr>
+                  <td class="brand-mark-cell">${renderLogo(logoSrc, companyName)}</td>
+                  <td>
+                    <h1 class="brand-name">${escapeHtml(companyName)}</h1>
+                    <p class="brand-project">${escapeHtml(report.projectName)} weekly product update</p>
+                    ${
+                      companyEmail
+                        ? `<p class="brand-contact">Email: ${escapeHtml(companyEmail)}</p>`
+                        : ""
+                    }
+                  </td>
+                </tr>
+              </table>
+            </td>
+            <td class="meta-panel">
+              <span class="meta-label">Report</span>
+              <span class="meta-value">#${escapeHtml(buildReportId(report.generatedAt))}</span>
+              <span class="meta-label">Report Date</span>
+              <span class="meta-value">${escapeHtml(formatLongDisplayDate(report.generatedAt))}</span>
+              <span class="meta-label">Coverage</span>
+              <span class="meta-value">${escapeHtml(formatDateRangeLabel(report.reportWindow))}</span>
+            </td>
+          </tr>
+        </table>
       </div>
 
-      <section>
-        <h2>Completed Stories</h2>
-        ${completedSection}
-      </section>
+      <div class="content">
+        <section class="overview">
+          <h2>Executive Summary</h2>
+          <p>
+            This update covers the work completed for ${escapeHtml(report.projectName)} during
+            ${escapeHtml(formatDateRangeLabel(report.reportWindow))}, along with the current delivery
+            status and the next areas of focus.
+          </p>
+          <table class="metrics" role="presentation">
+            <tr>
+              <td>
+                <div class="metric-card">
+                  <span class="metric-label">Completed</span>
+                  <span class="metric-value">${escapeHtml(report.completedStories.length)}</span>
+                </div>
+              </td>
+              <td>
+                <div class="metric-card">
+                  <span class="metric-label">In Progress</span>
+                  <span class="metric-value">${escapeHtml(report.inProgressItems.length)}</span>
+                </div>
+              </td>
+              <td>
+                <div class="metric-card">
+                  <span class="metric-label">Quality Status</span>
+                  <span class="metric-value">${escapeHtml(latestQualityState)}</span>
+                </div>
+              </td>
+            </tr>
+          </table>
+        </section>
 
-      <section>
-        <h2>In-Progress Work</h2>
-        ${renderIssueList(report.inProgressItems, "No in-progress work is currently tagged with the configured labels.")}
-      </section>
+        <section class="content-section">
+          <h2>Completed This Period</h2>
+          <div class="stack">${completedSection}</div>
+        </section>
 
-      <section>
-        <h2>Recent Test/Build Summary</h2>
-        ${renderWorkflowStatus(report.workflowStatus)}
-      </section>
+        <section class="content-section">
+          <h2>Currently In Progress</h2>
+          <div class="stack">
+            ${renderSummaryList(
+              report.inProgressItems,
+              "There are no active work items called out for this period.",
+            )}
+          </div>
+        </section>
 
-      ${renderPullRequests(report.mergedPullRequests)}
-      ${renderOptionalSection("Optional Blockers / Questions", report.blockers)}
-      ${renderOptionalSection("Optional Next Focus", report.nextFocus)}
+        <section class="content-section">
+          <h2>Quality Check</h2>
+          ${renderWorkflowStatus(report.workflowStatus)}
+        </section>
+
+        ${renderOptionalSection("Open Questions or Blockers", report.blockers)}
+        ${renderOptionalSection("Next Focus", report.nextFocus)}
+      </div>
     </div>
   </body>
 </html>`;
@@ -206,44 +522,38 @@ export function renderEmailHtml(report) {
 export function renderEmailText(report) {
   const lines = [
     report.subject,
+    `Company: ${report.branding?.companyName || report.projectName}`,
     `Reporting period: ${formatDateRangeLabel(report.reportWindow)}`,
+    `Generated: ${formatLongDisplayDate(report.generatedAt)}`,
     "",
-    "Completed stories:",
+    "Completed this period:",
   ];
 
   if (!report.completedStories.length) {
-    lines.push("- No completed stories this period.");
+    lines.push("- No completed milestones were finalized in this reporting period.");
   } else {
     for (const story of report.completedStories) {
-      lines.push(`- Issue #${story.number} - ${story.title}`);
-      lines.push(`  Story: ${story.story}`);
-      lines.push(`  Completed Outcome: ${story.completedOutcome}`);
+      lines.push(`- ${story.title}`);
+      lines.push(`  What was delivered: ${story.completedOutcome}`);
+      lines.push(`  Why it matters: ${story.story}`);
       lines.push(`  Validation: ${story.validation}`);
-      lines.push(`  Link: ${story.url}`);
     }
   }
 
-  lines.push("", "In-progress work:");
+  lines.push("", "Currently in progress:");
   if (!report.inProgressItems.length) {
-    lines.push("- No in-progress work is currently tagged with the configured labels.");
+    lines.push("- There are no active work items called out for this period.");
   } else {
     for (const item of report.inProgressItems) {
       lines.push(`- ${item.title}: ${item.summary}`);
     }
   }
 
-  lines.push("", "Recent test/build summary:");
+  lines.push("", "Quality check:");
   lines.push(`- ${report.workflowStatus.summary}`);
 
-  if (report.mergedPullRequests.length) {
-    lines.push("", "Merged PRs:");
-    for (const pullRequest of report.mergedPullRequests) {
-      lines.push(`- PR #${pullRequest.number} - ${pullRequest.title}`);
-    }
-  }
-
   if (report.blockers.length) {
-    lines.push("", "Blockers / questions:");
+    lines.push("", "Open questions or blockers:");
     for (const blocker of report.blockers) {
       lines.push(`- ${blocker.title}: ${blocker.summary}`);
     }
@@ -264,8 +574,7 @@ export function renderConsoleSummary(report) {
     `Subject: ${report.subject}`,
     `Completed stories: ${report.completedStories.length}`,
     `In-progress items: ${report.inProgressItems.length}`,
-    `Merged PRs: ${report.mergedPullRequests.length}`,
+    `Merged PRs fetched: ${report.mergedPullRequests.length}`,
     `Workflow summary: ${report.workflowStatus.summary}`,
   ].join("\n");
 }
-

@@ -10,25 +10,28 @@ test("renderEmailHtml includes no-results messaging when no completed stories ex
 
   const html = renderEmailHtml(report);
 
-  assert.match(html, /No completed stories this period\./);
-  assert.match(html, /In-Progress Work/);
-  assert.match(html, /Recent Test\/Build Summary/);
+  assert.match(html, /No completed milestones were finalized in this reporting period\./);
+  assert.match(html, /Currently In Progress/);
+  assert.match(html, /Quality Check/);
 });
 
-test("renderEmailHtml renders completed story content", () => {
+test("renderEmailHtml renders client-facing content without GitHub links", () => {
   const report = createSampleReport();
   const html = renderEmailHtml(report);
 
-  assert.match(html, /Issue #24 - Build game posting flow/);
-  assert.match(html, /School users can now create and publish a game posting visible in the marketplace\./);
+  assert.match(html, /V&amp;S Ventures LLC/);
+  assert.match(html, /Build game posting flow/);
+  assert.match(html, /What was delivered:/);
+  assert.doesNotMatch(html, /View issue/);
+  assert.doesNotMatch(html, /github\.com/);
 });
 
 test("renderEmailText includes the key stakeholder sections", () => {
   const report = createSampleReport();
   const text = renderEmailText(report);
 
-  assert.match(text, /Completed stories:/);
-  assert.match(text, /In-progress work:/);
-  assert.match(text, /Recent test\/build summary:/);
+  assert.match(text, /Completed this period:/);
+  assert.match(text, /Currently in progress:/);
+  assert.match(text, /Quality check:/);
+  assert.doesNotMatch(text, /https:\/\/github\.com/);
 });
-

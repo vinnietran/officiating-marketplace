@@ -26,6 +26,15 @@ test("sendEmail posts the weekly update payload to SendGrid", async () => {
       subject: "Weekly Product Update",
       html: "<p>Hello</p>",
       text: "Hello",
+      attachments: [
+        {
+          content: "base64-image",
+          filename: "logo.png",
+          type: "image/png",
+          disposition: "inline",
+          content_id: "weekly-product-update-logo",
+        },
+      ],
     });
 
     assert.equal(result.messageId, "message-123");
@@ -48,6 +57,15 @@ test("sendEmail posts the weekly update payload to SendGrid", async () => {
     assert.deepEqual(payload.content, [
       { type: "text/plain", value: "Hello" },
       { type: "text/html", value: "<p>Hello</p>" },
+    ]);
+    assert.deepEqual(payload.attachments, [
+      {
+        content: "base64-image",
+        filename: "logo.png",
+        type: "image/png",
+        disposition: "inline",
+        content_id: "weekly-product-update-logo",
+      },
     ]);
   } finally {
     globalThis.fetch = originalFetch;

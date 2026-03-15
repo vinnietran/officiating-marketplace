@@ -51,15 +51,16 @@ function renderLogo(logoSrc, companyName) {
   return `<img class="brand-mark" src="${escapeHtml(logoSrc)}" alt="${escapeHtml(companyName)} logo" />`;
 }
 
+function renderMultilineText(value) {
+  return escapeHtml(value).replace(/\n\n+/g, "</p><p>").replace(/\n/g, "<br />");
+}
+
 function renderStoryCard(story) {
   return `
     <article class="story-card">
       <h3>${escapeHtml(story.title)}</h3>
-      <p>${escapeHtml(story.story)}</p>
+      <p>${renderMultilineText(story.storyDetail || story.story)}</p>
       <div class="story-dates">
-        <span><strong>Moved to in progress:</strong> ${
-          story.inProgressAt ? escapeHtml(formatLongDisplayDate(story.inProgressAt)) : "Not tracked"
-        }</span>
         <span><strong>Marked done:</strong> ${
           story.completedAt ? escapeHtml(formatLongDisplayDate(story.completedAt)) : "Not tracked"
         }</span>
@@ -541,12 +542,7 @@ export function renderEmailText(report) {
   } else {
     for (const story of report.completedStories) {
       lines.push(`- ${story.title}`);
-      lines.push(`  Story: ${story.story}`);
-      lines.push(
-        `  Moved to in progress: ${
-          story.inProgressAt ? formatLongDisplayDate(story.inProgressAt) : "Not tracked"
-        }`,
-      );
+      lines.push(`  Story: ${story.storyDetail || story.story}`);
       lines.push(
         `  Marked done: ${
           story.completedAt ? formatLongDisplayDate(story.completedAt) : "Not tracked"

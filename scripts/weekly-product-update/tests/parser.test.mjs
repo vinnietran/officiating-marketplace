@@ -23,6 +23,10 @@ Manual end-to-end testing completed in the development environment.`,
 
   assert.equal(parsed.story, "Schools need a quick way to publish open games to the marketplace.");
   assert.equal(
+    parsed.storyDetail,
+    "Schools need a quick way to publish open games to the marketplace.",
+  );
+  assert.equal(
     parsed.completedOutcome,
     "Schools can now create a posting with date, location, and pay rate.",
   );
@@ -49,6 +53,10 @@ This work should reduce the number of incomplete signups.`,
     "Officials were abandoning profile setup before providing enough information to match them with games.",
   );
   assert.equal(
+    parsed.storyDetail,
+    "Officials were abandoning profile setup before providing enough information to match them with games.",
+  );
+  assert.equal(
     parsed.completedOutcome,
     "Officials were abandoning profile setup before providing enough information to match them with games.",
   );
@@ -66,6 +74,7 @@ test("parseStoryDetails handles missing sections without crashing", () => {
   const parsed = parseStoryDetails(issue);
 
   assert.equal(parsed.story, "Refine messaging follow-up.");
+  assert.equal(parsed.storyDetail, "Refine messaging follow-up.");
   assert.equal(parsed.completedOutcome, "This work is complete and is now available in the product.");
   assert.equal(parsed.validation, "Validation details were not captured in the issue.");
 });
@@ -90,4 +99,3 @@ test("stripMarkdown removes common markdown noise", () => {
     "Bold link code",
   );
 });
-

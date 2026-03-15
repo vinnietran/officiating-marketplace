@@ -22,7 +22,8 @@ export function createSampleReport() {
         url: "https://github.com/example/officiating-marketplace/issues/24",
         story:
           "Schools can create and publish open games that need to be filled by qualified officials.",
-        inProgressAt: "2026-03-03T15:00:00.000Z",
+        storyDetail:
+          "Schools can create and publish open games that need to be filled by qualified officials.\n\nThis gives assigners a faster way to post open needs and gives officials a clearer stream of opportunities to review.",
         completedAt: "2026-03-07T19:25:00.000Z",
         completedOutcome:
           "School users can now create and publish a game posting visible in the marketplace.",
@@ -34,7 +35,8 @@ export function createSampleReport() {
         url: "https://github.com/example/officiating-marketplace/issues/31",
         story:
           "Assigners needed a clearer way to review crew availability before confirming game coverage.",
-        inProgressAt: "2026-03-04T13:30:00.000Z",
+        storyDetail:
+          "Assigners needed a clearer way to review crew availability before confirming game coverage.\n\nThe goal was to reduce back-and-forth and make it easier to lock coverage decisions in one pass.",
         completedAt: "2026-03-09T17:10:00.000Z",
         completedOutcome:
           "Assigners can now review availability and finalize a crew assignment from one workflow.",

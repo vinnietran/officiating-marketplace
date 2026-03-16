@@ -25,6 +25,8 @@ test("renderEmailHtml renders client-facing content without GitHub links", () =>
   assert.match(html, /Marked done:/);
   assert.doesNotMatch(html, /View issue/);
   assert.doesNotMatch(html, /github\.com/);
+  assert.doesNotMatch(html, /<details/i);
+  assert.doesNotMatch(html, /<summary/i);
 });
 
 test("renderEmailText includes the key stakeholder sections", () => {

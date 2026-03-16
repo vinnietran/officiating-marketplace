@@ -18,11 +18,13 @@ export function stripMarkdown(markdown = "") {
     .replace(/!\[([^\]]*)\]\([^)]+\)/g, "$1")
     .replace(/\[([^\]]+)\]\([^)]+\)/g, "$1")
     .replace(/`([^`]+)`/g, "$1")
+    .replace(/^\s*---+\s*$/gm, "")
     .replace(/[*_~>#]/g, "")
     .replace(/^\s*[-*+]\s+/gm, "")
     .replace(/^\s*\d+\.\s+/gm, "")
     .replace(/^\s*\[[ xX]\]\s+/gm, "")
     .replace(/\r/g, "")
+    .replace(/\n[ \t]+/g, "\n")
     .replace(/\n{2,}/g, "\n\n")
     .trim();
 }
@@ -146,7 +148,7 @@ export function parseStoryDetails(issue) {
   const body = issue.body ?? "";
   const sections = extractSections(body);
   const fallbackParagraph = firstMeaningfulParagraph(body);
-  const fullFallbackParagraph = firstMeaningfulParagraph(body, Number.POSITIVE_INFINITY);
+  const fullBodyDetail = stripMarkdown(body).trim();
   const summarySection = pickFirstSection(sections, [
     "summary",
     "background",
@@ -168,9 +170,7 @@ export function parseStoryDetails(issue) {
   ]);
   const validationSection = pickFirstSection(sections, ["validation", "testing", "qa"]);
   const acceptanceBullets = extractBullets(acceptanceCriteria);
-  const fullStoryDetail = stripMarkdown(
-    summarySection || fullFallbackParagraph || acceptanceBullets[0] || issue.title,
-  ).trim();
+  const fullStoryDetail = fullBodyDetail || summarySection || acceptanceBullets[0] || issue.title;
 
   const storySummary = summarize(
     summarySection || fallbackParagraph || acceptanceBullets[0] || issue.title,

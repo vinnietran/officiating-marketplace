@@ -27,7 +27,7 @@ function summarizeIssue(issue) {
     number: issue.number,
     title: issue.title,
     url: issue.html_url,
-    summary: details.story,
+    summary: details.storyDetail || details.story,
   };
 }
 

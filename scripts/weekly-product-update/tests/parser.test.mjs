@@ -24,7 +24,7 @@ Manual end-to-end testing completed in the development environment.`,
   assert.equal(parsed.story, "Schools need a quick way to publish open games to the marketplace.");
   assert.equal(
     parsed.storyDetail,
-    "Schools need a quick way to publish open games to the marketplace.",
+    "Summary\nSchools need a quick way to publish open games to the marketplace.\n\nAcceptance Criteria\nSchools can create a posting with date, location, and pay rate\nSchools can publish the posting so officials can discover it\n\nValidation\nManual end-to-end testing completed in the development environment.",
   );
   assert.equal(
     parsed.completedOutcome,
@@ -54,7 +54,7 @@ This work should reduce the number of incomplete signups.`,
   );
   assert.equal(
     parsed.storyDetail,
-    "Officials were abandoning profile setup before providing enough information to match them with games.",
+    "Officials were abandoning profile setup before providing enough information to match them with games.\n\nThis work should reduce the number of incomplete signups.",
   );
   assert.equal(
     parsed.completedOutcome,

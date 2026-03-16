@@ -87,7 +87,7 @@ function renderSummaryList(items, emptyState) {
       (item) => `
         <article class="summary-item">
           <h3>${escapeHtml(item.title)}</h3>
-          <p>${escapeHtml(item.summary)}</p>
+          <div class="summary-copy">${renderMultilineText(item.summary)}</div>
         </article>
       `,
     )
@@ -344,6 +344,12 @@ export function renderEmailHtml(report, options = {}) {
         margin: 0;
       }
       .story-copy p + p {
+        margin-top: 10px;
+      }
+      .summary-copy p {
+        margin: 0;
+      }
+      .summary-copy p + p {
         margin-top: 10px;
       }
       .story-dates {

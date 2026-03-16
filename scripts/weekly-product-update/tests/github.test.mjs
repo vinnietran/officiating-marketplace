@@ -35,6 +35,13 @@ test("hasAnyLabel is case-insensitive", () => {
   assert.equal(hasAnyLabel(issue, ["in-progress"]), true);
 });
 
+test("hasAnyLabel matches labels across spaces, hyphens, and underscores", () => {
+  const issue = { labels: [{ name: "In Progress" }, { name: "next_up" }] };
+
+  assert.equal(hasAnyLabel(issue, ["in-progress"]), true);
+  assert.equal(hasAnyLabel(issue, ["next-up"]), true);
+});
+
 test("isWithinReportWindow respects inclusive boundaries", () => {
   const reportWindow = {
     start: new Date("2026-03-01T00:00:00.000Z"),
@@ -45,4 +52,3 @@ test("isWithinReportWindow respects inclusive boundaries", () => {
   assert.equal(isWithinReportWindow("2026-03-07T23:59:59.999Z", reportWindow), true);
   assert.equal(isWithinReportWindow("2026-03-08T00:00:00.000Z", reportWindow), false);
 });
-

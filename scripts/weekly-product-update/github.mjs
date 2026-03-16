@@ -30,6 +30,29 @@ async function githubRequest(config, pathname, params = {}) {
   return response.json();
 }
 
+async function githubGraphqlRequest(config, query, variables = {}) {
+  const response = await fetch(config.graphqlUrl, {
+    method: "POST",
+    headers: {
+      ...API_HEADERS,
+      Authorization: `Bearer ${config.githubToken}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ query, variables }),
+  });
+
+  if (!response.ok) {
+    throw new Error(`GitHub GraphQL request failed (${response.status}).`);
+  }
+
+  const payload = await response.json();
+  if (payload.errors?.length) {
+    throw new Error(payload.errors.map((error) => error.message).join("; "));
+  }
+
+  return payload.data;
+}
+
 async function paginate(config, pathname, params = {}) {
   const items = [];
   let page = 1;
@@ -78,6 +101,11 @@ export function hasAnyLabel(issue, labelNames = []) {
   return labelNames.some((name) => labels.has(normalizeLabelName(name)));
 }
 
+export function hasAnyProjectStatus(statuses = [], trackedNames = []) {
+  const normalizedStatuses = new Set(statuses.map((status) => normalizeLabelName(status)));
+  return trackedNames.some((name) => normalizedStatuses.has(normalizeLabelName(name)));
+}
+
 export function isWithinReportWindow(dateValue, reportWindow) {
   if (!dateValue) {
     return false;
@@ -119,6 +147,62 @@ export async function fetchOpenIssues(config) {
   });
 
   return filterOutPullRequests(issues);
+}
+
+const OPEN_ISSUE_PROJECT_STATUSES_QUERY = `
+  query OpenIssueProjectStatuses($owner: String!, $repo: String!, $after: String) {
+    repository(owner: $owner, name: $repo) {
+      issues(first: 100, states: OPEN, after: $after, orderBy: { field: UPDATED_AT, direction: DESC }) {
+        pageInfo {
+          hasNextPage
+          endCursor
+        }
+        nodes {
+          number
+          projectItems(first: 20, includeArchived: false) {
+            nodes {
+              fieldValueByName(name: "Status") {
+                ... on ProjectV2ItemFieldSingleSelectValue {
+                  name
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+`;
+
+export async function fetchOpenIssueProjectStatuses(config) {
+  const statusesByIssueNumber = new Map();
+  let after = null;
+
+  while (true) {
+    const data = await githubGraphqlRequest(config, OPEN_ISSUE_PROJECT_STATUSES_QUERY, {
+      owner: config.owner,
+      repo: config.repo,
+      after,
+    });
+
+    const issuesConnection = data?.repository?.issues;
+    const nodes = issuesConnection?.nodes ?? [];
+
+    for (const issue of nodes) {
+      const statuses = (issue.projectItems?.nodes ?? [])
+        .map((item) => item?.fieldValueByName?.name)
+        .filter(Boolean);
+      statusesByIssueNumber.set(issue.number, statuses);
+    }
+
+    if (!issuesConnection?.pageInfo?.hasNextPage) {
+      break;
+    }
+
+    after = issuesConnection.pageInfo.endCursor;
+  }
+
+  return statusesByIssueNumber;
 }
 
 export function selectIssuesByLabels(issues, labelNames = []) {

@@ -4,6 +4,7 @@ import assert from "node:assert/strict";
 import {
   filterOutPullRequests,
   hasAnyLabel,
+  hasAnyProjectStatus,
   isWithinReportWindow,
   selectIssuesByLabels,
 } from "../github.mjs";
@@ -40,6 +41,12 @@ test("hasAnyLabel matches labels across spaces, hyphens, and underscores", () =>
 
   assert.equal(hasAnyLabel(issue, ["in-progress"]), true);
   assert.equal(hasAnyLabel(issue, ["next-up"]), true);
+});
+
+test("hasAnyProjectStatus matches project status names across spaces, hyphens, and underscores", () => {
+  assert.equal(hasAnyProjectStatus(["In Progress"], ["in-progress"]), true);
+  assert.equal(hasAnyProjectStatus(["next_up"], ["next-up"]), true);
+  assert.equal(hasAnyProjectStatus(["Done"], ["in-progress"]), false);
 });
 
 test("isWithinReportWindow respects inclusive boundaries", () => {

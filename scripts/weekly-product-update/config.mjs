@@ -81,6 +81,7 @@ export function loadConfig(env = process.env) {
     repo,
     repository: env.GITHUB_REPOSITORY,
     apiBaseUrl: env.GITHUB_API_URL ?? "https://api.github.com",
+    graphqlUrl: env.GITHUB_GRAPHQL_URL ?? "https://api.github.com/graphql",
     serverUrl: env.GITHUB_SERVER_URL ?? "https://github.com",
     githubToken: env.GITHUB_TOKEN,
     projectName: env.PROJECT_NAME || humanizeRepositoryName(repo),
@@ -96,6 +97,11 @@ export function loadConfig(env = process.env) {
       inProgress: splitCsv(env.IN_PROGRESS_LABELS || "in-progress,doing,active"),
       blockers: splitCsv(env.BLOCKER_LABELS || "blocked,blocker,question,open-question"),
       nextFocus: splitCsv(env.NEXT_FOCUS_LABELS || "next-up"),
+    },
+    statuses: {
+      inProgress: splitCsv(
+        env.IN_PROGRESS_STATUSES || env.IN_PROGRESS_LABELS || "in-progress,doing,active",
+      ),
     },
     featureFlags: {
       includeMergedPRs: parseBoolean(env.INCLUDE_MERGED_PRS, true),

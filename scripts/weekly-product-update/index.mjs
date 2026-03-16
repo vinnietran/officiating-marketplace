@@ -4,10 +4,12 @@ import path from "node:path";
 import { loadConfig, validateRuntimeConfig } from "./config.mjs";
 import {
   fetchClosedIssues,
+  fetchOpenIssueProjectStatuses,
   fetchMergedPullRequests,
   fetchOpenIssues,
   fetchRepository,
   fetchWorkflowStatus,
+  hasAnyProjectStatus,
   selectIssuesByLabels,
 } from "./github.mjs";
 import { parseStoryDetails } from "./parser.mjs";
@@ -26,6 +28,17 @@ function summarizeIssue(issue) {
     url: issue.html_url,
     summary: details.story,
   };
+}
+
+function selectInProgressIssues(issues, projectStatusesByIssueNumber, config) {
+  return issues.filter((issue) => {
+    if (selectIssuesByLabels([issue], config.labels.inProgress).length > 0) {
+      return true;
+    }
+
+    const projectStatuses = projectStatusesByIssueNumber.get(issue.number) ?? [];
+    return hasAnyProjectStatus(projectStatuses, config.statuses.inProgress);
+  });
 }
 
 function summarizePullRequest(pullRequest) {
@@ -87,6 +100,7 @@ async function main() {
 
   const repository = await fetchRepository(config);
   const openIssuesPromise = fetchOpenIssues(config);
+  const openIssueProjectStatusesPromise = fetchOpenIssueProjectStatuses(config).catch(() => new Map());
   const closedIssuesPromise = fetchClosedIssues(config);
   const mergedPullRequestsPromise = config.featureFlags.includeMergedPRs
     ? fetchMergedPullRequests(config, repository.default_branch)
@@ -99,12 +113,14 @@ async function main() {
         runs: [],
       });
 
-  const [openIssues, closedIssues, mergedPullRequests, workflowStatus] = await Promise.all([
+  const [openIssues, openIssueProjectStatuses, closedIssues, mergedPullRequests, workflowStatus] =
+    await Promise.all([
     openIssuesPromise,
+    openIssueProjectStatusesPromise,
     closedIssuesPromise,
     mergedPullRequestsPromise,
     workflowStatusPromise,
-  ]);
+    ]);
 
   const completedStories = closedIssues.map((issue) => ({
     ...parseStoryDetails(issue),
@@ -121,7 +137,11 @@ async function main() {
       email: config.senderEmail,
     },
     completedStories,
-    inProgressItems: selectIssuesByLabels(openIssues, config.labels.inProgress).map(summarizeIssue),
+    inProgressItems: selectInProgressIssues(
+      openIssues,
+      openIssueProjectStatuses,
+      config,
+    ).map(summarizeIssue),
     mergedPullRequests: mergedPullRequests.map(summarizePullRequest),
     workflowStatus,
     blockers: config.featureFlags.includeBlockers

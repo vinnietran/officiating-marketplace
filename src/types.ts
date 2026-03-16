@@ -71,6 +71,7 @@ export interface Crew {
   createdAtISO: string;
   crewChiefUid: string;
   crewChiefName: string;
+  refereeOfficialId?: string;
   memberUids: string[];
   members: CrewMember[];
   memberPositions: Partial<Record<string, FootballPosition>>;
@@ -119,6 +120,7 @@ export interface Bid {
   id: string;
   gameId: string;
   officialUid: string;
+  createdByOfficialId?: string;
   officialName: string;
   bidderType?: BidderType;
   crewId?: string;

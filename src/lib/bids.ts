@@ -4,7 +4,7 @@ export function requiresCrewBidForGame(game: Pick<Game, "level">): boolean {
   return game.level === "Varsity";
 }
 
-export function canBidWithCrew(
+export function isCrewMember(
   crew: Pick<Crew, "memberUids" | "createdByUid" | "crewChiefUid">,
   userId: string
 ): boolean {
@@ -13,6 +13,34 @@ export function canBidWithCrew(
     crew.createdByUid === userId ||
     crew.crewChiefUid === userId
   );
+}
+
+export function getCrewRefereeOfficialId(
+  crew: Pick<Crew, "refereeOfficialId" | "memberPositions">
+): string | null {
+  if (crew.refereeOfficialId?.trim()) {
+    return crew.refereeOfficialId;
+  }
+
+  const refereeEntries = Object.entries(crew.memberPositions).filter(
+    ([, position]) => position === "R"
+  );
+  if (refereeEntries.length !== 1) {
+    return null;
+  }
+
+  return refereeEntries[0][0] || null;
+}
+
+export function canBidWithCrew(
+  crew: Pick<Crew, "refereeOfficialId" | "memberPositions">,
+  userId: string
+): boolean {
+  return getCrewRefereeOfficialId(crew) === userId;
+}
+
+export function getCrewMemberCrews(crews: Crew[], userId: string): Crew[] {
+  return crews.filter((crew) => isCrewMember(crew, userId));
 }
 
 export function getBidEligibleCrews(crews: Crew[], userId: string): Crew[] {

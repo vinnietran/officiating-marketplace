@@ -5,6 +5,7 @@ import { MessageModal } from "../components/MessageModal";
 import { PageHeader } from "../components/ui/PageHeader";
 import { Select } from "../components/ui/Select";
 import { useAuth } from "../context/AuthContext";
+import { getCrewRefereeOfficialId } from "../lib/bids";
 import { FIRESTORE_DATABASE_ID } from "../lib/firebase";
 import { getReadableFirestoreError } from "../lib/firebaseErrors";
 import {
@@ -79,6 +80,24 @@ function getCrewChiefUid(crew: Crew): string {
 
 function getCrewChiefName(crew: Crew): string {
   return crew.crewChiefName?.trim() ? crew.crewChiefName : crew.createdByName;
+}
+
+function getAssignedRefereeCount(
+  positionsByUid: Partial<Record<string, FootballPosition>>
+): number {
+  return Object.values(positionsByUid).filter((position) => position === "R").length;
+}
+
+function getCrewRefereeName(crew: Crew): string {
+  const refereeOfficialId = getCrewRefereeOfficialId(crew);
+  if (!refereeOfficialId) {
+    return "Unassigned";
+  }
+
+  return (
+    crew.members.find((member) => member.uid === refereeOfficialId)?.name ??
+    (crew.createdByUid === refereeOfficialId ? crew.createdByName : "Assigned")
+  );
 }
 
 export function Crews() {
@@ -401,15 +420,21 @@ export function Crews() {
     }
 
     try {
+      const normalizedPositions = normalizeMemberPositions(
+        selectedMembers.map((member) => member.uid),
+        selectedMemberPositions
+      );
+      if (getAssignedRefereeCount(normalizedPositions) > 1) {
+        setFormError("Only one crew member can be assigned as Referee.");
+        return;
+      }
+
       setCreating(true);
       await createCrew(
         {
           name: trimmedName,
           members: selectedMembers,
-          memberPositions: normalizeMemberPositions(
-            selectedMembers.map((member) => member.uid),
-            selectedMemberPositions
-          )
+          memberPositions: normalizedPositions
         },
         {
           uid: activeUser.uid,
@@ -671,6 +696,13 @@ export function Crews() {
       selectedCrew.memberUids,
       manageMemberPositions
     );
+    if (getAssignedRefereeCount(normalizedPositions) > 1) {
+      setModalMessage({
+        title: "Referee Required",
+        message: "Only one crew member can be assigned as Referee."
+      });
+      return;
+    }
 
     setUpdatingCrewPositions(true);
     try {
@@ -706,6 +738,9 @@ export function Crews() {
           <h3>Create Crew</h3>
           <p className="meta-line">
             Crew chief defaults to the user who creates the crew.
+          </p>
+          <p className="meta-line">
+            Crew bidding is restricted to the member assigned as Referee (R).
           </p>
           <form className="crew-form" onSubmit={handleCreateCrew}>
             <label>
@@ -919,6 +954,9 @@ export function Crews() {
               </p>
               <p className="meta-line">
                 <strong>Crew Chief:</strong> {selectedCrewChiefName}
+              </p>
+              <p className="meta-line">
+                <strong>Referee:</strong> {getCrewRefereeName(selectedCrew)}
               </p>
 
               <h4>Members</h4>

@@ -6,7 +6,12 @@ import { CompleteProfilePanel } from "../components/CompleteProfilePanel";
 import { MessageModal } from "../components/MessageModal";
 import { Select } from "../components/ui/Select";
 import { useAuth } from "../context/AuthContext";
-import { findActiveBid, getBidEligibleCrews, requiresCrewBidForGame } from "../lib/bids";
+import {
+  findActiveBid,
+  getBidEligibleCrews,
+  getCrewMemberCrews,
+  requiresCrewBidForGame
+} from "../lib/bids";
 import {
   formatCurrency,
   formatGameDate,
@@ -225,12 +230,19 @@ export function ScheduleGameDetails() {
       : null;
   const activeUserId = user?.uid ?? "";
 
+  const memberCrews = useMemo(() => {
+    if (!user || profile?.role !== "official") {
+      return [];
+    }
+    return getCrewMemberCrews(crews, user.uid);
+  }, [crews, profile?.role, user]);
+
   const officialCrews = useMemo(() => {
     if (!user || profile?.role !== "official") {
       return [];
     }
-    return getBidEligibleCrews(crews, user.uid);
-  }, [crews, profile?.role, user]);
+    return getBidEligibleCrews(memberCrews, user.uid);
+  }, [memberCrews, profile?.role, user]);
 
   const officialBidsForGame = useMemo(() => {
     if (!user || profile?.role !== "official") {
@@ -547,8 +559,10 @@ export function ScheduleGameDetails() {
           : bidWindowInfo.state === "closed"
             ? "The bidding window has closed."
             : requiresCrewBid && officialCrews.length === 0
-              ? "Varsity games require crew bids. Join or create a crew to bid."
-            : null;
+              ? memberCrews.length > 0
+                ? "You are a member of one or more crews, but you are not the Referee for any crew eligible to place this bid."
+                : "Varsity games require crew bids. Join or create a crew to bid."
+              : null;
 
   if (!canViewAwardedDetails) {
     return (
@@ -652,7 +666,7 @@ export function ScheduleGameDetails() {
         : null;
 
     if (input.bidderType === "crew" && !selectedCrew) {
-      throw new Error("Select one of your crews to place a crew bid.");
+      throw new Error("Only the Referee for this crew can place a crew bid.");
     }
 
     const latestIdentityBid = findActiveBid({

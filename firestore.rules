@@ -74,19 +74,10 @@ service cloud.firestore {
       return !gameLevelIsVarsity(gameId) || crewBidPayload();
     }
 
-    function requesterBelongsToCrew(crewId) {
+    function requesterIsCrewReferee(crewId) {
       return crewExists(crewId)
-        && (
-          (
-            get(/databases/$(database)/documents/crews/$(crewId)).data.keys().hasAny(["memberUids"])
-            && get(/databases/$(database)/documents/crews/$(crewId)).data.memberUids.hasAny([request.auth.uid])
-          )
-          || (
-            get(/databases/$(database)/documents/crews/$(crewId)).data.keys().hasAny(["crewChiefUid"])
-            && get(/databases/$(database)/documents/crews/$(crewId)).data.crewChiefUid == request.auth.uid
-          )
-          || get(/databases/$(database)/documents/crews/$(crewId)).data.createdByUid == request.auth.uid
-        );
+        && get(/databases/$(database)/documents/crews/$(crewId)).data.keys().hasAny(["refereeOfficialId"])
+        && get(/databases/$(database)/documents/crews/$(crewId)).data.refereeOfficialId == request.auth.uid;
     }
 
     function crewBidSubmittedByMember() {
@@ -94,7 +85,7 @@ service cloud.firestore {
         || (
           request.resource.data.crewId is string
           && request.resource.data.crewId.size() > 0
-          && requesterBelongsToCrew(request.resource.data.crewId)
+          && requesterIsCrewReferee(request.resource.data.crewId)
         );
     }
 
@@ -116,10 +107,25 @@ service cloud.firestore {
         ]);
     }
 
+    function crewRefereeFieldMatchesPositions(data) {
+      return !data.keys().hasAny(["refereeOfficialId"])
+        || (
+          data.refereeOfficialId is string
+          && data.refereeOfficialId.size() > 0
+          && data.keys().hasAny(["memberUids"])
+          && data.memberUids.hasAny([data.refereeOfficialId])
+          && data.keys().hasAny(["memberPositions"])
+          && data.memberPositions is map
+          && data.memberPositions.keys().hasAny([data.refereeOfficialId])
+          && data.memberPositions[data.refereeOfficialId] == "R"
+        );
+    }
+
     function creatorCrewUpdatePayloadIsValid() {
       return resource.data.createdByUid == request.auth.uid
+        && crewRefereeFieldMatchesPositions(request.resource.data)
         && (
-          !request.resource.data.diff(resource.data).affectedKeys().hasAny(["memberPositions"])
+          !request.resource.data.diff(resource.data).affectedKeys().hasAny(["memberPositions", "refereeOfficialId"])
           || crewPositionMapIsValid(
             request.resource.data.memberPositions,
             request.resource.data.memberUids
@@ -129,11 +135,12 @@ service cloud.firestore {
 
     function crewChiefCanUpdatePositionsOnly(crewId) {
       return requesterIsCrewChief(crewId)
-        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(["memberPositions"])
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(["memberPositions", "refereeOfficialId"])
         && crewPositionMapIsValid(
           request.resource.data.memberPositions,
           resource.data.memberUids
-        );
+        )
+        && crewRefereeFieldMatchesPositions(request.resource.data);
     }
 
     function anonymousRatingPayload() {
@@ -173,6 +180,7 @@ service cloud.firestore {
           request.resource.data.memberPositions,
           request.resource.data.memberUids
         ))
+        && crewRefereeFieldMatchesPositions(request.resource.data)
         && (
           request.resource.data.createdByRole == "official" ||
           request.resource.data.createdByRole == "assignor" ||
@@ -211,6 +219,7 @@ service cloud.firestore {
 
       allow create: if hasRole("official")
         && request.resource.data.officialUid == request.auth.uid
+        && request.resource.data.createdByOfficialId == request.auth.uid
         && gameExists(request.resource.data.gameId)
         && gameOpenForBidding(request.resource.data.gameId)
         && bidMatchesGameLevelPolicy(request.resource.data.gameId)
@@ -225,6 +234,7 @@ service cloud.firestore {
       allow update: if signedIn()
         && resource.data.officialUid == request.auth.uid
         && request.resource.data.officialUid == resource.data.officialUid
+        && request.resource.data.createdByOfficialId == request.auth.uid
         && request.resource.data.gameId == resource.data.gameId
         && gameOpenForBidding(resource.data.gameId)
         && bidMatchesGameLevelPolicy(resource.data.gameId)

@@ -237,6 +237,16 @@ function normalizeCrewMemberPositions(rawPositions, memberUids) {
   return normalized;
 }
 
+function assertSingleCrewReferee(memberPositions) {
+  const refereeCount = Object.values(memberPositions).filter((position) => position === "R").length;
+  assert(refereeCount <= 1, "invalid-argument", "Only one crew member can be assigned as Referee.");
+}
+
+function getRefereeOfficialIdFromMemberPositions(memberPositions) {
+  const refereeEntries = Object.entries(memberPositions).filter(([, position]) => position === "R");
+  return refereeEntries.length === 1 ? refereeEntries[0][0] : "";
+}
+
 function normalizeGameAssignment(assignment) {
   assert(assignment && typeof assignment === "object", "invalid-argument", "Assignment is required.");
   const assignmentType = trimString(assignment.assignmentType);
@@ -297,6 +307,7 @@ function normalizeBidDocument(id, data) {
     id,
     gameId: trimString(data.gameId),
     officialUid: trimString(data.officialUid),
+    createdByOfficialId: trimString(data.createdByOfficialId) || undefined,
     officialName: trimString(data.officialName),
     bidderType: trimString(data.bidderType) || undefined,
     crewId: trimString(data.crewId) || undefined,
@@ -311,6 +322,7 @@ function normalizeCrewDocument(id, data) {
   const memberUids = Array.isArray(data.memberUids)
     ? data.memberUids.map((uid) => trimString(uid)).filter(Boolean)
     : [];
+  const memberPositions = normalizeCrewMemberPositions(data.memberPositions, memberUids);
   return {
     id,
     name: trimString(data.name),
@@ -320,9 +332,11 @@ function normalizeCrewDocument(id, data) {
     createdAtISO: trimString(data.createdAtISO),
     crewChiefUid: trimString(data.crewChiefUid) || trimString(data.createdByUid),
     crewChiefName: trimString(data.crewChiefName) || trimString(data.createdByName),
+    refereeOfficialId:
+      trimString(data.refereeOfficialId) || getRefereeOfficialIdFromMemberPositions(memberPositions) || undefined,
     memberUids,
     members: Array.isArray(data.members) ? data.members.map(normalizeCrewMember) : [],
-    memberPositions: normalizeCrewMemberPositions(data.memberPositions, memberUids)
+    memberPositions
   };
 }
 
@@ -409,6 +423,10 @@ function requiresCrewBidForGame(game) {
   return game.level === "Varsity";
 }
 
+function getCrewRefereeOfficialId(crew) {
+  return trimString(crew.refereeOfficialId) || getRefereeOfficialIdFromMemberPositions(crew.memberPositions);
+}
+
 async function getCrewById(crewId) {
   const snapshot = await db.collection(CREWS_COLLECTION).doc(crewId).get();
   assert(snapshot.exists, "not-found", "Crew not found.");
@@ -427,8 +445,12 @@ async function getBidById(bidId) {
   return normalizeBidDocument(snapshot.id, snapshot.data());
 }
 
+function canManageCrew(crew, uid) {
+  return crew.createdByUid === uid || crew.crewChiefUid === uid;
+}
+
 function canBidWithCrew(crew, uid) {
-  return crew.memberUids.includes(uid) || crew.createdByUid === uid || crew.crewChiefUid === uid;
+  return getCrewRefereeOfficialId(crew) === uid;
 }
 
 exports.createUserProfile = onClientCall(async (request) => {
@@ -733,7 +755,7 @@ exports.createBid = onClientCall(async (request) => {
     assert(
       canBidWithCrew(crew, profile.uid),
       "permission-denied",
-      "You must belong to the selected crew to submit a crew bid."
+      "Only the Referee for this crew can place a crew bid."
     );
     crewName = crew.name;
   }
@@ -741,6 +763,7 @@ exports.createBid = onClientCall(async (request) => {
   await db.collection(BIDS_COLLECTION).add({
     gameId,
     officialUid: profile.uid,
+    createdByOfficialId: profile.uid,
     officialName: profile.displayName,
     bidderType,
     amount: input.amount,
@@ -786,13 +809,14 @@ exports.updateBid = onClientCall(async (request) => {
     assert(
       canBidWithCrew(crew, profile.uid),
       "permission-denied",
-      "You must belong to the selected crew to submit a crew bid."
+      "Only the Referee for this crew can place a crew bid."
     );
     crewName = crew.name;
   }
 
   await db.collection(BIDS_COLLECTION).doc(bidId).update({
     officialName: profile.displayName,
+    createdByOfficialId: profile.uid,
     amount: input.amount,
     createdAtISO: new Date().toISOString(),
     bidderType,
@@ -832,6 +856,8 @@ exports.createCrew = onClientCall(async (request) => {
 
   const memberUids = uniqueMembers.map((member) => member.uid);
   const memberPositions = normalizeCrewMemberPositions(input.memberPositions, memberUids);
+  assertSingleCrewReferee(memberPositions);
+  const refereeOfficialId = getRefereeOfficialIdFromMemberPositions(memberPositions);
   await db.collection(CREWS_COLLECTION).add({
     name,
     createdByUid: profile.uid,
@@ -842,7 +868,8 @@ exports.createCrew = onClientCall(async (request) => {
     crewChiefName: profile.displayName,
     memberUids,
     members: uniqueMembers,
-    memberPositions
+    memberPositions,
+    ...(refereeOfficialId ? { refereeOfficialId } : {})
   });
 
   return { ok: true };
@@ -873,11 +900,14 @@ exports.updateCrewMembers = onClientCall(async (request) => {
   assert(uniqueMembers.length >= 1 && uniqueMembers.length <= 15, "invalid-argument", "Crew must include between 1 and 15 members.");
   const memberUids = uniqueMembers.map((member) => member.uid);
   const memberPositions = normalizeCrewMemberPositions(crew.memberPositions, memberUids);
+  assertSingleCrewReferee(memberPositions);
+  const refereeOfficialId = getRefereeOfficialIdFromMemberPositions(memberPositions);
 
   await db.collection(CREWS_COLLECTION).doc(crewId).update({
     memberUids,
     members: uniqueMembers,
-    memberPositions
+    memberPositions,
+    refereeOfficialId: refereeOfficialId || FieldValue.delete()
   });
   return { ok: true };
 });
@@ -916,8 +946,11 @@ exports.updateCrewMemberPositions = onClientCall(async (request) => {
     request.data && request.data.memberPositions,
     crew.memberUids
   );
+  assertSingleCrewReferee(memberPositions);
+  const refereeOfficialId = getRefereeOfficialIdFromMemberPositions(memberPositions);
   await db.collection(CREWS_COLLECTION).doc(crewId).update({
-    memberPositions
+    memberPositions,
+    refereeOfficialId: refereeOfficialId || FieldValue.delete()
   });
   return { ok: true };
 });

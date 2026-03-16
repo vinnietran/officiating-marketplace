@@ -19,6 +19,7 @@ interface GameCardProps {
   currentUserId: string;
   currentUserName: string;
   availableCrews: Crew[];
+  crewBidUnavailableReason?: string | null;
   userDistanceMiles?: number | null;
   distanceUnavailableLabel?: string;
   canManageGame: boolean;
@@ -57,6 +58,7 @@ export function GameCard({
   currentUserId,
   currentUserName,
   availableCrews,
+  crewBidUnavailableReason,
   userDistanceMiles,
   distanceUnavailableLabel,
   canManageGame,
@@ -139,10 +141,17 @@ export function GameCard({
       return "Bidding is closed for this game.";
     }
     if (requiresCrewBid && availableCrews.length === 0) {
-      return "Varsity games require crew bids. Join or create a crew to bid.";
+      return crewBidUnavailableReason ?? "Varsity games require crew bids. Join or create a crew to bid.";
     }
     return null;
-  }, [role, game.status, isDirectAssignment, requiresCrewBid, availableCrews.length]);
+  }, [
+    role,
+    game.status,
+    isDirectAssignment,
+    requiresCrewBid,
+    availableCrews.length,
+    crewBidUnavailableReason
+  ]);
 
   const gameBids = useMemo(() => {
     if (role === "official") {

@@ -40,6 +40,7 @@ export function BidForm({
   const [message, setMessage] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const noEligibleCrews = forceCrewOnly && availableCrews.length === 0;
 
   useEffect(() => {
     setOfficialName(defaultOfficialName);
@@ -155,7 +156,11 @@ export function BidForm({
       ) : null}
 
       {forceCrewOnly ? (
-        <p className="hint-text">Varsity games require a crew bid.</p>
+        <p className="hint-text">
+          {noEligibleCrews
+            ? "You are a member of one or more crews, but you are not the Referee for any crew eligible to place this bid."
+            : "Varsity games require a crew bid."}
+        </p>
       ) : null}
 
       <label>
@@ -203,7 +208,7 @@ export function BidForm({
       {error ? <p className="error-text">{error}</p> : null}
 
       <div className="bid-form-actions">
-        <button type="submit" disabled={submitting}>
+        <button type="submit" disabled={submitting || noEligibleCrews}>
           {submitting
             ? "Submitting..."
             : activeBid

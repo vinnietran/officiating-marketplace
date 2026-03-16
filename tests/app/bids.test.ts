@@ -5,6 +5,8 @@ import {
   buildBidSubmission,
   findActiveBid,
   getBidEligibleCrews,
+  getCrewMemberCrews,
+  getCrewRefereeOfficialId,
   getBidFormDefaults,
   requiresCrewBidForGame
 } from "../../src/lib/bids";
@@ -20,9 +22,10 @@ const crews: Crew[] = [
     createdAtISO: "2026-03-01T00:00:00.000Z",
     crewChiefUid: "o1",
     crewChiefName: "Alex Zebra",
+    refereeOfficialId: "o1",
     memberUids: ["o1"],
     members: [{ uid: "o1", name: "Alex Zebra", email: "alex@example.com" }],
-    memberPositions: {}
+    memberPositions: { o1: "R" }
   },
   {
     id: "crew-2",
@@ -38,7 +41,7 @@ const crews: Crew[] = [
       { uid: "o2", name: "Sam Blue", email: "sam@example.com" },
       { uid: "o3", name: "Jamie Red", email: "jamie@example.com" }
     ],
-    memberPositions: {}
+    memberPositions: { o2: "R" }
   }
 ];
 
@@ -174,7 +177,7 @@ test("buildBidSubmission rejects lower offers, invalid messages, and varsity ind
   );
 });
 
-test("crew bidding helpers identify varsity games and eligible crews", () => {
+test("crew bidding helpers identify varsity games, members, and referee-eligible crews", () => {
   assert.equal(
     requiresCrewBidForGame({
       level: "Varsity"
@@ -188,8 +191,19 @@ test("crew bidding helpers identify varsity games and eligible crews", () => {
     false
   );
 
+  assert.equal(getCrewRefereeOfficialId(crews[0]), "o1");
+  assert.equal(getCrewRefereeOfficialId(crews[1]), "o2");
+
+  assert.deepEqual(
+    getCrewMemberCrews(crews, "o3").map((crew) => crew.id),
+    ["crew-2"]
+  );
   assert.deepEqual(
     getBidEligibleCrews(crews, "o3").map((crew) => crew.id),
+    []
+  );
+  assert.deepEqual(
+    getBidEligibleCrews(crews, "o2").map((crew) => crew.id),
     ["crew-2"]
   );
   assert.deepEqual(getBidEligibleCrews(crews, "o9"), []);

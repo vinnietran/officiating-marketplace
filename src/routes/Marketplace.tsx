@@ -27,7 +27,12 @@ import {
 import { FIRESTORE_DATABASE_ID } from "../lib/firebase";
 import { getReadableFirestoreError } from "../lib/firebaseErrors";
 import { formatCurrency, formatGameDate } from "../lib/format";
-import { findActiveBid, getBidEligibleCrews, requiresCrewBidForGame } from "../lib/bids";
+import {
+  findActiveBid,
+  getBidEligibleCrews,
+  getCrewMemberCrews,
+  requiresCrewBidForGame
+} from "../lib/bids";
 import {
   buildQualifiedGameLevels,
   filterAvailableMarketplaceGames,
@@ -291,13 +296,37 @@ export function Marketplace() {
     });
   }, [deferredFilters, listingPoolGames]);
 
+  const memberCrews = useMemo(() => {
+    if (!user || profile?.role !== "official") {
+      return [];
+    }
+
+    return getCrewMemberCrews(crews, user.uid);
+  }, [crews, profile?.role, user]);
+
   const officialCrews = useMemo(() => {
     if (!user || profile?.role !== "official") {
       return [];
     }
 
-    return getBidEligibleCrews(crews, user.uid);
-  }, [crews, profile?.role, user]);
+    return getBidEligibleCrews(memberCrews, user.uid);
+  }, [memberCrews, profile?.role, user]);
+
+  const crewBidUnavailableReason = useMemo(() => {
+    if (!user || profile?.role !== "official") {
+      return null;
+    }
+
+    if (officialCrews.length > 0) {
+      return null;
+    }
+
+    if (memberCrews.length > 0) {
+      return "You are a member of one or more crews, but you are not the Referee for any crew eligible to place this bid.";
+    }
+
+    return "Varsity games require crew bids. Join or create a crew to bid.";
+  }, [memberCrews.length, officialCrews.length, profile?.role, user]);
 
   const hasActiveFilters = useMemo(() => {
     return Boolean(
@@ -915,7 +944,7 @@ export function Marketplace() {
         : null;
 
     if (input.bidderType === "crew" && !selectedCrew) {
-      throw new Error("Select one of your crews to place a crew bid.");
+      throw new Error("Only the Referee for this crew can place a crew bid.");
     }
 
     const latestOfficialBid = findActiveBid({
@@ -1293,6 +1322,7 @@ export function Marketplace() {
                   currentUserId={activeUser.uid}
                   currentUserName={activeProfile.displayName}
                   availableCrews={officialCrews}
+                  crewBidUnavailableReason={crewBidUnavailableReason}
                   userDistanceMiles={
                     activeProfile.role === "official"
                       ? distanceByGameId[game.id]

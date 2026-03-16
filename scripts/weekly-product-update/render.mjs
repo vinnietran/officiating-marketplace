@@ -52,14 +52,22 @@ function renderLogo(logoSrc, companyName) {
 }
 
 function renderMultilineText(value) {
-  return escapeHtml(value).replace(/\n\n+/g, "</p><p>").replace(/\n/g, "<br />");
+  const normalized = String(value ?? "").trim();
+  if (!normalized) {
+    return "";
+  }
+
+  return normalized
+    .split(/\n\s*\n/)
+    .map((paragraph) => `<p>${escapeHtml(paragraph).replace(/\n/g, "<br />")}</p>`)
+    .join("");
 }
 
 function renderStoryCard(story) {
   return `
     <article class="story-card">
       <h3>${escapeHtml(story.title)}</h3>
-      <p>${renderMultilineText(story.storyDetail || story.story)}</p>
+      <div class="story-copy">${renderMultilineText(story.storyDetail || story.story)}</div>
       <div class="story-dates">
         <span><strong>Marked done:</strong> ${
           story.completedAt ? escapeHtml(formatLongDisplayDate(story.completedAt)) : "Not tracked"
@@ -331,6 +339,12 @@ export function renderEmailHtml(report, options = {}) {
       .story-card p + p,
       .summary-item p + p {
         margin-top: 8px;
+      }
+      .story-copy p {
+        margin: 0;
+      }
+      .story-copy p + p {
+        margin-top: 10px;
       }
       .story-dates {
         margin-top: 14px;

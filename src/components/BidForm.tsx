@@ -98,7 +98,8 @@ export function BidForm({
         amount,
         message,
         activeBid,
-        availableCrews
+        availableCrews,
+        requiresCrewBid: forceCrewOnly
       });
 
       setSubmitting(true);
@@ -139,7 +140,7 @@ export function BidForm({
 
           {bidderType === "crew" ? (
             <label>
-              Crew
+              {forceCrewOnly ? "Select Crew to Bid As" : "Crew"}
               <Select
                 value={selectedCrewId}
                 onValueChange={setSelectedCrewId}

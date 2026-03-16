@@ -27,6 +27,7 @@ import {
 import { FIRESTORE_DATABASE_ID } from "../lib/firebase";
 import { getReadableFirestoreError } from "../lib/firebaseErrors";
 import { formatCurrency, formatGameDate } from "../lib/format";
+import { findActiveBid, getBidEligibleCrews, requiresCrewBidForGame } from "../lib/bids";
 import {
   buildQualifiedGameLevels,
   filterAvailableMarketplaceGames,
@@ -295,9 +296,7 @@ export function Marketplace() {
       return [];
     }
 
-    return crews.filter(
-      (crew) => (crew.crewChiefUid?.trim() ? crew.crewChiefUid : crew.createdByUid) === user.uid
-    );
+    return getBidEligibleCrews(crews, user.uid);
   }, [crews, profile?.role, user]);
 
   const hasActiveFilters = useMemo(() => {
@@ -905,7 +904,7 @@ export function Marketplace() {
     if (game.mode === "direct_assignment") {
       throw new Error("This game was directly assigned and cannot accept bids.");
     }
-    if (game.level === "Varsity" && input.bidderType !== "crew") {
+    if (requiresCrewBidForGame(game) && input.bidderType !== "crew") {
       throw new Error("Varsity games require crew bids.");
     }
 
@@ -919,9 +918,12 @@ export function Marketplace() {
       throw new Error("Select one of your crews to place a crew bid.");
     }
 
-    const latestOfficialBid = [...gameBids]
-      .filter((bid) => bid.officialUid === activeUser.uid)
-      .sort((a, b) => b.createdAtISO.localeCompare(a.createdAtISO))[0];
+    const latestOfficialBid = findActiveBid({
+      bidderType: input.bidderType,
+      existingBids: gameBids.filter((bid) => bid.officialUid === activeUser.uid),
+      selectedCrewId: selectedCrew?.id ?? "",
+      singleBidMode: false
+    });
 
     if (latestOfficialBid) {
       if (input.amount <= latestOfficialBid.amount) {

@@ -1,7 +1,13 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { buildBidSubmission, findActiveBid, getBidFormDefaults } from "../../src/lib/bids";
+import {
+  buildBidSubmission,
+  findActiveBid,
+  getBidEligibleCrews,
+  getBidFormDefaults,
+  requiresCrewBidForGame
+} from "../../src/lib/bids";
 import type { Bid, Crew } from "../../src/types";
 
 const crews: Crew[] = [
@@ -16,6 +22,22 @@ const crews: Crew[] = [
     crewChiefName: "Alex Zebra",
     memberUids: ["o1"],
     members: [{ uid: "o1", name: "Alex Zebra", email: "alex@example.com" }],
+    memberPositions: {}
+  },
+  {
+    id: "crew-2",
+    name: "River Crew",
+    createdByUid: "o2",
+    createdByName: "Sam Blue",
+    createdByRole: "official",
+    createdAtISO: "2026-03-01T00:00:00.000Z",
+    crewChiefUid: "o2",
+    crewChiefName: "Sam Blue",
+    memberUids: ["o2", "o3"],
+    members: [
+      { uid: "o2", name: "Sam Blue", email: "sam@example.com" },
+      { uid: "o3", name: "Jamie Red", email: "jamie@example.com" }
+    ],
     memberPositions: {}
   }
 ];
@@ -107,7 +129,7 @@ test("buildBidSubmission trims values and resolves crew metadata", () => {
   });
 });
 
-test("buildBidSubmission rejects lower offers and invalid messages", () => {
+test("buildBidSubmission rejects lower offers, invalid messages, and varsity individual bids", () => {
   assert.throws(
     () =>
       buildBidSubmission({
@@ -135,5 +157,40 @@ test("buildBidSubmission rejects lower offers and invalid messages", () => {
       }),
     /Message cannot exceed 200 characters/
   );
+
+  assert.throws(
+    () =>
+      buildBidSubmission({
+        officialName: "Alex Zebra",
+        bidderType: "individual",
+        selectedCrewId: "",
+        amount: "120",
+        message: "",
+        activeBid: null,
+        availableCrews: crews,
+        requiresCrewBid: true
+      }),
+    /Varsity games require crew bids/
+  );
 });
 
+test("crew bidding helpers identify varsity games and eligible crews", () => {
+  assert.equal(
+    requiresCrewBidForGame({
+      level: "Varsity"
+    }),
+    true
+  );
+  assert.equal(
+    requiresCrewBidForGame({
+      level: "Junior Varsity"
+    }),
+    false
+  );
+
+  assert.deepEqual(
+    getBidEligibleCrews(crews, "o3").map((crew) => crew.id),
+    ["crew-2"]
+  );
+  assert.deepEqual(getBidEligibleCrews(crews, "o9"), []);
+});

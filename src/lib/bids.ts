@@ -1,4 +1,23 @@
-import type { Bid, Crew } from "../types";
+import type { Bid, Crew, Game } from "../types";
+
+export function requiresCrewBidForGame(game: Pick<Game, "level">): boolean {
+  return game.level === "Varsity";
+}
+
+export function canBidWithCrew(
+  crew: Pick<Crew, "memberUids" | "createdByUid" | "crewChiefUid">,
+  userId: string
+): boolean {
+  return (
+    crew.memberUids.includes(userId) ||
+    crew.createdByUid === userId ||
+    crew.crewChiefUid === userId
+  );
+}
+
+export function getBidEligibleCrews(crews: Crew[], userId: string): Crew[] {
+  return crews.filter((crew) => canBidWithCrew(crew, userId));
+}
 
 export function findActiveBid(input: {
   bidderType: "individual" | "crew";
@@ -54,6 +73,7 @@ export function buildBidSubmission(input: {
   message: string;
   activeBid: Bid | null;
   availableCrews: Crew[];
+  requiresCrewBid?: boolean;
 }): {
   officialName: string;
   bidderType: "individual" | "crew";
@@ -75,6 +95,10 @@ export function buildBidSubmission(input: {
 
   if (input.message.length > 200) {
     throw new Error("Message cannot exceed 200 characters.");
+  }
+
+  if (input.requiresCrewBid && input.bidderType !== "crew") {
+    throw new Error("Varsity games require crew bids.");
   }
 
   if (input.bidderType === "crew" && !input.selectedCrewId) {

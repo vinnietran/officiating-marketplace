@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { BidForm } from "./BidForm";
 import { EditGameForm } from "./EditGameForm";
+import { requiresCrewBidForGame } from "../lib/bids";
 import {
   formatCurrency,
   formatGameDate,
@@ -98,7 +99,7 @@ export function GameCard({
         )
       : null;
   const isDirectAssignment = game.mode === "direct_assignment";
-  const requiresCrewBid = game.level === "Varsity";
+  const requiresCrewBid = requiresCrewBidForGame(game);
   const directAssignmentCount = game.directAssignments?.length ?? 0;
   const statusLabel = getGameStatusLabel(game.status, game.mode);
 
@@ -266,6 +267,9 @@ export function GameCard({
                     {`Bid Window: ${bidWindowInfo.label}`}
                   </span>
                 ) : null}
+                {requiresCrewBid ? (
+                  <span className="game-card-flag game-card-flag-varsity">CREW BID REQUIRED</span>
+                ) : null}
               </div>
 
               <div className="game-card-header">
@@ -328,6 +332,9 @@ export function GameCard({
                 <span className={`game-card-flag game-card-flag-window-${bidWindowInfo.state}`}>
                   {`Bid Window: ${bidWindowInfo.label}`}
                 </span>
+              ) : null}
+              {requiresCrewBid ? (
+                <span className="game-card-flag game-card-flag-varsity">CREW BID REQUIRED</span>
               ) : null}
             </div>
 

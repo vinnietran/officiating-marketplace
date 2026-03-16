@@ -55,6 +55,15 @@ service cloud.firestore {
         && get(/databases/$(database)/documents/games/$(gameId)).data.level == "Varsity";
     }
 
+    function gameOpenForBidding(gameId) {
+      return gameExists(gameId)
+        && get(/databases/$(database)/documents/games/$(gameId)).data.status == "open"
+        && (
+          !get(/databases/$(database)/documents/games/$(gameId)).data.keys().hasAny(["mode"])
+          || get(/databases/$(database)/documents/games/$(gameId)).data.mode != "direct_assignment"
+        );
+    }
+
     function crewBidPayload() {
       return request.resource.data.bidderType == "crew"
         && request.resource.data.crewId is string
@@ -65,12 +74,27 @@ service cloud.firestore {
       return !gameLevelIsVarsity(gameId) || crewBidPayload();
     }
 
-    function crewBidSubmittedByChief() {
+    function requesterBelongsToCrew(crewId) {
+      return crewExists(crewId)
+        && (
+          (
+            get(/databases/$(database)/documents/crews/$(crewId)).data.keys().hasAny(["memberUids"])
+            && get(/databases/$(database)/documents/crews/$(crewId)).data.memberUids.hasAny([request.auth.uid])
+          )
+          || (
+            get(/databases/$(database)/documents/crews/$(crewId)).data.keys().hasAny(["crewChiefUid"])
+            && get(/databases/$(database)/documents/crews/$(crewId)).data.crewChiefUid == request.auth.uid
+          )
+          || get(/databases/$(database)/documents/crews/$(crewId)).data.createdByUid == request.auth.uid
+        );
+    }
+
+    function crewBidSubmittedByMember() {
       return request.resource.data.bidderType != "crew"
         || (
           request.resource.data.crewId is string
           && request.resource.data.crewId.size() > 0
-          && requesterIsCrewChief(request.resource.data.crewId)
+          && requesterBelongsToCrew(request.resource.data.crewId)
         );
     }
 
@@ -188,8 +212,9 @@ service cloud.firestore {
       allow create: if hasRole("official")
         && request.resource.data.officialUid == request.auth.uid
         && gameExists(request.resource.data.gameId)
+        && gameOpenForBidding(request.resource.data.gameId)
         && bidMatchesGameLevelPolicy(request.resource.data.gameId)
-        && crewBidSubmittedByChief();
+        && crewBidSubmittedByMember();
 
       allow delete: if signedIn()
         && (
@@ -201,8 +226,9 @@ service cloud.firestore {
         && resource.data.officialUid == request.auth.uid
         && request.resource.data.officialUid == resource.data.officialUid
         && request.resource.data.gameId == resource.data.gameId
+        && gameOpenForBidding(resource.data.gameId)
         && bidMatchesGameLevelPolicy(resource.data.gameId)
-        && crewBidSubmittedByChief();
+        && crewBidSubmittedByMember();
     }
 
     match /ratings/{ratingId} {

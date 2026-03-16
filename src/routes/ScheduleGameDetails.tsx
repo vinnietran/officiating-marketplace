@@ -6,6 +6,7 @@ import { CompleteProfilePanel } from "../components/CompleteProfilePanel";
 import { MessageModal } from "../components/MessageModal";
 import { Select } from "../components/ui/Select";
 import { useAuth } from "../context/AuthContext";
+import { findActiveBid, getBidEligibleCrews, requiresCrewBidForGame } from "../lib/bids";
 import {
   formatCurrency,
   formatGameDate,
@@ -228,9 +229,7 @@ export function ScheduleGameDetails() {
     if (!user || profile?.role !== "official") {
       return [];
     }
-    return crews.filter(
-      (crew) => (crew.crewChiefUid?.trim() ? crew.crewChiefUid : crew.createdByUid) === user.uid
-    );
+    return getBidEligibleCrews(crews, user.uid);
   }, [crews, profile?.role, user]);
 
   const officialBidsForGame = useMemo(() => {
@@ -513,7 +512,7 @@ export function ScheduleGameDetails() {
     : null;
   const isDirectAssignment = activeGame.mode === "direct_assignment";
   const statusLabel = getGameStatusLabel(activeGame.status, activeGame.mode);
-  const requiresCrewBid = activeGame.level === "Varsity";
+  const requiresCrewBid = requiresCrewBidForGame(activeGame);
   const isAssignedOfficial =
     activeProfile.role === "official" &&
     assignedIndividuals.some((entry) => entry.uid === activeUser.uid);
@@ -656,22 +655,12 @@ export function ScheduleGameDetails() {
       throw new Error("Select one of your crews to place a crew bid.");
     }
 
-    const latestIdentityBid = [...gameBids]
-      .filter((bid) => {
-        if (input.bidderType === "crew") {
-          return (
-            bid.officialUid === activeUser.uid &&
-            bid.bidderType === "crew" &&
-            bid.crewId === selectedCrew?.id
-          );
-        }
-
-        return (
-          bid.officialUid === activeUser.uid &&
-          (!bid.bidderType || bid.bidderType === "individual")
-        );
-      })
-      .sort((a, b) => b.createdAtISO.localeCompare(a.createdAtISO))[0];
+    const latestIdentityBid = findActiveBid({
+      bidderType: input.bidderType,
+      existingBids: gameBids.filter((bid) => bid.officialUid === activeUser.uid),
+      selectedCrewId: selectedCrew?.id ?? "",
+      singleBidMode: false
+    });
 
     if (latestIdentityBid) {
       if (input.amount <= latestIdentityBid.amount) {

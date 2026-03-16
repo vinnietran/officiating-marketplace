@@ -1025,6 +1025,12 @@ button:disabled {
   color: #b42318;
 }
 
+.game-card-flag-varsity {
+  background: #fff4e5;
+  border-color: #f5c27a;
+  color: #9a3412;
+}
+
 .game-card-sport-line {
   margin-bottom: 8px;
 }

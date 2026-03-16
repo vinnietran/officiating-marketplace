@@ -405,6 +405,10 @@ function isBidWindowClosed(game) {
   return new Date(game.acceptingBidsUntilISO).getTime() <= Date.now();
 }
 
+function requiresCrewBidForGame(game) {
+  return game.level === "Varsity";
+}
+
 async function getCrewById(crewId) {
   const snapshot = await db.collection(CREWS_COLLECTION).doc(crewId).get();
   assert(snapshot.exists, "not-found", "Crew not found.");
@@ -423,8 +427,8 @@ async function getBidById(bidId) {
   return normalizeBidDocument(snapshot.id, snapshot.data());
 }
 
-function canManageCrew(crew, uid) {
-  return crew.createdByUid === uid || crew.crewChiefUid === uid;
+function canBidWithCrew(crew, uid) {
+  return crew.memberUids.includes(uid) || crew.createdByUid === uid || crew.crewChiefUid === uid;
 }
 
 exports.createUserProfile = onClientCall(async (request) => {
@@ -716,12 +720,21 @@ exports.createBid = onClientCall(async (request) => {
 
   const game = await getGameById(gameId);
   assert(!isBidWindowClosed(game), "failed-precondition", "This game is no longer accepting bids.");
+  assert(
+    !requiresCrewBidForGame(game) || bidderType === "crew",
+    "failed-precondition",
+    "Varsity games require a crew bid."
+  );
 
   let crewName;
   if (bidderType === "crew") {
     assert(crewId, "invalid-argument", "crewId is required for crew bids.");
     const crew = await getCrewById(crewId);
-    assert(canManageCrew(crew, profile.uid), "permission-denied", "Only the crew creator or chief can submit a crew bid.");
+    assert(
+      canBidWithCrew(crew, profile.uid),
+      "permission-denied",
+      "You must belong to the selected crew to submit a crew bid."
+    );
     crewName = crew.name;
   }
 
@@ -760,12 +773,21 @@ exports.updateBid = onClientCall(async (request) => {
   assert(BIDDER_TYPES.has(bidderType), "invalid-argument", "Invalid bidder type.");
   assert(typeof input.amount === "number" && Number.isFinite(input.amount), "invalid-argument", "Bid amount must be a number.");
   assert(input.amount >= 0, "invalid-argument", "Bid amount must be zero or greater.");
+  assert(
+    !requiresCrewBidForGame(game) || bidderType === "crew",
+    "failed-precondition",
+    "Varsity games require a crew bid."
+  );
 
   let crewName;
   if (bidderType === "crew") {
     assert(crewId, "invalid-argument", "crewId is required for crew bids.");
     const crew = await getCrewById(crewId);
-    assert(canManageCrew(crew, profile.uid), "permission-denied", "Only the crew creator or chief can submit a crew bid.");
+    assert(
+      canBidWithCrew(crew, profile.uid),
+      "permission-denied",
+      "You must belong to the selected crew to submit a crew bid."
+    );
     crewName = crew.name;
   }
 

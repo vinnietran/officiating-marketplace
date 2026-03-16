@@ -34,8 +34,9 @@ jobs:
       issues: read
       pull-requests: read
       actions: read
+      repository-projects: read
     env:
-      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      GITHUB_TOKEN: ${{ secrets.PRODUCT_UPDATE_GITHUB_TOKEN || secrets.GITHUB_TOKEN }}
       PROJECT_NAME: ${{ vars.PRODUCT_UPDATE_PROJECT_NAME || github.event.repository.name }}
       REPORT_START: ${{ inputs.report_start }}
       REPORT_END: ${{ inputs.report_end }}
@@ -46,6 +47,7 @@ jobs:
       REPORT_SENDER_EMAIL: ${{ vars.PRODUCT_UPDATE_SENDER_EMAIL }}
       SENDGRID_API_KEY: ${{ secrets.PRODUCT_UPDATE_SENDGRID_API_KEY }}
       IN_PROGRESS_LABELS: ${{ vars.PRODUCT_UPDATE_IN_PROGRESS_LABELS || 'in-progress,doing,active' }}
+      IN_PROGRESS_STATUSES: ${{ vars.PRODUCT_UPDATE_IN_PROGRESS_STATUSES || vars.PRODUCT_UPDATE_IN_PROGRESS_LABELS || 'in-progress,doing,active' }}
       BLOCKER_LABELS: ${{ vars.PRODUCT_UPDATE_BLOCKER_LABELS || 'blocked,blocker,question,open-question' }}
       NEXT_FOCUS_LABELS: ${{ vars.PRODUCT_UPDATE_NEXT_FOCUS_LABELS || 'next-up' }}
       INCLUDE_MERGED_PRS: ${{ vars.PRODUCT_UPDATE_INCLUDE_MERGED_PRS || 'true' }}

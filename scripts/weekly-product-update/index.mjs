@@ -24,6 +24,7 @@ import { sendEmail } from "./send-email.mjs";
 function summarizeIssue(issue) {
   const details = parseStoryDetails(issue);
   return {
+    number: issue.number,
     title: issue.title,
     url: issue.html_url,
     summary: details.story,
@@ -38,6 +39,27 @@ function selectInProgressIssues(issues, projectStatusesByIssueNumber, config) {
 
     const projectStatuses = projectStatusesByIssueNumber.get(issue.number) ?? [];
     return hasAnyProjectStatus(projectStatuses, config.statuses.inProgress);
+  });
+}
+
+function buildInProgressDiagnostics(issues, projectStatusesByIssueNumber, config) {
+  return issues.map((issue) => {
+    const projectStatuses = projectStatusesByIssueNumber.get(issue.number) ?? [];
+    const matchedByLabel = selectIssuesByLabels([issue], config.labels.inProgress).length > 0;
+    const matchedByProjectStatus = hasAnyProjectStatus(
+      projectStatuses,
+      config.statuses.inProgress,
+    );
+
+    return {
+      number: issue.number,
+      title: issue.title,
+      labels: (issue.labels ?? []).map((label) => label.name).filter(Boolean),
+      projectStatuses,
+      matchedByLabel,
+      matchedByProjectStatus,
+      includedInProgress: matchedByLabel || matchedByProjectStatus,
+    };
   });
 }
 
@@ -100,7 +122,9 @@ async function main() {
 
   const repository = await fetchRepository(config);
   const openIssuesPromise = fetchOpenIssues(config);
-  const openIssueProjectStatusesPromise = fetchOpenIssueProjectStatuses(config).catch(() => new Map());
+  const openIssueProjectStatusesPromise = fetchOpenIssueProjectStatuses(config)
+    .then((map) => ({ map, warning: null }))
+    .catch((error) => ({ map: new Map(), warning: error.message || String(error) }));
   const closedIssuesPromise = fetchClosedIssues(config);
   const mergedPullRequestsPromise = config.featureFlags.includeMergedPRs
     ? fetchMergedPullRequests(config, repository.default_branch)
@@ -113,14 +137,31 @@ async function main() {
         runs: [],
       });
 
-  const [openIssues, openIssueProjectStatuses, closedIssues, mergedPullRequests, workflowStatus] =
+  const [
+    openIssues,
+    openIssueProjectStatusesResult,
+    closedIssues,
+    mergedPullRequests,
+    workflowStatus,
+  ] =
     await Promise.all([
-    openIssuesPromise,
-    openIssueProjectStatusesPromise,
-    closedIssuesPromise,
-    mergedPullRequestsPromise,
-    workflowStatusPromise,
+      openIssuesPromise,
+      openIssueProjectStatusesPromise,
+      closedIssuesPromise,
+      mergedPullRequestsPromise,
+      workflowStatusPromise,
     ]);
+  const openIssueProjectStatuses = openIssueProjectStatusesResult.map;
+  const inProgressItems = selectInProgressIssues(
+    openIssues,
+    openIssueProjectStatuses,
+    config,
+  ).map(summarizeIssue);
+  const inProgressDiagnostics = buildInProgressDiagnostics(
+    openIssues,
+    openIssueProjectStatuses,
+    config,
+  );
 
   const completedStories = closedIssues.map((issue) => ({
     ...parseStoryDetails(issue),
@@ -137,11 +178,7 @@ async function main() {
       email: config.senderEmail,
     },
     completedStories,
-    inProgressItems: selectInProgressIssues(
-      openIssues,
-      openIssueProjectStatuses,
-      config,
-    ).map(summarizeIssue),
+    inProgressItems,
     mergedPullRequests: mergedPullRequests.map(summarizePullRequest),
     workflowStatus,
     blockers: config.featureFlags.includeBlockers
@@ -151,6 +188,12 @@ async function main() {
       ? selectIssuesByLabels(openIssues, config.labels.nextFocus).map(summarizeIssue)
       : [],
     repositoryUrl: `${config.serverUrl}/${config.repository}`,
+    diagnostics: {
+      projectStatusWarning: openIssueProjectStatusesResult.warning,
+      inProgressLabelsConfigured: config.labels.inProgress,
+      inProgressStatusesConfigured: config.statuses.inProgress,
+      openIssues: inProgressDiagnostics,
+    },
   };
 
   const html = renderEmailHtml(report, { logoSrc: logoAsset.previewSrc });
@@ -160,6 +203,9 @@ async function main() {
   await writeArtifacts(config.outputDir, report, html, text);
 
   console.log(renderConsoleSummary(report));
+  if (openIssueProjectStatusesResult.warning) {
+    console.warn(`Project status lookup warning: ${openIssueProjectStatusesResult.warning}`);
+  }
 
   if (config.dryRun) {
     console.log(`Dry run enabled. Preview artifacts written to ${config.outputDir}.`);

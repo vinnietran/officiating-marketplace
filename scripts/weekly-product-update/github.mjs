@@ -65,9 +65,17 @@ export function filterOutPullRequests(items = []) {
   return items.filter((item) => !isPullRequestIssue(item));
 }
 
+function normalizeLabelName(value) {
+  return String(value ?? "")
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
+}
+
 export function hasAnyLabel(issue, labelNames = []) {
-  const labels = new Set((issue.labels ?? []).map((label) => label.name?.toLowerCase()));
-  return labelNames.some((name) => labels.has(name.toLowerCase()));
+  const labels = new Set((issue.labels ?? []).map((label) => normalizeLabelName(label.name)));
+  return labelNames.some((name) => labels.has(normalizeLabelName(name)));
 }
 
 export function isWithinReportWindow(dateValue, reportWindow) {

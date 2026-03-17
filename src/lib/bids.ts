@@ -1,4 +1,5 @@
-import type { Bid, Crew, Game } from "../types";
+import { findDuplicateRosterOfficialIds } from "./crewRosters";
+import type { Bid, Crew, CrewRosterOfficial, Game } from "../types";
 
 export function requiresCrewBidForGame(game: Pick<Game, "level">): boolean {
   return game.level === "Varsity";
@@ -47,25 +48,46 @@ export function getBidEligibleCrews(crews: Crew[], userId: string): Crew[] {
   return crews.filter((crew) => canBidWithCrew(crew, userId));
 }
 
+export function getBidCrewId(bid: Pick<Bid, "baseCrewId" | "crewId">): string | null {
+  return bid.baseCrewId?.trim() || bid.crewId?.trim() || null;
+}
+
+export function isBidEditableByOfficial(
+  bid: Pick<Bid, "bidderType" | "officialUid" | "baseCrewId" | "crewId">,
+  userId: string,
+  eligibleCrewIds: Iterable<string>
+): boolean {
+  if (bid.bidderType === "crew") {
+    const bidCrewId = getBidCrewId(bid);
+    return Boolean(bidCrewId && new Set(eligibleCrewIds).has(bidCrewId));
+  }
+
+  return bid.officialUid === userId;
+}
+
 export function findActiveBid(input: {
   bidderType: "individual" | "crew";
   existingBids: Bid[];
   selectedCrewId: string;
   singleBidMode: boolean;
 }): Bid | null {
+  const sortNewestFirst = (left: Bid, right: Bid) =>
+    right.createdAtISO.localeCompare(left.createdAtISO);
+
   const individualBid =
-    input.existingBids.find((bid) => !bid.bidderType || bid.bidderType === "individual") ?? null;
+    [...input.existingBids]
+      .filter((bid) => !bid.bidderType || bid.bidderType === "individual")
+      .sort(sortNewestFirst)[0] ?? null;
 
   const crewBidsByCrewId = new Map<string, Bid>();
-  input.existingBids.forEach((bid) => {
-    if (bid.bidderType === "crew" && bid.crewId && !crewBidsByCrewId.has(bid.crewId)) {
-      crewBidsByCrewId.set(bid.crewId, bid);
+  [...input.existingBids].sort(sortNewestFirst).forEach((bid) => {
+    const crewId = getBidCrewId(bid);
+    if (bid.bidderType === "crew" && crewId && !crewBidsByCrewId.has(crewId)) {
+      crewBidsByCrewId.set(crewId, bid);
     }
   });
 
-  const latestExistingBid =
-    [...input.existingBids].sort((a, b) => b.createdAtISO.localeCompare(a.createdAtISO))[0] ??
-    null;
+  const latestExistingBid = [...input.existingBids].sort(sortNewestFirst)[0] ?? null;
 
   if (input.singleBidMode) {
     return latestExistingBid;
@@ -101,12 +123,15 @@ export function buildBidSubmission(input: {
   message: string;
   activeBid: Bid | null;
   availableCrews: Crew[];
+  proposedRoster?: CrewRosterOfficial[];
   requiresCrewBid?: boolean;
 }): {
   officialName: string;
   bidderType: "individual" | "crew";
   crewId?: string;
+  baseCrewId?: string;
   crewName?: string;
+  proposedRoster?: CrewRosterOfficial[];
   amount: number;
   message?: string;
 } {
@@ -133,6 +158,18 @@ export function buildBidSubmission(input: {
     throw new Error("Select a crew to submit a crew bid.");
   }
 
+  if (input.bidderType === "crew") {
+    const proposedRoster = input.proposedRoster ?? [];
+    if (proposedRoster.length === 0) {
+      throw new Error("Crew bids must include at least one official in the game roster.");
+    }
+
+    const duplicateRosterOfficialIds = findDuplicateRosterOfficialIds(proposedRoster);
+    if (duplicateRosterOfficialIds.length > 0) {
+      throw new Error("Roster contains duplicate officials.");
+    }
+  }
+
   if (input.activeBid && numericAmount <= input.activeBid.amount) {
     throw new Error("New offer must be higher than your current bid.");
   }
@@ -146,7 +183,9 @@ export function buildBidSubmission(input: {
     officialName: trimmedName,
     bidderType: input.bidderType,
     crewId: input.bidderType === "crew" ? input.selectedCrewId : undefined,
+    baseCrewId: input.bidderType === "crew" ? input.selectedCrewId : undefined,
     crewName: input.bidderType === "crew" ? activeCrew?.name : undefined,
+    proposedRoster: input.bidderType === "crew" ? input.proposedRoster : undefined,
     amount: numericAmount,
     message: input.message.trim() || undefined
   };

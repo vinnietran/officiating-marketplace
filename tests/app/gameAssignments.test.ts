@@ -20,6 +20,7 @@ const crew: Crew = {
   createdAtISO: "2026-03-01T00:00:00.000Z",
   crewChiefUid: "o1",
   crewChiefName: "Alex Zebra",
+  refereeOfficialId: "o1",
   memberUids: ["o1", "o2"],
   members: [
     { uid: "o1", name: "Alex Zebra", email: "alex@example.com" },
@@ -56,7 +57,24 @@ const marketplaceGame: Game = {
   ...directGame,
   mode: "marketplace",
   directAssignments: undefined,
-  selectedBidId: "bid-1"
+  selectedBidId: "bid-1",
+  awardedCrewId: "crew-1",
+  assignedOfficials: [
+    {
+      officialUid: "o1",
+      officialName: "Alex Zebra",
+      role: "R",
+      source: "baseCrew",
+      baseCrewMember: true
+    },
+    {
+      officialUid: "o9",
+      officialName: "Taylor Alternate",
+      role: "U",
+      source: "alternate",
+      baseCrewMember: false
+    }
+  ]
 };
 
 const selectedBid: Bid = {
@@ -66,7 +84,24 @@ const selectedBid: Bid = {
   officialName: "Alex Zebra",
   bidderType: "crew",
   crewId: "crew-1",
+  baseCrewId: "crew-1",
   crewName: "Metro Crew",
+  proposedRoster: [
+    {
+      officialUid: "o1",
+      officialName: "Alex Zebra",
+      role: "R",
+      source: "baseCrew",
+      baseCrewMember: true
+    },
+    {
+      officialUid: "o9",
+      officialName: "Taylor Alternate",
+      role: "U",
+      source: "alternate",
+      baseCrewMember: false
+    }
+  ],
   amount: 140,
   createdAtISO: "2026-03-10T00:00:00.000Z"
 };
@@ -75,7 +110,7 @@ test("assignment helpers identify direct and awarded marketplace assignments", (
   const crewsById = new Map([[crew.id, crew]]);
   assert.equal(isOfficialAssignedToDirectGame(directGame, "o2"), true);
   assert.equal(
-    isOfficialAssignedToAwardedMarketplaceGame(selectedBid, crewsById, "o2"),
+    isOfficialAssignedToAwardedMarketplaceGame(selectedBid, crewsById, "o9"),
     true
   );
   assert.equal(
@@ -102,11 +137,10 @@ test("getOfficialAssignmentDetails resolves crew and position information", () =
   );
 
   assert.deepEqual(
-    getOfficialAssignmentDetails(marketplaceGame, selectedBid, crewsById, "o1"),
+    getOfficialAssignmentDetails(marketplaceGame, selectedBid, crewsById, "o9"),
     {
       crewLabel: "Metro Crew",
-      positionLabel: "Referee (R)"
+      positionLabel: "Umpire (U)"
     }
   );
 });
-

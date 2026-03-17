@@ -1,4 +1,5 @@
 import type { Bid, Crew, FootballPosition, Game } from "../types";
+import { getAssignedOfficialPosition } from "./crewRosters";
 
 const FOOTBALL_POSITION_LABELS: Record<FootballPosition, string> = {
   R: "Referee",
@@ -19,6 +20,10 @@ export function isOfficialAssignedToDirectGame(game: Game, officialUid: string):
     return false;
   }
 
+  if (game.assignedOfficials?.length) {
+    return game.assignedOfficials.some((official) => official.officialUid === officialUid);
+  }
+
   return (game.directAssignments ?? []).some((assignment) => {
     if (assignment.assignmentType === "individual") {
       return assignment.officialUid === officialUid;
@@ -36,15 +41,23 @@ export function isOfficialAssignedToAwardedMarketplaceGame(
     return false;
   }
 
-  if (selectedBid.officialUid === officialUid) {
+  if (selectedBid.bidderType !== "crew" && selectedBid.officialUid === officialUid) {
     return true;
   }
 
-  if (selectedBid.bidderType !== "crew" || !selectedBid.crewId) {
+  if (selectedBid.bidderType === "crew" && selectedBid.proposedRoster?.length) {
+    return selectedBid.proposedRoster.some((official) => official.officialUid === officialUid);
+  }
+
+  if (selectedBid.bidderType !== "crew") {
     return false;
   }
 
-  const awardedCrew = crewsById.get(selectedBid.crewId);
+  const awardedCrewId = selectedBid.baseCrewId ?? selectedBid.crewId;
+  if (!awardedCrewId) {
+    return false;
+  }
+  const awardedCrew = crewsById.get(awardedCrewId);
   if (!awardedCrew) {
     return false;
   }
@@ -92,6 +105,18 @@ export function getOfficialAssignmentDetails(
   crewsById: Map<string, Crew>,
   officialUid: string
 ): { crewLabel: string; positionLabel: string } {
+  if (game.assignedOfficials?.length) {
+    const assignedOfficial = game.assignedOfficials.find(
+      (candidate) => candidate.officialUid === officialUid
+    );
+    if (assignedOfficial) {
+      return {
+        crewLabel: game.awardedCrewId ? selectedBid?.crewName ?? "Crew" : "Individual",
+        positionLabel: toPositionLabel(assignedOfficial.role)
+      };
+    }
+  }
+
   if (game.mode === "direct_assignment") {
     const assignment = (game.directAssignments ?? []).find((candidate) => {
       if (candidate.assignmentType === "individual") {
@@ -120,10 +145,15 @@ export function getOfficialAssignmentDetails(
     return { crewLabel: "Assigned", positionLabel: "Unassigned" };
   }
   if (selectedBid.bidderType === "crew") {
-    const awardedCrew = selectedBid.crewId ? crewsById.get(selectedBid.crewId) : null;
+    const awardedCrewId = selectedBid.baseCrewId ?? selectedBid.crewId;
     return {
       crewLabel: selectedBid.crewName ?? "Crew",
-      positionLabel: toPositionLabel(awardedCrew?.memberPositions?.[officialUid])
+      positionLabel: toPositionLabel(
+        getAssignedOfficialPosition(game, selectedBid, officialUid) ??
+          (awardedCrewId
+            ? crewsById.get(awardedCrewId)?.memberPositions?.[officialUid]
+            : undefined)
+      )
     };
   }
   return { crewLabel: "Individual", positionLabel: "Unassigned" };

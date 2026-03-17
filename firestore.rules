@@ -201,44 +201,12 @@ service cloud.firestore {
 
     match /games/{gameId} {
       allow read: if signedIn();
-
-      allow create: if canManageGames()
-        && request.resource.data.createdByUid == request.auth.uid
-        && (request.resource.data.createdByRole == "assignor" || request.resource.data.createdByRole == "school")
-        && (request.resource.data.status == "open" || request.resource.data.status == "awarded");
-
-      allow update: if canManageGames()
-        && resource.data.createdByUid == request.auth.uid;
-
-      allow delete: if canManageGames()
-        && resource.data.createdByUid == request.auth.uid;
+      allow create, update, delete: if false;
     }
 
     match /bids/{bidId} {
       allow read: if signedIn();
-
-      allow create: if hasRole("official")
-        && request.resource.data.officialUid == request.auth.uid
-        && request.resource.data.createdByOfficialId == request.auth.uid
-        && gameExists(request.resource.data.gameId)
-        && gameOpenForBidding(request.resource.data.gameId)
-        && bidMatchesGameLevelPolicy(request.resource.data.gameId)
-        && crewBidSubmittedByMember();
-
-      allow delete: if signedIn()
-        && (
-          resource.data.officialUid == request.auth.uid
-          || ownsGame(resource.data.gameId)
-        );
-
-      allow update: if signedIn()
-        && resource.data.officialUid == request.auth.uid
-        && request.resource.data.officialUid == resource.data.officialUid
-        && request.resource.data.createdByOfficialId == request.auth.uid
-        && request.resource.data.gameId == resource.data.gameId
-        && gameOpenForBidding(resource.data.gameId)
-        && bidMatchesGameLevelPolicy(resource.data.gameId)
-        && crewBidSubmittedByMember();
+      allow create, update, delete: if false;
     }
 
     match /ratings/{ratingId} {

@@ -21,6 +21,7 @@ import {
   subscribeCrews,
   subscribeBids,
   subscribeGames,
+  subscribeOfficialProfiles,
   updateBid,
   updateGame
 } from "../lib/firestore";
@@ -31,6 +32,7 @@ import {
   findActiveBid,
   getBidEligibleCrews,
   getCrewMemberCrews,
+  isBidEditableByOfficial,
   requiresCrewBidForGame
 } from "../lib/bids";
 import {
@@ -123,6 +125,7 @@ export function Marketplace() {
   const [games, setGames] = useState<Game[]>([]);
   const [bids, setBids] = useState<Bid[]>([]);
   const [crews, setCrews] = useState<Crew[]>([]);
+  const [officialProfiles, setOfficialProfiles] = useState<UserProfile[]>([]);
   const [freshOfficialProfile, setFreshOfficialProfile] = useState<UserProfile | null>(null);
   const [distanceByGameId, setDistanceByGameId] = useState<Record<string, number | null>>({});
   const [dataError, setDataError] = useState<string | null>(null);
@@ -147,6 +150,7 @@ export function Marketplace() {
       setGames([]);
       setBids([]);
       setCrews([]);
+      setOfficialProfiles([]);
       setOfficialQuickFilter("all");
       return;
     }
@@ -160,11 +164,15 @@ export function Marketplace() {
     const unsubscribeCrews = subscribeCrews(setCrews, (error) =>
       setDataError(getReadableFirestoreError(error, FIRESTORE_DATABASE_ID))
     );
+    const unsubscribeOfficialProfiles = subscribeOfficialProfiles(setOfficialProfiles, (error) =>
+      setDataError(getReadableFirestoreError(error, FIRESTORE_DATABASE_ID))
+    );
 
     return () => {
       unsubscribeGames();
       unsubscribeBids();
       unsubscribeCrews();
+      unsubscribeOfficialProfiles();
     };
   }, [user]);
 
@@ -913,7 +921,9 @@ export function Marketplace() {
       officialName: string;
       bidderType: "individual" | "crew";
       crewId?: string;
+      baseCrewId?: string;
       crewName?: string;
+      proposedRoster?: Bid["proposedRoster"];
       amount: number;
       message?: string;
     }
@@ -949,7 +959,13 @@ export function Marketplace() {
 
     const latestOfficialBid = findActiveBid({
       bidderType: input.bidderType,
-      existingBids: gameBids.filter((bid) => bid.officialUid === activeUser.uid),
+      existingBids: gameBids.filter((bid) =>
+        isBidEditableByOfficial(
+          bid,
+          activeUser.uid,
+          officialCrews.map((crew) => crew.id)
+        )
+      ),
       selectedCrewId: selectedCrew?.id ?? "",
       singleBidMode: false
     });
@@ -963,7 +979,9 @@ export function Marketplace() {
         officialName: input.officialName,
         bidderType: input.bidderType,
         crewId: selectedCrew?.id,
+        baseCrewId: selectedCrew?.id,
         crewName: selectedCrew?.name,
+        proposedRoster: input.proposedRoster,
         amount: input.amount,
         message: input.message
       });
@@ -980,7 +998,9 @@ export function Marketplace() {
       officialName: input.officialName,
       bidderType: input.bidderType,
       crewId: selectedCrew?.id,
+      baseCrewId: selectedCrew?.id,
       crewName: selectedCrew?.name,
+      proposedRoster: input.proposedRoster,
       amount: input.amount,
       message: input.message
     });
@@ -1322,6 +1342,7 @@ export function Marketplace() {
                   currentUserId={activeUser.uid}
                   currentUserName={activeProfile.displayName}
                   availableCrews={officialCrews}
+                  availableOfficials={officialProfiles}
                   crewBidUnavailableReason={crewBidUnavailableReason}
                   userDistanceMiles={
                     activeProfile.role === "official"

@@ -1105,6 +1105,77 @@ button:disabled {
   margin: 0 0 10px;
 }
 
+.bid-form-grid {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+}
+
+.bid-form-grid + .bid-form-grid {
+  margin-top: 10px;
+}
+
+.bid-form-grid-full {
+  grid-column: 1 / -1;
+}
+
+.bid-form-guide {
+  margin-bottom: 12px;
+  border: 1px solid #d9e1ec;
+  border-radius: 10px;
+  background: #f4f8ff;
+  overflow: hidden;
+}
+
+.bid-form-guide-summary {
+  list-style: none;
+  cursor: pointer;
+  padding: 10px 14px;
+  color: #1e3a8a;
+  font-size: 0.92rem;
+  font-weight: 700;
+}
+
+.bid-form-guide-summary::-webkit-details-marker {
+  display: none;
+}
+
+.bid-form-guide[open] .bid-form-guide-summary {
+  border-bottom: 1px solid #d9e1ec;
+}
+
+.bid-form-guide-list {
+  margin: 0;
+  padding: 10px 14px 12px 32px;
+  color: #41506a;
+  font-size: 0.9rem;
+}
+
+.bid-form-guide-list li + li {
+  margin-top: 6px;
+}
+
+.bid-roster-header {
+  display: grid;
+  gap: 2px;
+  margin-bottom: 10px;
+}
+
+.bid-roster-title {
+  margin: 0;
+  color: #111827;
+  font-size: 0.95rem;
+  font-weight: 700;
+}
+
+.bid-roster-editor {
+  margin: 12px 0;
+  border: 1px solid #d9e1ec;
+  border-radius: 10px;
+  padding: 12px;
+  background: #fbfcfe;
+}
+
 .bid-form-actions {
   margin-top: 10px;
   display: flex;
@@ -1487,22 +1558,23 @@ button:disabled {
   padding: 0;
   display: grid;
   gap: 8px;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
 }
 
 .crew-member-item {
   border: 1px solid #e4e9f0;
   border-radius: 8px;
-  padding: 10px;
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  gap: 10px;
+  padding: 10px 12px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 10px 12px;
 }
 
 .crew-position-control {
   display: grid;
   gap: 4px;
-  margin-top: 8px;
+  margin-top: 6px;
   font-size: 0.86rem;
 }
 
@@ -2007,6 +2079,137 @@ a {
 .ui-select-item-indicator svg {
   width: 14px;
   height: 14px;
+}
+
+.ui-searchable-select {
+  position: relative;
+}
+
+.ui-searchable-select-trigger {
+  text-align: left;
+}
+
+.ui-searchable-select-placeholder {
+  color: var(--muted);
+}
+
+.ui-searchable-select-content {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 0;
+  right: 0;
+  overflow: hidden;
+  border-radius: 14px;
+  border: 1px solid rgba(15, 23, 42, 0.1);
+  background: #ffffff;
+  box-shadow: 0 18px 38px rgba(15, 23, 42, 0.12);
+  z-index: 220;
+  animation: menu-pop 0.16s ease;
+}
+
+.ui-searchable-select-search {
+  padding: 8px;
+  border-bottom: 1px solid rgba(15, 23, 42, 0.08);
+}
+
+.ui-searchable-select-search input {
+  width: 100%;
+  min-height: 38px;
+  border: 1px solid rgba(15, 23, 42, 0.12);
+  border-radius: 10px;
+  padding: 0 12px;
+  background: #f8fafc;
+  color: var(--ink);
+  font: inherit;
+  font-size: 0.95rem;
+}
+
+.ui-searchable-select-search input:focus {
+  outline: none;
+  border-color: rgba(15, 76, 207, 0.3);
+  box-shadow: 0 0 0 3px rgba(15, 76, 207, 0.08);
+}
+
+.ui-searchable-select-list {
+  max-height: 240px;
+  overflow-y: auto;
+  padding: 0;
+}
+
+.ui-searchable-select-item {
+  width: 100%;
+  min-height: 0;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 16px;
+  border: 0;
+  border-radius: 0;
+  border-bottom: 1px solid rgba(15, 23, 42, 0.06);
+  background: transparent;
+  color: var(--ink);
+  font: inherit;
+  font-weight: 400;
+  text-align: left;
+}
+
+.ui-searchable-select-item:hover,
+.ui-searchable-select-item[aria-selected="true"] {
+  background: rgba(241, 245, 249, 0.9);
+  color: var(--brand-strong);
+}
+
+.ui-searchable-select-item:focus-visible {
+  outline: none;
+  background: rgba(241, 245, 249, 0.9);
+  color: var(--brand-strong);
+}
+
+.ui-searchable-select-item:last-child {
+  border-bottom: 0;
+}
+
+.ui-searchable-select-item-label {
+  min-width: 0;
+  flex: 1;
+}
+
+.ui-searchable-select-option {
+  display: grid;
+  gap: 2px;
+}
+
+.ui-searchable-select-option-title {
+  color: var(--ink);
+  font-size: 0.98rem;
+  font-weight: 600;
+  line-height: 1.2;
+}
+
+.ui-searchable-select-option-meta {
+  color: var(--muted);
+  font-size: 0.86rem;
+  line-height: 1.2;
+}
+
+.ui-searchable-select-item-indicator {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--brand);
+  margin-top: 2px;
+}
+
+.ui-searchable-select-item-indicator svg {
+  width: 14px;
+  height: 14px;
+}
+
+.ui-searchable-select-empty {
+  padding: 16px 14px;
+  color: var(--muted);
+  font-size: 0.95rem;
 }
 
 .ui-section-header {

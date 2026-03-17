@@ -20,6 +20,7 @@ export type CrewOwnerRole = "official" | "assignor" | "school";
 export type BidderType = "individual" | "crew";
 export type GameMode = "marketplace" | "direct_assignment";
 export type RatingTargetType = "official" | "crew" | "school" | "venue";
+export type CrewRosterSource = "baseCrew" | "alternate";
 export type FootballPosition =
   | "R"
   | "U"
@@ -60,6 +61,15 @@ export interface CrewMember {
   uid: string;
   name: string;
   email: string;
+}
+
+export interface CrewRosterOfficial {
+  officialUid: string;
+  officialName: string;
+  officialEmail?: string;
+  role?: FootballPosition;
+  source: CrewRosterSource;
+  baseCrewMember: boolean;
 }
 
 export interface Crew {
@@ -114,6 +124,8 @@ export interface Game {
   mode?: GameMode;
   directAssignments?: GameAssignment[];
   selectedBidId?: string;
+  awardedCrewId?: string;
+  assignedOfficials?: CrewRosterOfficial[];
 }
 
 export interface Bid {
@@ -124,7 +136,9 @@ export interface Bid {
   officialName: string;
   bidderType?: BidderType;
   crewId?: string;
+  baseCrewId?: string;
   crewName?: string;
+  proposedRoster?: CrewRosterOfficial[];
   amount: number;
   message?: string;
   createdAtISO: string;

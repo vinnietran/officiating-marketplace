@@ -3,14 +3,14 @@ import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { BidForm } from "./BidForm";
 import { EditGameForm } from "./EditGameForm";
-import { requiresCrewBidForGame } from "../lib/bids";
+import { isBidEditableByOfficial, requiresCrewBidForGame } from "../lib/bids";
 import {
   formatCurrency,
   formatGameDate,
   getBidWindowInfo,
   getGameStatusLabel
 } from "../lib/format";
-import type { Bid, Crew, Game, UserRole } from "../types";
+import type { Bid, Crew, Game, UserProfile, UserRole } from "../types";
 
 interface GameCardProps {
   game: Game;
@@ -19,6 +19,7 @@ interface GameCardProps {
   currentUserId: string;
   currentUserName: string;
   availableCrews: Crew[];
+  availableOfficials: UserProfile[];
   crewBidUnavailableReason?: string | null;
   userDistanceMiles?: number | null;
   distanceUnavailableLabel?: string;
@@ -29,7 +30,9 @@ interface GameCardProps {
       officialName: string;
       bidderType: "individual" | "crew";
       crewId?: string;
+      baseCrewId?: string;
       crewName?: string;
+      proposedRoster?: Bid["proposedRoster"];
       amount: number;
       message?: string;
     }
@@ -58,6 +61,7 @@ export function GameCard({
   currentUserId,
   currentUserName,
   availableCrews,
+  availableOfficials,
   crewBidUnavailableReason,
   userDistanceMiles,
   distanceUnavailableLabel,
@@ -106,8 +110,15 @@ export function GameCard({
   const statusLabel = getGameStatusLabel(game.status, game.mode);
 
   const officialBidsForGame = useMemo(
-    () => allGameBids.filter((bid) => bid.officialUid === currentUserId),
-    [allGameBids, currentUserId]
+    () =>
+      allGameBids.filter((bid) =>
+        isBidEditableByOfficial(
+          bid,
+          currentUserId,
+          availableCrews.map((crew) => crew.id)
+        )
+      ),
+    [allGameBids, availableCrews, currentUserId]
   );
   const hasSubmittedBid = officialBidsForGame.length > 0;
 
@@ -210,7 +221,9 @@ export function GameCard({
     officialName: string;
     bidderType: "individual" | "crew";
     crewId?: string;
+    baseCrewId?: string;
     crewName?: string;
+    proposedRoster?: Bid["proposedRoster"];
     amount: number;
     message?: string;
   }) {
@@ -443,7 +456,9 @@ export function GameCard({
         <BidForm
           postedPay={game.payPosted}
           defaultOfficialName={currentUserName}
+          sport={game.sport}
           availableCrews={availableCrews}
+          availableOfficials={availableOfficials}
           existingBids={officialBidsForGame}
           singleBidMode
           forceCrewOnly={requiresCrewBid}
@@ -482,7 +497,11 @@ export function GameCard({
           ) : (
             <ul className="bid-list">
               {gameBids.map((bid) => {
-                const canDeleteBid = bid.officialUid === currentUserId;
+                const canDeleteBid = isBidEditableByOfficial(
+                  bid,
+                  currentUserId,
+                  availableCrews.map((crew) => crew.id)
+                );
 
                 return (
                   <li key={bid.id} className="bid-item">

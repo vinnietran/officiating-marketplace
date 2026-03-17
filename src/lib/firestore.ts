@@ -6,6 +6,7 @@ import type {
   Bid,
   Crew,
   CrewMember,
+  CrewRosterOfficial,
   Evaluation,
   FootballPosition,
   Game,
@@ -51,7 +52,9 @@ export interface NewBidInput {
   officialName: string;
   bidderType: "individual" | "crew";
   crewId?: string;
+  baseCrewId?: string;
   crewName?: string;
+  proposedRoster?: CrewRosterOfficial[];
   amount: number;
   message?: string;
 }
@@ -60,7 +63,9 @@ export interface UpdateBidInput {
   officialName: string;
   bidderType?: "individual" | "crew";
   crewId?: string;
+  baseCrewId?: string;
   crewName?: string;
+  proposedRoster?: CrewRosterOfficial[];
   amount: number;
   message?: string;
 }

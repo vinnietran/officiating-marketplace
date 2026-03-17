@@ -5,11 +5,19 @@ import {
   buildBidSubmission,
   findActiveBid,
   getBidEligibleCrews,
+  getBidCrewId,
   getCrewMemberCrews,
   getCrewRefereeOfficialId,
   getBidFormDefaults,
+  isBidEditableByOfficial,
   requiresCrewBidForGame
 } from "../../src/lib/bids";
+import {
+  findDuplicateRosterOfficialIds,
+  gamesOverlap,
+  getAvailableFootballPositionsForRoster,
+  getCrewDefaultRoster
+} from "../../src/lib/crewRosters";
 import type { Bid, Crew } from "../../src/types";
 
 const crews: Crew[] = [
@@ -65,6 +73,18 @@ const existingBids: Bid[] = [
     crewName: "Metro Crew",
     amount: 140,
     createdAtISO: "2026-03-11T10:00:00.000Z"
+  },
+  {
+    id: "bid-3",
+    gameId: "game-1",
+    officialUid: "o9",
+    officialName: "Legacy Referee",
+    bidderType: "crew",
+    crewId: "crew-2",
+    baseCrewId: "crew-2",
+    crewName: "River Crew",
+    amount: 145,
+    createdAtISO: "2026-03-12T10:00:00.000Z"
   }
 ];
 
@@ -83,10 +103,10 @@ test("findActiveBid selects the current individual, crew, or latest bid", () => 
     findActiveBid({
       bidderType: "crew",
       existingBids,
-      selectedCrewId: "crew-1",
+      selectedCrewId: "crew-2",
       singleBidMode: false
     })?.id,
-    "bid-2"
+    "bid-3"
   );
 
   assert.equal(
@@ -96,7 +116,7 @@ test("findActiveBid selects the current individual, crew, or latest bid", () => 
       selectedCrewId: "",
       singleBidMode: true
     })?.id,
-    "bid-2"
+    "bid-3"
   );
 });
 
@@ -112,6 +132,7 @@ test("getBidFormDefaults bumps the current offer when a bid already exists", () 
 });
 
 test("buildBidSubmission trims values and resolves crew metadata", () => {
+  const proposedRoster = getCrewDefaultRoster(crews[0]);
   const result = buildBidSubmission({
     officialName: " Alex Zebra ",
     bidderType: "crew",
@@ -119,14 +140,17 @@ test("buildBidSubmission trims values and resolves crew metadata", () => {
     amount: "150",
     message: " Ready to travel ",
     activeBid: existingBids[1],
-    availableCrews: crews
+    availableCrews: crews,
+    proposedRoster
   });
 
   assert.deepEqual(result, {
     officialName: "Alex Zebra",
     bidderType: "crew",
     crewId: "crew-1",
+    baseCrewId: "crew-1",
     crewName: "Metro Crew",
+    proposedRoster,
     amount: 150,
     message: "Ready to travel"
   });
@@ -207,4 +231,95 @@ test("crew bidding helpers identify varsity games, members, and referee-eligible
     ["crew-2"]
   );
   assert.deepEqual(getBidEligibleCrews(crews, "o9"), []);
+});
+
+test("crew bid helpers resolve crew identity and editable bids for current referees", () => {
+  assert.equal(getBidCrewId(existingBids[2]), "crew-2");
+  assert.equal(
+    isBidEditableByOfficial(existingBids[2], "o2", ["crew-2"]),
+    true
+  );
+  assert.equal(
+    isBidEditableByOfficial(existingBids[2], "o3", ["crew-2"]),
+    true
+  );
+  assert.equal(
+    isBidEditableByOfficial(existingBids[2], "o3", []),
+    false
+  );
+  assert.equal(
+    isBidEditableByOfficial(existingBids[0], "o1", []),
+    true
+  );
+});
+
+test("crew roster helpers initialize base rosters, catch duplicates, and detect overlap windows", () => {
+  const defaultRoster = getCrewDefaultRoster(crews[1]);
+  assert.deepEqual(
+    defaultRoster.map((official) => official.officialUid),
+    ["o2", "o3"]
+  );
+
+  assert.deepEqual(
+    findDuplicateRosterOfficialIds([
+      defaultRoster[0],
+      defaultRoster[0]
+    ]),
+    ["o2"]
+  );
+
+  assert.equal(
+    gamesOverlap(
+      { dateISO: "2026-03-20T18:00:00.000Z" },
+      { dateISO: "2026-03-20T19:30:00.000Z" }
+    ),
+    true
+  );
+  assert.equal(
+    gamesOverlap(
+      { dateISO: "2026-03-20T18:00:00.000Z" },
+      { dateISO: "2026-03-21T00:30:00.000Z" }
+    ),
+    false
+  );
+
+  const rosterWithAssignedPositions = [
+    {
+      officialUid: "o2",
+      officialName: "Sam Blue",
+      role: "R" as const,
+      source: "baseCrew" as const,
+      baseCrewMember: true
+    },
+    {
+      officialUid: "o3",
+      officialName: "Jamie Red",
+      role: "U" as const,
+      source: "baseCrew" as const,
+      baseCrewMember: true
+    },
+    {
+      officialUid: "o4",
+      officialName: "Taylor Alt",
+      source: "alternate" as const,
+      baseCrewMember: false
+    }
+  ];
+
+  assert.equal(
+    getAvailableFootballPositionsForRoster(rosterWithAssignedPositions, "o4").includes("R"),
+    false
+  );
+  assert.equal(
+    getAvailableFootballPositionsForRoster(rosterWithAssignedPositions, "o4").includes("U"),
+    false
+  );
+  assert.equal(
+    getAvailableFootballPositionsForRoster(rosterWithAssignedPositions, "o4").includes("C"),
+    true
+  );
+  assert.equal(
+    getAvailableFootballPositionsForRoster(rosterWithAssignedPositions, "o2").includes("R"),
+    true
+  );
 });

@@ -247,6 +247,39 @@ function getRefereeOfficialIdFromMemberPositions(memberPositions) {
   return refereeEntries.length === 1 ? refereeEntries[0][0] : "";
 }
 
+function normalizeRosterOfficial(rawOfficial) {
+  assert(rawOfficial && typeof rawOfficial === "object", "invalid-argument", "Roster official is required.");
+  const officialUid = trimString(rawOfficial.officialUid || rawOfficial.officialId);
+  const officialName = trimString(rawOfficial.officialName);
+  const officialEmail = trimString(rawOfficial.officialEmail);
+  const role = trimString(rawOfficial.role);
+  const source = trimString(rawOfficial.source);
+
+  assert(officialUid, "invalid-argument", "Roster official uid is required.");
+  assert(officialName, "invalid-argument", "Roster official name is required.");
+  if (role) {
+    assert(FOOTBALL_POSITIONS.has(role), "invalid-argument", "Invalid roster role.");
+  }
+  assert(
+    !source || source === "baseCrew" || source === "alternate",
+    "invalid-argument",
+    "Roster source must be baseCrew or alternate."
+  );
+
+  return {
+    officialUid,
+    officialName,
+    ...(officialEmail ? { officialEmail } : {}),
+    ...(role ? { role } : {}),
+    source: source === "alternate" ? "alternate" : "baseCrew",
+    baseCrewMember: Boolean(rawOfficial.baseCrewMember)
+  };
+}
+
+function normalizeStoredRoster(rawRoster) {
+  return Array.isArray(rawRoster) ? rawRoster.map(normalizeRosterOfficial) : [];
+}
+
 function normalizeGameAssignment(assignment) {
   assert(assignment && typeof assignment === "object", "invalid-argument", "Assignment is required.");
   const assignmentType = trimString(assignment.assignmentType);
@@ -298,7 +331,9 @@ function normalizeGameDocument(id, data) {
     status: trimString(data.status),
     mode: trimString(data.mode) || undefined,
     directAssignments: Array.isArray(data.directAssignments) ? data.directAssignments : undefined,
-    selectedBidId: trimString(data.selectedBidId) || undefined
+    selectedBidId: trimString(data.selectedBidId) || undefined,
+    awardedCrewId: trimString(data.awardedCrewId) || undefined,
+    assignedOfficials: normalizeStoredRoster(data.assignedOfficials)
   };
 }
 
@@ -311,7 +346,9 @@ function normalizeBidDocument(id, data) {
     officialName: trimString(data.officialName),
     bidderType: trimString(data.bidderType) || undefined,
     crewId: trimString(data.crewId) || undefined,
+    baseCrewId: trimString(data.baseCrewId) || undefined,
     crewName: trimString(data.crewName) || undefined,
+    proposedRoster: normalizeStoredRoster(data.proposedRoster),
     amount: typeof data.amount === "number" ? data.amount : 0,
     message: trimString(data.message) || undefined,
     createdAtISO: trimString(data.createdAtISO)
@@ -427,6 +464,17 @@ function getCrewRefereeOfficialId(crew) {
   return trimString(crew.refereeOfficialId) || getRefereeOfficialIdFromMemberPositions(crew.memberPositions);
 }
 
+function buildDefaultCrewRoster(crew) {
+  return crew.members.map((member) => ({
+    officialUid: member.uid,
+    officialName: member.name,
+    officialEmail: member.email,
+    ...(crew.memberPositions[member.uid] ? { role: crew.memberPositions[member.uid] } : {}),
+    source: "baseCrew",
+    baseCrewMember: true
+  }));
+}
+
 async function getCrewById(crewId) {
   const snapshot = await db.collection(CREWS_COLLECTION).doc(crewId).get();
   assert(snapshot.exists, "not-found", "Crew not found.");
@@ -445,12 +493,226 @@ async function getBidById(bidId) {
   return normalizeBidDocument(snapshot.id, snapshot.data());
 }
 
+async function getOfficialProfilesByUids(uids) {
+  const uniqueUids = Array.from(new Set(uids.map((uid) => trimString(uid)).filter(Boolean)));
+  const snapshots = await Promise.all(
+    uniqueUids.map((uid) => db.collection(USER_PROFILES_COLLECTION).doc(uid).get())
+  );
+  const profilesByUid = new Map();
+
+  snapshots.forEach((snapshot, index) => {
+    const uid = uniqueUids[index];
+    assert(snapshot.exists, "invalid-argument", `Official profile not found for ${uid}.`);
+    const profile = normalizeUserProfile(snapshot.id, snapshot.data());
+    assert(profile && profile.role === "official", "invalid-argument", `Official profile not found for ${uid}.`);
+    profilesByUid.set(uid, profile);
+  });
+
+  return profilesByUid;
+}
+
+async function normalizeProposedRoster(rawRoster, crew) {
+  const inputRoster = Array.isArray(rawRoster) ? rawRoster : buildDefaultCrewRoster(crew);
+  const normalizedInputRoster = inputRoster.map(normalizeRosterOfficial);
+  assert(normalizedInputRoster.length > 0, "invalid-argument", "Crew bids must include at least one roster official.");
+
+  assertNoDuplicateRosterOfficials(normalizedInputRoster);
+
+  const officialProfilesByUid = await getOfficialProfilesByUids(
+    normalizedInputRoster.map((official) => official.officialUid)
+  );
+  const baseCrewMemberIds = new Set(crew.memberUids);
+
+  return normalizedInputRoster.map((official) => {
+    const officialProfile = officialProfilesByUid.get(official.officialUid);
+    return {
+      officialUid: official.officialUid,
+      officialName: officialProfile.displayName,
+      officialEmail: officialProfile.email,
+      ...(official.role ? { role: official.role } : {}),
+      source: baseCrewMemberIds.has(official.officialUid) ? "baseCrew" : "alternate",
+      baseCrewMember: baseCrewMemberIds.has(official.officialUid)
+    };
+  });
+}
+
+function assertNoDuplicateRosterOfficials(roster) {
+  const duplicateRosterEntries = Array.from(
+    roster.reduce((duplicates, rosterOfficial) => {
+      const nextCount = (duplicates.get(rosterOfficial.officialUid) ?? 0) + 1;
+      duplicates.set(rosterOfficial.officialUid, nextCount);
+      return duplicates;
+    }, new Map())
+  )
+    .filter(([, count]) => count > 1)
+    .map(([uid]) => uid);
+  assert(
+    duplicateRosterEntries.length === 0,
+    "invalid-argument",
+    "Roster contains duplicate officials."
+  );
+}
+
+function getGameWindow(game) {
+  const startMs = new Date(game.dateISO).getTime();
+  assert(!Number.isNaN(startMs), "failed-precondition", "Game has an invalid scheduled date.");
+  return {
+    startMs,
+    endMs: startMs + 180 * 60 * 1000
+  };
+}
+
+function gameWindowsOverlap(leftGame, rightGame) {
+  const leftWindow = getGameWindow(leftGame);
+  const rightWindow = getGameWindow(rightGame);
+  return leftWindow.startMs < rightWindow.endMs && rightWindow.startMs < leftWindow.endMs;
+}
+
+function buildAssignedOfficialsFromDirectAssignments(game, crewsById) {
+  return (game.directAssignments ?? []).flatMap((assignment) => {
+    if (assignment.assignmentType === "individual") {
+      return [
+        {
+          officialUid: assignment.officialUid,
+          officialName: assignment.officialName,
+          officialEmail: assignment.officialEmail,
+          ...(assignment.position ? { role: assignment.position } : {}),
+          source: "alternate",
+          baseCrewMember: false
+        }
+      ];
+    }
+
+    const assignedCrew = crewsById.get(assignment.crewId);
+    return assignment.memberUids.map((memberUid, index) => {
+      const matchingCrewMember = assignedCrew?.members.find((member) => member.uid === memberUid);
+      return {
+        officialUid: memberUid,
+        officialName: assignment.memberNames[index] || matchingCrewMember?.name || "Official",
+        ...(matchingCrewMember?.email ? { officialEmail: matchingCrewMember.email } : {}),
+        ...(assignedCrew?.memberPositions?.[memberUid]
+          ? { role: assignedCrew.memberPositions[memberUid] }
+          : {}),
+        source: "baseCrew",
+        baseCrewMember: true
+      };
+    });
+  });
+}
+
+function buildAssignedOfficialsFromBid(bid, crewsById) {
+  if (!bid) {
+    return [];
+  }
+
+  if (bid.bidderType !== "crew") {
+    return [
+      {
+        officialUid: bid.officialUid,
+        officialName: bid.officialName,
+        source: "alternate",
+        baseCrewMember: false
+      }
+    ];
+  }
+
+  if (bid.proposedRoster?.length) {
+    return bid.proposedRoster;
+  }
+
+  const awardedCrew = bid.crewId ? crewsById.get(bid.crewId) : null;
+  return awardedCrew ? buildDefaultCrewRoster(awardedCrew) : [];
+}
+
+async function checkRosterConflicts(input) {
+  const targetGame = input.game;
+  const rosterOfficialUids = Array.from(
+    new Set(input.roster.map((official) => trimString(official.officialUid)).filter(Boolean))
+  );
+
+  if (rosterOfficialUids.length === 0) {
+    return { hasConflict: false, conflicts: [] };
+  }
+
+  const [gamesSnapshot, bidsSnapshot, crewsSnapshot] = await Promise.all([
+    db.collection(GAMES_COLLECTION).where("status", "==", "awarded").get(),
+    db.collection(BIDS_COLLECTION).get(),
+    db.collection(CREWS_COLLECTION).get()
+  ]);
+  const bidsById = new Map(
+    bidsSnapshot.docs.map((doc) => {
+      const bid = normalizeBidDocument(doc.id, doc.data());
+      return [bid.id, bid];
+    })
+  );
+  const crewsById = new Map(
+    crewsSnapshot.docs.map((doc) => {
+      const crew = normalizeCrewDocument(doc.id, doc.data());
+      return [crew.id, crew];
+    })
+  );
+
+  const conflicts = [];
+  gamesSnapshot.docs.forEach((doc) => {
+    const otherGame = normalizeGameDocument(doc.id, doc.data());
+    if (otherGame.id === input.ignoreGameId) {
+      return;
+    }
+    if (!gameWindowsOverlap(targetGame, otherGame)) {
+      return;
+    }
+
+    const otherAssignedOfficials =
+      otherGame.assignedOfficials?.length
+        ? otherGame.assignedOfficials
+        : otherGame.mode === "direct_assignment"
+          ? buildAssignedOfficialsFromDirectAssignments(otherGame, crewsById)
+          : buildAssignedOfficialsFromBid(
+              otherGame.selectedBidId ? bidsById.get(otherGame.selectedBidId) ?? null : null,
+              crewsById
+            );
+
+    otherAssignedOfficials.forEach((assignedOfficial) => {
+      if (!rosterOfficialUids.includes(assignedOfficial.officialUid)) {
+        return;
+      }
+
+      const otherWindow = getGameWindow(otherGame);
+      conflicts.push({
+        officialUid: assignedOfficial.officialUid,
+        conflictingGameId: otherGame.id,
+        conflictingStartISO: new Date(otherWindow.startMs).toISOString(),
+        conflictingEndISO: new Date(otherWindow.endMs).toISOString()
+      });
+    });
+  });
+
+  return {
+    hasConflict: conflicts.length > 0,
+    conflicts
+  };
+}
+
 function canManageCrew(crew, uid) {
   return crew.createdByUid === uid || crew.crewChiefUid === uid;
 }
 
 function canBidWithCrew(crew, uid) {
   return getCrewRefereeOfficialId(crew) === uid;
+}
+
+async function canEditExistingBid(bid, uid) {
+  if (!bid || bid.bidderType !== "crew") {
+    return Boolean(bid && bid.officialUid === uid);
+  }
+
+  const crewId = trimString(bid.baseCrewId) || trimString(bid.crewId);
+  if (!crewId) {
+    return false;
+  }
+
+  const crew = await getCrewById(crewId);
+  return canBidWithCrew(crew, uid);
 }
 
 exports.createUserProfile = onClientCall(async (request) => {
@@ -678,6 +940,27 @@ exports.createAssignedGame = onClientCall(async (request) => {
   assert(directAssignmentsInput.length > 0, "invalid-argument", "At least one direct assignment is required.");
 
   const directAssignments = directAssignmentsInput.map(normalizeGameAssignment);
+  const crewsSnapshot = await db.collection(CREWS_COLLECTION).get();
+  const crewsById = new Map(
+    crewsSnapshot.docs.map((doc) => {
+      const crew = normalizeCrewDocument(doc.id, doc.data());
+      return [crew.id, crew];
+    })
+  );
+  const assignedOfficials = buildAssignedOfficialsFromDirectAssignments(
+    { directAssignments },
+    crewsById
+  );
+  assertNoDuplicateRosterOfficials(assignedOfficials);
+  const directAssignmentConflictCheck = await checkRosterConflicts({
+    game: { dateISO: input.dateISO },
+    roster: assignedOfficials
+  });
+  assert(
+    !directAssignmentConflictCheck.hasConflict,
+    "failed-precondition",
+    "One or more officials on this roster are already assigned to another overlapping game."
+  );
   const nowISO = new Date().toISOString();
   await db.collection(GAMES_COLLECTION).add({
     schoolName: input.schoolName,
@@ -694,6 +977,7 @@ exports.createAssignedGame = onClientCall(async (request) => {
     status: "awarded",
     mode: "direct_assignment",
     directAssignments,
+    assignedOfficials,
     ...(input.notes ? { notes: input.notes } : {})
   });
 
@@ -710,6 +994,47 @@ exports.updateGame = onClientCall(async (request) => {
   assert(existingGame.createdByUid === profile.uid, "permission-denied", "Only the game creator can update this game.");
 
   const input = validateNewGameInput(request.data && request.data.input, true);
+  if (existingGame.status === "awarded") {
+    const [bidsSnapshot, crewsSnapshot] = await Promise.all([
+      db.collection(BIDS_COLLECTION).get(),
+      db.collection(CREWS_COLLECTION).get()
+    ]);
+    const bidsById = new Map(
+      bidsSnapshot.docs.map((doc) => {
+        const bid = normalizeBidDocument(doc.id, doc.data());
+        return [bid.id, bid];
+      })
+    );
+    const crewsById = new Map(
+      crewsSnapshot.docs.map((doc) => {
+        const crew = normalizeCrewDocument(doc.id, doc.data());
+        return [crew.id, crew];
+      })
+    );
+    const assignedOfficials =
+      existingGame.assignedOfficials?.length
+        ? existingGame.assignedOfficials
+        : existingGame.mode === "direct_assignment"
+          ? buildAssignedOfficialsFromDirectAssignments(existingGame, crewsById)
+          : buildAssignedOfficialsFromBid(
+              existingGame.selectedBidId
+                ? bidsById.get(existingGame.selectedBidId) ?? null
+                : null,
+              crewsById
+            );
+    if (assignedOfficials.length > 0) {
+      const awardedConflictCheck = await checkRosterConflicts({
+        game: { dateISO: input.dateISO },
+        roster: assignedOfficials,
+        ignoreGameId: gameId
+      });
+      assert(
+        !awardedConflictCheck.hasConflict,
+        "failed-precondition",
+        "One or more assigned officials would conflict with another overlapping game."
+      );
+    }
+  }
   await db.collection(GAMES_COLLECTION).doc(gameId).update({
     schoolName: input.schoolName,
     sport: input.sport,
@@ -735,6 +1060,7 @@ exports.createBid = onClientCall(async (request) => {
   const bidderType = trimString(input.bidderType) || "individual";
   const message = trimString(input.message);
   const crewId = trimString(input.crewId);
+  const baseCrewId = trimString(input.baseCrewId) || crewId;
   assert(gameId, "invalid-argument", "gameId is required.");
   assert(BIDDER_TYPES.has(bidderType), "invalid-argument", "Invalid bidder type.");
   assert(typeof input.amount === "number" && Number.isFinite(input.amount), "invalid-argument", "Bid amount must be a number.");
@@ -749,15 +1075,26 @@ exports.createBid = onClientCall(async (request) => {
   );
 
   let crewName;
+  let proposedRoster;
   if (bidderType === "crew") {
-    assert(crewId, "invalid-argument", "crewId is required for crew bids.");
-    const crew = await getCrewById(crewId);
+    assert(baseCrewId, "invalid-argument", "baseCrewId is required for crew bids.");
+    const crew = await getCrewById(baseCrewId);
     assert(
       canBidWithCrew(crew, profile.uid),
       "permission-denied",
       "Only the Referee for this crew can place a crew bid."
     );
     crewName = crew.name;
+    proposedRoster = await normalizeProposedRoster(input.proposedRoster, crew);
+    const rosterConflictCheck = await checkRosterConflicts({
+      game,
+      roster: proposedRoster
+    });
+    assert(
+      !rosterConflictCheck.hasConflict,
+      "failed-precondition",
+      "One or more officials on this roster are already assigned to another overlapping game."
+    );
   }
 
   await db.collection(BIDS_COLLECTION).add({
@@ -768,7 +1105,14 @@ exports.createBid = onClientCall(async (request) => {
     bidderType,
     amount: input.amount,
     createdAtISO: new Date().toISOString(),
-    ...(bidderType === "crew" ? { crewId, crewName } : {}),
+    ...(bidderType === "crew"
+      ? {
+          crewId: baseCrewId,
+          baseCrewId,
+          crewName,
+          proposedRoster
+        }
+      : {}),
     ...(message ? { message } : {})
   });
 
@@ -785,13 +1129,20 @@ exports.updateBid = onClientCall(async (request) => {
   assert(input && typeof input === "object", "invalid-argument", "Bid update input is required.");
 
   const existingBid = await getBidById(bidId);
-  assert(existingBid.officialUid === profile.uid, "permission-denied", "You can only update your own bids.");
+  assert(
+    await canEditExistingBid(existingBid, profile.uid),
+    "permission-denied",
+    existingBid.bidderType === "crew"
+      ? "Only the Referee for this crew can update the crew bid."
+      : "You can only update your own bids."
+  );
 
   const game = await getGameById(existingBid.gameId);
   assert(!isBidWindowClosed(game), "failed-precondition", "This game is no longer accepting bid updates.");
 
   const bidderType = trimString(input.bidderType) || "individual";
   const crewId = trimString(input.crewId);
+  const baseCrewId = trimString(input.baseCrewId) || crewId || existingBid.baseCrewId || existingBid.crewId;
   const message = trimString(input.message);
   assert(BIDDER_TYPES.has(bidderType), "invalid-argument", "Invalid bidder type.");
   assert(typeof input.amount === "number" && Number.isFinite(input.amount), "invalid-argument", "Bid amount must be a number.");
@@ -803,15 +1154,26 @@ exports.updateBid = onClientCall(async (request) => {
   );
 
   let crewName;
+  let proposedRoster;
   if (bidderType === "crew") {
-    assert(crewId, "invalid-argument", "crewId is required for crew bids.");
-    const crew = await getCrewById(crewId);
+    assert(baseCrewId, "invalid-argument", "baseCrewId is required for crew bids.");
+    const crew = await getCrewById(baseCrewId);
     assert(
       canBidWithCrew(crew, profile.uid),
       "permission-denied",
       "Only the Referee for this crew can place a crew bid."
     );
     crewName = crew.name;
+    proposedRoster = await normalizeProposedRoster(input.proposedRoster, crew);
+    const rosterConflictCheck = await checkRosterConflicts({
+      game,
+      roster: proposedRoster
+    });
+    assert(
+      !rosterConflictCheck.hasConflict,
+      "failed-precondition",
+      "One or more officials on this roster are already assigned to another overlapping game."
+    );
   }
 
   await db.collection(BIDS_COLLECTION).doc(bidId).update({
@@ -820,8 +1182,10 @@ exports.updateBid = onClientCall(async (request) => {
     amount: input.amount,
     createdAtISO: new Date().toISOString(),
     bidderType,
-    crewId: bidderType === "crew" ? crewId : FieldValue.delete(),
+    crewId: bidderType === "crew" ? baseCrewId : FieldValue.delete(),
+    baseCrewId: bidderType === "crew" ? baseCrewId : FieldValue.delete(),
     crewName: bidderType === "crew" ? crewName : FieldValue.delete(),
+    proposedRoster: bidderType === "crew" ? proposedRoster : FieldValue.delete(),
     message: message || FieldValue.delete()
   });
 
@@ -835,7 +1199,13 @@ exports.deleteBid = onClientCall(async (request) => {
   const bidId = trimString(request.data && request.data.bidId);
   assert(bidId, "invalid-argument", "bidId is required.");
   const existingBid = await getBidById(bidId);
-  assert(existingBid.officialUid === profile.uid, "permission-denied", "You can only delete your own bids.");
+  assert(
+    await canEditExistingBid(existingBid, profile.uid),
+    "permission-denied",
+    existingBid.bidderType === "crew"
+      ? "Only the Referee for this crew can delete the crew bid."
+      : "You can only delete your own bids."
+  );
 
   await db.collection(BIDS_COLLECTION).doc(bidId).delete();
   return { ok: true };
@@ -1023,10 +1393,32 @@ exports.selectBid = onClientCall(async (request) => {
   assert(game.createdByUid === profile.uid, "permission-denied", "Only the game creator can award a bid.");
   const bid = await getBidById(bidId);
   assert(bid.gameId === gameId, "invalid-argument", "The selected bid does not belong to this game.");
+  const crewsSnapshot = await db.collection(CREWS_COLLECTION).get();
+  const crewsById = new Map(
+    crewsSnapshot.docs.map((doc) => {
+      const crew = normalizeCrewDocument(doc.id, doc.data());
+      return [crew.id, crew];
+    })
+  );
+  const assignedOfficials = buildAssignedOfficialsFromBid(bid, crewsById);
+  assert(assignedOfficials.length > 0, "failed-precondition", "The selected bid does not include a valid roster.");
+  assertNoDuplicateRosterOfficials(assignedOfficials);
+  const rosterConflictCheck = await checkRosterConflicts({
+    game,
+    roster: assignedOfficials,
+    ignoreGameId: gameId
+  });
+  assert(
+    !rosterConflictCheck.hasConflict,
+    "failed-precondition",
+    "One or more officials on this roster are already assigned to another overlapping game."
+  );
 
   await db.collection(GAMES_COLLECTION).doc(gameId).update({
     selectedBidId: bidId,
-    status: "awarded"
+    status: "awarded",
+    awardedCrewId: bid.bidderType === "crew" ? bid.baseCrewId || bid.crewId : FieldValue.delete(),
+    assignedOfficials
   });
   return { ok: true };
 });

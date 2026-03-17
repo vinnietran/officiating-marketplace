@@ -10,6 +10,7 @@ import {
   findActiveBid,
   getBidEligibleCrews,
   getCrewMemberCrews,
+  isBidEditableByOfficial,
   requiresCrewBidForGame
 } from "../lib/bids";
 import {
@@ -26,6 +27,7 @@ import {
   subscribeCrews,
   subscribeEvaluationsForGame,
   subscribeGames,
+  subscribeOfficialProfiles,
   subscribeRatingsForGame,
   updateBid,
   upsertGameEvaluation,
@@ -40,7 +42,8 @@ import type {
   FootballPosition,
   Game,
   Rating,
-  RatingTargetType
+  RatingTargetType,
+  UserProfile
 } from "../types";
 
 function getBidderLabel(bid: Bid): string {
@@ -131,6 +134,7 @@ export function ScheduleGameDetails() {
   const [games, setGames] = useState<Game[]>([]);
   const [bids, setBids] = useState<Bid[]>([]);
   const [crews, setCrews] = useState<Crew[]>([]);
+  const [officialProfiles, setOfficialProfiles] = useState<UserProfile[]>([]);
   const [ratings, setRatings] = useState<Rating[]>([]);
   const [evaluations, setEvaluations] = useState<Evaluation[]>([]);
   const [dataError, setDataError] = useState<string | null>(null);
@@ -167,6 +171,7 @@ export function ScheduleGameDetails() {
       setGames([]);
       setBids([]);
       setCrews([]);
+      setOfficialProfiles([]);
       setRatings([]);
       setEvaluations([]);
       return;
@@ -179,6 +184,9 @@ export function ScheduleGameDetails() {
       setDataError(getReadableFirestoreError(error, FIRESTORE_DATABASE_ID))
     );
     const unsubscribeCrews = subscribeCrews(setCrews, (error) =>
+      setDataError(getReadableFirestoreError(error, FIRESTORE_DATABASE_ID))
+    );
+    const unsubscribeOfficialProfiles = subscribeOfficialProfiles(setOfficialProfiles, (error) =>
       setDataError(getReadableFirestoreError(error, FIRESTORE_DATABASE_ID))
     );
     const unsubscribeRatings = gameId
@@ -196,6 +204,7 @@ export function ScheduleGameDetails() {
       unsubscribeGames();
       unsubscribeBids();
       unsubscribeCrews();
+      unsubscribeOfficialProfiles();
       unsubscribeRatings();
       unsubscribeEvaluations();
     };
@@ -225,8 +234,8 @@ export function ScheduleGameDetails() {
     return gameBids.find((bid) => bid.id === game.selectedBidId) ?? null;
   }, [game?.selectedBidId, gameBids]);
   const selectedBidCrew =
-    selectedBid?.bidderType === "crew" && selectedBid.crewId
-      ? crews.find((crew) => crew.id === selectedBid.crewId) ?? null
+    selectedBid?.bidderType === "crew" && (selectedBid.baseCrewId ?? selectedBid.crewId)
+      ? crews.find((crew) => crew.id === (selectedBid.baseCrewId ?? selectedBid.crewId)) ?? null
       : null;
   const activeUserId = user?.uid ?? "";
 
@@ -248,12 +257,29 @@ export function ScheduleGameDetails() {
     if (!user || profile?.role !== "official") {
       return [];
     }
-    return gameBids.filter((bid) => bid.officialUid === user.uid);
-  }, [gameBids, profile?.role, user]);
+    return gameBids.filter((bid) =>
+      isBidEditableByOfficial(
+        bid,
+        user.uid,
+        officialCrews.map((crew) => crew.id)
+      )
+    );
+  }, [gameBids, officialCrews, profile?.role, user]);
 
   const assignedIndividuals = useMemo<AssignedIndividual[]>(() => {
     if (!game || game.status !== "awarded") {
       return [];
+    }
+
+    if (game.assignedOfficials?.length) {
+      return [...game.assignedOfficials]
+        .map((official) => ({
+          uid: official.officialUid,
+          name: official.officialName,
+          crew: game.awardedCrewId ? selectedBid?.crewName ?? "Crew" : "Individual",
+          position: toPositionLabel(official.role)
+        }))
+        .sort((a, b) => a.name.localeCompare(b.name));
     }
 
     const assignedByKey = new Map<string, AssignedIndividual>();
@@ -294,7 +320,20 @@ export function ScheduleGameDetails() {
       return [];
     }
 
-    if (selectedBid.bidderType === "crew" && selectedBid.crewId) {
+    if (selectedBid.bidderType === "crew" && selectedBid.proposedRoster?.length) {
+      selectedBid.proposedRoster.forEach((official) => {
+        addAssignedIndividual({
+          uid: official.officialUid,
+          name: official.officialName,
+          crew: selectedBid.crewName ?? "Crew",
+          position: toPositionLabel(official.role)
+        });
+      });
+
+      return Array.from(assignedByKey.values()).sort((a, b) => a.name.localeCompare(b.name));
+    }
+
+    if (selectedBid.bidderType === "crew" && (selectedBid.baseCrewId ?? selectedBid.crewId)) {
       if (selectedBidCrew) {
         selectedBidCrew.members.forEach((member) => {
           addAssignedIndividual({
@@ -374,10 +413,10 @@ export function ScheduleGameDetails() {
       return [];
     }
 
-    if (selectedBid.bidderType === "crew" && selectedBid.crewId) {
+    if (selectedBid.bidderType === "crew" && (selectedBid.baseCrewId ?? selectedBid.crewId)) {
       addTarget({
         targetType: "crew",
-        targetId: selectedBid.crewId,
+        targetId: selectedBid.baseCrewId ?? selectedBid.crewId ?? "",
         targetName: selectedBid.crewName ?? "Crew",
         detail: selectedBidCrew
           ? `${selectedBidCrew.members.length} members`
@@ -641,7 +680,9 @@ export function ScheduleGameDetails() {
     officialName: string;
     bidderType: "individual" | "crew";
     crewId?: string;
+    baseCrewId?: string;
     crewName?: string;
+    proposedRoster?: Bid["proposedRoster"];
     amount: number;
     message?: string;
   }) {
@@ -671,7 +712,13 @@ export function ScheduleGameDetails() {
 
     const latestIdentityBid = findActiveBid({
       bidderType: input.bidderType,
-      existingBids: gameBids.filter((bid) => bid.officialUid === activeUser.uid),
+      existingBids: gameBids.filter((bid) =>
+        isBidEditableByOfficial(
+          bid,
+          activeUser.uid,
+          officialCrews.map((crew) => crew.id)
+        )
+      ),
       selectedCrewId: selectedCrew?.id ?? "",
       singleBidMode: false
     });
@@ -685,7 +732,9 @@ export function ScheduleGameDetails() {
         officialName: input.officialName,
         bidderType: input.bidderType,
         crewId: selectedCrew?.id,
+        baseCrewId: selectedCrew?.id,
         crewName: selectedCrew?.name,
+        proposedRoster: input.proposedRoster,
         amount: input.amount,
         message: input.message
       });
@@ -702,7 +751,9 @@ export function ScheduleGameDetails() {
       officialName: input.officialName,
       bidderType: input.bidderType,
       crewId: selectedCrew?.id,
+      baseCrewId: selectedCrew?.id,
       crewName: selectedCrew?.name,
+      proposedRoster: input.proposedRoster,
       amount: input.amount,
       message: input.message
     });
@@ -716,7 +767,9 @@ export function ScheduleGameDetails() {
     officialName: string;
     bidderType: "individual" | "crew";
     crewId?: string;
+    baseCrewId?: string;
     crewName?: string;
+    proposedRoster?: Bid["proposedRoster"];
     amount: number;
     message?: string;
   }) {
@@ -975,7 +1028,9 @@ export function ScheduleGameDetails() {
                 <BidForm
                   postedPay={activeGame.payPosted}
                   defaultOfficialName={activeProfile.displayName}
+                  sport={activeGame.sport}
                   availableCrews={officialCrews}
+                  availableOfficials={officialProfiles}
                   existingBids={officialBidsForGame}
                   forceCrewOnly={requiresCrewBid}
                   onSubmit={handleBidFormSubmit}

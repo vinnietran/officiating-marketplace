@@ -133,6 +133,7 @@ export function Marketplace() {
   const [modalMessage, setModalMessage] = useState<{
     title: string;
     message: string;
+    autoCloseMs?: number;
   } | null>(null);
   const deferredFilters = useDeferredValue(filters);
   const isOfficial = profile?.role === "official";
@@ -987,7 +988,8 @@ export function Marketplace() {
       });
       setModalMessage({
         title: "Offer Increased",
-        message: "Your bid was updated successfully."
+        message: "Your bid was updated successfully.",
+        autoCloseMs: 1800
       });
       return;
     }
@@ -1006,7 +1008,8 @@ export function Marketplace() {
     });
     setModalMessage({
       title: "Bid Submitted",
-      message: "Your bid was submitted successfully."
+      message: "Your bid was submitted successfully.",
+      autoCloseMs: 1800
     });
   }
 
@@ -1366,6 +1369,7 @@ export function Marketplace() {
         <MessageModal
           title={modalMessage.title}
           message={modalMessage.message}
+          autoCloseMs={modalMessage.autoCloseMs}
           onClose={() => setModalMessage(null)}
         />
       ) : null}

@@ -24,11 +24,20 @@ jobs:
       - name: Install root dependencies
         run: npm ci
 
+      - name: Install Playwright browser
+        run: npx playwright install --with-deps chromium
+
       - name: Install functions dependencies
         run: npm --prefix functions install
 
-      - name: Run tests
-        run: npm test
+      - name: Run app tests
+        run: npm run test:app
+
+      - name: Run weekly script tests
+        run: npm run test:weekly
+
+      - name: Run functional tests
+        run: npm run test:functional
 
       - name: Build web app
         run: npm run build
@@ -36,3 +45,18 @@ jobs:
       - name: Check functions source
         run: node --check functions/index.js
 
+      - name: Upload Playwright report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: playwright-report
+          if-no-files-found: ignore
+
+      - name: Upload Playwright test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-test-results
+          path: test-results
+          if-no-files-found: ignore

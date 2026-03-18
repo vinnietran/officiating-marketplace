@@ -1,6 +1,10 @@
 import { initializeApp } from "firebase/app";
-import { getAuth } from "firebase/auth";
-import { getFunctions, connectFunctionsEmulator } from "firebase/functions";
+import { getAuth, type Auth } from "firebase/auth";
+import {
+  getFunctions,
+  connectFunctionsEmulator,
+  type Functions
+} from "firebase/functions";
 import { getAnalytics, isSupported } from "firebase/analytics";
 
 const firebaseConfig = {
@@ -35,16 +39,21 @@ const functionsEmulatorPort =
 
 export const FIRESTORE_DATABASE_ID = configuredDatabaseId || "(default)";
 export const FIRESTORE_FALLBACK_DATABASE_ID = null;
+export const IS_E2E = import.meta.env.MODE === "e2e";
 
-export const firebaseApp = initializeApp(firebaseConfig);
-export const auth = getAuth(firebaseApp);
-export const functions = getFunctions(firebaseApp, functionsRegion);
+const firebaseAppInstance = initializeApp(firebaseConfig);
 
-if (useFunctionsEmulator) {
+export const firebaseApp = (IS_E2E ? undefined : firebaseAppInstance) as typeof firebaseAppInstance;
+export const auth = (IS_E2E ? undefined : getAuth(firebaseAppInstance)) as Auth;
+export const functions = (
+  IS_E2E ? undefined : getFunctions(firebaseAppInstance, functionsRegion)
+) as Functions;
+
+if (!IS_E2E && useFunctionsEmulator) {
   connectFunctionsEmulator(functions, functionsEmulatorHost, functionsEmulatorPort);
 }
 
-if (typeof window !== "undefined") {
+if (!IS_E2E && typeof window !== "undefined") {
   if (import.meta.env.DEV) {
     console.info(
       `[Firebase] project=${firebaseConfig.projectId}, firestoreDatabase=${FIRESTORE_DATABASE_ID}, functionsRegion=${functionsRegion}, functionsEmulator=${useFunctionsEmulator ? `${functionsEmulatorHost}:${functionsEmulatorPort}` : "off"}`

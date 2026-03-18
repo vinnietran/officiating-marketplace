@@ -1,7 +1,8 @@
 import { httpsCallable } from "firebase/functions";
 
-import { functions } from "./firebase";
+import { IS_E2E, functions } from "./firebase";
 import { getCoordinatesForAddress } from "./googlePlaces";
+import { e2eFirestore } from "../test-support/e2e/harness";
 import type {
   Bid,
   Crew,
@@ -117,6 +118,10 @@ async function callFunction<TResponse>(
   name: string,
   payload?: Record<string, unknown>
 ): Promise<TResponse> {
+  if (IS_E2E) {
+    throw new Error(`Direct function calls are unavailable in E2E mode (${name}).`);
+  }
+
   const callable = httpsCallable<Record<string, unknown>, TResponse>(functions, name);
   const response = await callable(payload ?? {});
   return response.data;
@@ -189,16 +194,29 @@ async function geocodeAddressSafely(address: string): Promise<GeoPoint | null> {
 }
 
 export async function createUserProfile(profile: UserProfile): Promise<void> {
+  if (IS_E2E) {
+    await e2eFirestore.createUserProfile(profile);
+    return;
+  }
+
   await callFunction("createUserProfile", { profile });
 }
 
 export async function getUserProfile(uid: string): Promise<UserProfile | null> {
+  if (IS_E2E) {
+    return e2eFirestore.getUserProfile(uid);
+  }
+
   return callFunction<UserProfile | null>("getUserProfile", { uid });
 }
 
 export async function getUserProfilesByUids(
   uids: string[]
 ): Promise<Record<string, UserProfile>> {
+  if (IS_E2E) {
+    return e2eFirestore.getUserProfilesByUids(uids);
+  }
+
   return callFunction<Record<string, UserProfile>>("getUserProfilesByUids", { uids });
 }
 
@@ -207,6 +225,14 @@ export async function updateOfficialProfile(
   input: UpdateOfficialProfileInput
 ): Promise<void> {
   const locationCoordinates = await geocodeAddressSafely(buildAddressString(input.contactInfo));
+  if (IS_E2E) {
+    await e2eFirestore.updateOfficialProfile(uid, {
+      ...input,
+      locationCoordinates
+    });
+    return;
+  }
+
   await callFunction("updateOfficialProfile", {
     uid,
     input: {
@@ -219,6 +245,10 @@ export async function updateOfficialProfile(
 export async function searchOfficialProfilesByEmail(
   rawEmail: string
 ): Promise<UserProfile[]> {
+  if (IS_E2E) {
+    return e2eFirestore.searchOfficialProfilesByEmail(rawEmail);
+  }
+
   return callFunction<UserProfile[]>("searchOfficialProfilesByEmail", { email: rawEmail });
 }
 
@@ -226,6 +256,10 @@ export function subscribeGames(
   onChange: (games: Game[]) => void,
   onError?: (error: Error) => void
 ): Unsubscribe {
+  if (IS_E2E) {
+    return e2eFirestore.subscribeGames(onChange);
+  }
+
   return createPollingSubscription(() => callFunction<Game[]>("listGames"), onChange, onError);
 }
 
@@ -233,6 +267,10 @@ export function subscribeBids(
   onChange: (bids: Bid[]) => void,
   onError?: (error: Error) => void
 ): Unsubscribe {
+  if (IS_E2E) {
+    return e2eFirestore.subscribeBids(onChange);
+  }
+
   return createPollingSubscription(() => callFunction<Bid[]>("listBids"), onChange, onError);
 }
 
@@ -240,6 +278,10 @@ export function subscribeOfficialProfiles(
   onChange: (profiles: UserProfile[]) => void,
   onError?: (error: Error) => void
 ): Unsubscribe {
+  if (IS_E2E) {
+    return e2eFirestore.subscribeOfficialProfiles(onChange);
+  }
+
   return createPollingSubscription(
     () => callFunction<UserProfile[]>("listOfficialProfiles"),
     onChange,
@@ -251,6 +293,10 @@ export function subscribeCrews(
   onChange: (crews: Crew[]) => void,
   onError?: (error: Error) => void
 ): Unsubscribe {
+  if (IS_E2E) {
+    return e2eFirestore.subscribeCrews(onChange);
+  }
+
   return createPollingSubscription(() => callFunction<Crew[]>("listCrews"), onChange, onError);
 }
 
@@ -259,6 +305,10 @@ export function subscribeRatingsForGame(
   onChange: (ratings: Rating[]) => void,
   onError?: (error: Error) => void
 ): Unsubscribe {
+  if (IS_E2E) {
+    return e2eFirestore.subscribeRatingsForGame(gameId, onChange);
+  }
+
   return createPollingSubscription(
     () => callFunction<Rating[]>("listRatingsForGame", { gameId }),
     onChange,
@@ -271,6 +321,10 @@ export function subscribeEvaluationsForGame(
   onChange: (evaluations: Evaluation[]) => void,
   onError?: (error: Error) => void
 ): Unsubscribe {
+  if (IS_E2E) {
+    return e2eFirestore.subscribeEvaluationsForGame(gameId, onChange);
+  }
+
   return createPollingSubscription(
     () => callFunction<Evaluation[]>("listEvaluationsForGame", { gameId }),
     onChange,
@@ -282,6 +336,10 @@ export function subscribeRatings(
   onChange: (ratings: Rating[]) => void,
   onError?: (error: Error) => void
 ): Unsubscribe {
+  if (IS_E2E) {
+    return e2eFirestore.subscribeRatings(onChange);
+  }
+
   return createPollingSubscription(
     () => callFunction<Rating[]>("listRatings"),
     onChange,
@@ -294,6 +352,17 @@ export async function createGame(
   createdBy: { uid: string; role: "assignor" | "school"; displayName: string }
 ): Promise<void> {
   const locationCoordinates = await geocodeAddressSafely(input.location);
+  if (IS_E2E) {
+    await e2eFirestore.createGame(
+      {
+        ...input,
+        locationCoordinates: locationCoordinates ?? undefined
+      },
+      createdBy
+    );
+    return;
+  }
+
   await callFunction("createGame", {
     input: {
       ...input,
@@ -308,6 +377,17 @@ export async function createAssignedGame(
   createdBy: { uid: string; role: "assignor" | "school"; displayName: string }
 ): Promise<void> {
   const locationCoordinates = await geocodeAddressSafely(input.location);
+  if (IS_E2E) {
+    await e2eFirestore.createAssignedGame(
+      {
+        ...input,
+        locationCoordinates: locationCoordinates ?? undefined
+      },
+      createdBy
+    );
+    return;
+  }
+
   await callFunction("createAssignedGame", {
     input: {
       ...input,
@@ -319,6 +399,14 @@ export async function createAssignedGame(
 
 export async function updateGame(gameId: string, input: NewGameInput): Promise<void> {
   const locationCoordinates = await geocodeAddressSafely(input.location);
+  if (IS_E2E) {
+    await e2eFirestore.updateGame(gameId, {
+      ...input,
+      locationCoordinates
+    });
+    return;
+  }
+
   await callFunction("updateGame", {
     gameId,
     input: {
@@ -329,14 +417,29 @@ export async function updateGame(gameId: string, input: NewGameInput): Promise<v
 }
 
 export async function createBid(input: NewBidInput): Promise<void> {
+  if (IS_E2E) {
+    await e2eFirestore.createBid(input);
+    return;
+  }
+
   await callFunction("createBid", { input });
 }
 
 export async function updateBid(bidId: string, input: UpdateBidInput): Promise<void> {
+  if (IS_E2E) {
+    await e2eFirestore.updateBid(bidId, input);
+    return;
+  }
+
   await callFunction("updateBid", { bidId, input });
 }
 
 export async function deleteBid(bidId: string): Promise<void> {
+  if (IS_E2E) {
+    await e2eFirestore.deleteBid(bidId);
+    return;
+  }
+
   await callFunction("deleteBid", { bidId });
 }
 
@@ -348,10 +451,20 @@ export async function createCrew(
     displayName: string;
   }
 ): Promise<void> {
+  if (IS_E2E) {
+    await e2eFirestore.createCrew(input, createdBy);
+    return;
+  }
+
   await callFunction("createCrew", { input, createdBy });
 }
 
 export async function deleteCrew(crewId: string): Promise<void> {
+  if (IS_E2E) {
+    await e2eFirestore.deleteCrew(crewId);
+    return;
+  }
+
   await callFunction("deleteCrew", { crewId });
 }
 
@@ -359,6 +472,11 @@ export async function updateCrewMembers(
   crewId: string,
   members: CrewMember[]
 ): Promise<void> {
+  if (IS_E2E) {
+    await e2eFirestore.updateCrewMembers(crewId, members);
+    return;
+  }
+
   await callFunction("updateCrewMembers", { crewId, members });
 }
 
@@ -366,6 +484,11 @@ export async function updateCrewChief(
   crewId: string,
   chief: Pick<CrewMember, "uid" | "name">
 ): Promise<void> {
+  if (IS_E2E) {
+    await e2eFirestore.updateCrewChief(crewId, chief);
+    return;
+  }
+
   await callFunction("updateCrewChief", { crewId, chief });
 }
 
@@ -373,6 +496,11 @@ export async function updateCrewMemberPositions(
   crewId: string,
   memberPositions: Partial<Record<string, FootballPosition>>
 ): Promise<void> {
+  if (IS_E2E) {
+    await e2eFirestore.updateCrewMemberPositions(crewId, memberPositions);
+    return;
+  }
+
   await callFunction("updateCrewMemberPositions", { crewId, memberPositions });
 }
 
@@ -380,6 +508,11 @@ export async function upsertGameRating(
   input: UpsertGameRatingInput,
   ratedBy: { uid: string; role: "assignor" | "school" | "official" }
 ): Promise<void> {
+  if (IS_E2E) {
+    await e2eFirestore.upsertGameRating(input, ratedBy);
+    return;
+  }
+
   await callFunction("upsertGameRating", { input, ratedBy });
 }
 
@@ -387,13 +520,28 @@ export async function upsertGameEvaluation(
   input: UpsertGameEvaluationInput,
   evaluator: { uid: string }
 ): Promise<void> {
+  if (IS_E2E) {
+    await e2eFirestore.upsertGameEvaluation(input, evaluator);
+    return;
+  }
+
   await callFunction("upsertGameEvaluation", { input, evaluator });
 }
 
 export async function selectBid(gameId: string, bidId: string): Promise<void> {
+  if (IS_E2E) {
+    await e2eFirestore.selectBid(gameId, bidId);
+    return;
+  }
+
   await callFunction("selectBid", { gameId, bidId });
 }
 
 export async function deleteGame(gameId: string): Promise<void> {
+  if (IS_E2E) {
+    await e2eFirestore.deleteGame(gameId);
+    return;
+  }
+
   await callFunction("deleteGame", { gameId });
 }

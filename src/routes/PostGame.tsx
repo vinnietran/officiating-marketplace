@@ -14,6 +14,7 @@ export function PostGame() {
   const [modalMessage, setModalMessage] = useState<{
     title: string;
     message: string;
+    autoCloseMs?: number;
   } | null>(null);
 
   if (loading) {
@@ -92,7 +93,8 @@ export function PostGame() {
 
     setModalMessage({
       title: "Game Posted",
-      message: "Your game was posted successfully."
+      message: "Your game was posted successfully.",
+      autoCloseMs: 1800
     });
   }
 
@@ -135,6 +137,7 @@ export function PostGame() {
         <MessageModal
           title={modalMessage.title}
           message={modalMessage.message}
+          autoCloseMs={modalMessage.autoCloseMs}
           onClose={() => setModalMessage(null)}
         />
       ) : null}

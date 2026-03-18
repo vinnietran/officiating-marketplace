@@ -23,6 +23,7 @@ export function AssignGame() {
   const [modalMessage, setModalMessage] = useState<{
     title: string;
     message: string;
+    autoCloseMs?: number;
   } | null>(null);
 
   useEffect(() => {
@@ -133,7 +134,8 @@ export function AssignGame() {
 
     setModalMessage({
       title: "Game Assigned",
-      message: "Your game was directly assigned."
+      message: "Your game was directly assigned.",
+      autoCloseMs: 1800
     });
   }
 
@@ -184,6 +186,7 @@ export function AssignGame() {
         <MessageModal
           title={modalMessage.title}
           message={modalMessage.message}
+          autoCloseMs={modalMessage.autoCloseMs}
           onClose={() => setModalMessage(null)}
         />
       ) : null}

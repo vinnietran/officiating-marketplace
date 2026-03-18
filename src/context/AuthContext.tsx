@@ -14,8 +14,9 @@ import {
   updateProfile,
   type User
 } from "firebase/auth";
-import { auth } from "../lib/firebase";
+import { IS_E2E, auth } from "../lib/firebase";
 import { createUserProfile, getUserProfile } from "../lib/firestore";
+import { e2eAuth } from "../test-support/e2e/harness";
 import type { UserProfile, UserRole } from "../types";
 
 interface SignUpInput {
@@ -70,7 +71,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
   }
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (nextUser) => {
+    const handleAuthChange = (nextUser: User | null) => {
       setUser(nextUser);
 
       if (!nextUser) {
@@ -94,21 +95,38 @@ export function AuthProvider({ children }: PropsWithChildren) {
         .finally(() => {
           setProfileLoading(false);
         });
-    });
+    };
+
+    const unsubscribe = IS_E2E
+      ? e2eAuth.onAuthStateChanged(handleAuthChange)
+      : onAuthStateChanged(auth, handleAuthChange);
 
     return () => unsubscribe();
   }, []);
 
   async function signIn(email: string, password: string): Promise<void> {
+    if (IS_E2E) {
+      await e2eAuth.signIn(email, password);
+      return;
+    }
+
     await signInWithEmailAndPassword(auth, email, password);
   }
 
   async function signUp(input: SignUpInput): Promise<void> {
-    const credential = await createUserWithEmailAndPassword(auth, input.email, input.password);
+    const credential = IS_E2E
+      ? { user: await e2eAuth.signUp(input) }
+      : await createUserWithEmailAndPassword(auth, input.email, input.password);
 
-    await updateProfile(credential.user, {
-      displayName: input.displayName
-    });
+    if (IS_E2E) {
+      await e2eAuth.updateProfile(credential.user, {
+        displayName: input.displayName
+      });
+    } else {
+      await updateProfile(credential.user, {
+        displayName: input.displayName
+      });
+    }
 
     const createdProfile: UserProfile = {
       uid: credential.user.uid,
@@ -134,7 +152,11 @@ export function AuthProvider({ children }: PropsWithChildren) {
       throw new Error("Display name is required.");
     }
 
-    await updateProfile(user, { displayName });
+    if (IS_E2E) {
+      await e2eAuth.updateProfile(user, { displayName });
+    } else {
+      await updateProfile(user, { displayName });
+    }
 
     const createdProfile: UserProfile = {
       uid: user.uid,
@@ -151,6 +173,11 @@ export function AuthProvider({ children }: PropsWithChildren) {
   }
 
   async function signOut(): Promise<void> {
+    if (IS_E2E) {
+      await e2eAuth.signOut();
+      return;
+    }
+
     await firebaseSignOut(auth);
   }
 

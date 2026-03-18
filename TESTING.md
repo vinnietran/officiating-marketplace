@@ -1,6 +1,6 @@
 # Testing and CI
 
-This repository now includes a GitHub Actions CI workflow and a zero-new-dependency automated test suite focused on the core feature logic that currently drives the app.
+This repository includes both logic-level tests and a full Playwright functional test suite with HTML reporting.
 
 ## CI Workflow
 
@@ -14,6 +14,7 @@ This repository now includes a GitHub Actions CI workflow and a zero-new-depende
 CI performs these checks:
 
 - installs root dependencies with `npm ci`
+- installs the Playwright Chromium browser bundle
 - installs Firebase Functions dependencies with `npm --prefix functions install`
 - runs the automated test suite with `npm test`
 - builds the Vite app with `npm run build`
@@ -25,6 +26,24 @@ Run the full test suite:
 
 ```bash
 npm test
+```
+
+Run only the browser functional suite:
+
+```bash
+npm run test:functional
+```
+
+Run the browser suite in headed mode:
+
+```bash
+npm run test:functional:headed
+```
+
+Open the HTML Playwright report after a run:
+
+```bash
+npm run test:functional:report
 ```
 
 Run only the app business-logic tests:
@@ -58,16 +77,35 @@ The app test suite covers the major existing feature logic through extracted hel
 - crew and assignment resolution logic used by schedule/dashboard style views
 - marketplace discovery helpers such as level qualification and location matching
 
-## Current Testing Approach
+The Playwright suite covers the primary role-based workflows in a browser:
 
-Because this environment could not fetch additional npm packages, the app suite is implemented with:
+- incomplete-profile onboarding and official profile completion
+- official profile details updates
+- crew creation and Varsity crew-bid setup
+- assignor posting and editing marketplace games
+- official bid placement and bid increases
+- assignor bid selection and award flow
+- direct assignment for crews and individuals
+- evaluator game evaluations
+- post-game ratings from both assignor and official perspectives
+
+## Functional Test Architecture
+
+The Playwright suite runs the app in `vite --mode e2e`, which swaps Firebase and Google Places integrations for a deterministic in-browser E2E harness. That keeps the functional tests fully automated and self-contained while still exercising the real UI.
+
+Artifacts produced by the browser suite:
+
+- `playwright-report/` for the HTML report
+- `test-results/` for traces, screenshots, and videos retained on failure
+
+GitHub Actions uploads the Playwright HTML report as an artifact on every run.
+
+## Logic Test Architecture
+
+The app logic suite is implemented with:
 
 - TypeScript compilation for test sources
 - Node's built-in `node:test` runner
 - Node's experimental test coverage output
 
 This provides stable CI validation for the highest-risk logic without introducing an unverified browser test stack.
-
-## Known Limitation
-
-The suite currently emphasizes business logic and flow assembly over DOM-level interaction testing. That is an intentional tradeoff based on the repository's current tooling and the inability to install additional browser-test dependencies during implementation.

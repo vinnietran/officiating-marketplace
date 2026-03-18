@@ -156,6 +156,7 @@ export function ScheduleGameDetails() {
   const [modalMessage, setModalMessage] = useState<{
     title: string;
     message: string;
+    autoCloseMs?: number;
   } | null>(null);
 
   useEffect(() => {
@@ -650,7 +651,8 @@ export function ScheduleGameDetails() {
       await selectBid(activeGame.id, bidId);
       setModalMessage({
         title: "Bid Selected",
-        message: "The bid was selected successfully."
+        message: "The bid was selected successfully.",
+        autoCloseMs: 1800
       });
     } catch (error) {
       setDataError(getReadableFirestoreError(error, FIRESTORE_DATABASE_ID));
@@ -740,7 +742,8 @@ export function ScheduleGameDetails() {
       });
       setModalMessage({
         title: "Offer Increased",
-        message: "Your bid was updated successfully."
+        message: "Your bid was updated successfully.",
+        autoCloseMs: 1800
       });
       return;
     }
@@ -759,7 +762,8 @@ export function ScheduleGameDetails() {
     });
     setModalMessage({
       title: "Bid Submitted",
-      message: "Your bid was submitted successfully."
+      message: "Your bid was submitted successfully.",
+      autoCloseMs: 1800
     });
   }
 
@@ -829,7 +833,8 @@ export function ScheduleGameDetails() {
 
       setModalMessage({
         title: "Rating Saved",
-        message: `Saved ${parsedStars}/5 for ${target.targetName}.`
+        message: `Saved ${parsedStars}/5 for ${target.targetName}.`,
+        autoCloseMs: 1800
       });
       setEditingRatingKey(null);
     } catch (error) {
@@ -867,7 +872,8 @@ export function ScheduleGameDetails() {
       );
       setModalMessage({
         title: "Evaluation Saved",
-        message: "Your evaluation was saved successfully."
+        message: "Your evaluation was saved successfully.",
+        autoCloseMs: 1800
       });
       setShowEvaluationForm(false);
     } catch (error) {
@@ -1300,6 +1306,7 @@ export function ScheduleGameDetails() {
         <MessageModal
           title={modalMessage.title}
           message={modalMessage.message}
+          autoCloseMs={modalMessage.autoCloseMs}
           onClose={() => setModalMessage(null)}
         />
       ) : null}

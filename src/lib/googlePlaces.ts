@@ -1,3 +1,8 @@
+import { IS_E2E } from "./firebase";
+import {
+  e2eGooglePlaces,
+  getE2EDistanceBetweenPoints
+} from "../test-support/e2e/harness";
 import type { GeoPoint } from "../types";
 
 interface AutocompleteSuggestionResult {
@@ -321,15 +326,27 @@ function haversineMiles(
 }
 
 export function getDistanceMilesBetweenPoints(origin: GeoPoint, destination: GeoPoint): number {
+  if (IS_E2E) {
+    return getE2EDistanceBetweenPoints(origin, destination);
+  }
+
   const miles = haversineMiles(origin.lat, origin.lng, destination.lat, destination.lng);
   return Math.round(miles * 10) / 10;
 }
 
 export function hasGooglePlacesApiKey(): boolean {
+  if (IS_E2E) {
+    return e2eGooglePlaces.hasGooglePlacesApiKey();
+  }
+
   return getMapsApiKey().length > 0;
 }
 
 export async function ensureGooglePlacesLoaded(): Promise<boolean> {
+  if (IS_E2E) {
+    return e2eGooglePlaces.ensureGooglePlacesLoaded();
+  }
+
   const apiKey = getMapsApiKey();
   if (!apiKey) {
     return false;
@@ -580,6 +597,10 @@ export async function getDistanceMilesBetweenAddresses(
   originAddress: string,
   destinationAddress: string
 ): Promise<number | null> {
+  if (IS_E2E) {
+    return e2eGooglePlaces.getDistanceMilesBetweenAddresses(originAddress, destinationAddress);
+  }
+
   const origin = normalizeAddress(originAddress);
   const destination = normalizeAddress(destinationAddress);
 
@@ -622,6 +643,10 @@ export async function getDistanceMilesBetweenAddresses(
 }
 
 export async function getCoordinatesForAddress(address: string): Promise<GeoPoint | null> {
+  if (IS_E2E) {
+    return e2eGooglePlaces.getCoordinatesForAddress(address);
+  }
+
   return geocodeAddress(address);
 }
 
@@ -629,6 +654,10 @@ export async function getDistanceMilesFromCoordinatesToAddress(
   origin: GeoPoint,
   destinationAddress: string
 ): Promise<number | null> {
+  if (IS_E2E) {
+    return e2eGooglePlaces.getDistanceMilesFromCoordinatesToAddress(origin, destinationAddress);
+  }
+
   const destination = destinationAddress.trim();
   if (!destination) {
     return null;
@@ -659,6 +688,10 @@ export function clearLocationDistanceCaches(): void {
 export async function getLocationSuggestions(
   input: string
 ): Promise<PlaceSuggestion[]> {
+  if (IS_E2E) {
+    return e2eGooglePlaces.getLocationSuggestions(input);
+  }
+
   const trimmedInput = input.trim();
   if (!trimmedInput) {
     return [];

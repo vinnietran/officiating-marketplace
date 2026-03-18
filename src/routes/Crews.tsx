@@ -133,6 +133,7 @@ export function Crews() {
   const [modalMessage, setModalMessage] = useState<{
     title: string;
     message: string;
+    autoCloseMs?: number;
   } | null>(null);
 
   useEffect(() => {
@@ -463,7 +464,8 @@ export function Crews() {
       );
       setModalMessage({
         title: "Crew Created",
-        message: "Your crew was saved."
+        message: "Your crew was saved.",
+        autoCloseMs: 1800
       });
     } catch (error) {
       setFormError(getReadableFirestoreError(error, FIRESTORE_DATABASE_ID));
@@ -501,7 +503,8 @@ export function Crews() {
       }
       setModalMessage({
         title: "Crew Deleted",
-        message: `${crewToDelete.name} was deleted.`
+        message: `${crewToDelete.name} was deleted.`,
+        autoCloseMs: 1800
       });
     } catch (error) {
       setDataError(getReadableFirestoreError(error, FIRESTORE_DATABASE_ID));
@@ -709,7 +712,8 @@ export function Crews() {
       await updateCrewMemberPositions(selectedCrew.id, normalizedPositions);
       setModalMessage({
         title: "Crew Positions Updated",
-        message: "Football positions were saved for this crew."
+        message: "Football positions were saved for this crew.",
+        autoCloseMs: 1800
       });
     } catch (error) {
       setDataError(getReadableFirestoreError(error, FIRESTORE_DATABASE_ID));
@@ -1153,6 +1157,7 @@ export function Crews() {
         <MessageModal
           title={modalMessage.title}
           message={modalMessage.message}
+          autoCloseMs={modalMessage.autoCloseMs}
           onClose={() => setModalMessage(null)}
         />
       ) : null}

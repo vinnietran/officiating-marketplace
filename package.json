@@ -17,7 +17,8 @@
     "test:weekly": "node --test scripts/weekly-product-update/tests/*.test.mjs",
     "ci": "npm run test && npm run build && node --check functions/index.js",
     "weekly-product-update:example": "node scripts/weekly-product-update/generate-example.mjs",
-    "weekly-product-update:dry-run": "node scripts/weekly-product-update/index.mjs"
+    "weekly-product-update:dry-run": "node scripts/weekly-product-update/index.mjs",
+    "create-milestones": "node scripts/create-milestones.mjs"
   },
   "dependencies": {
     "@radix-ui/react-dialog": "^1.1.15",

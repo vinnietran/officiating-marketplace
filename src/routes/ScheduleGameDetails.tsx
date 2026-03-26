@@ -21,7 +21,9 @@ import {
 } from "../lib/format";
 import {
   createBid,
+  deleteBid,
   deleteGame,
+  listBids,
   selectBid,
   subscribeBids,
   subscribeCrews,
@@ -740,6 +742,7 @@ export function ScheduleGameDetails() {
         amount: input.amount,
         message: input.message
       });
+      setBids(await listBids());
       setModalMessage({
         title: "Offer Increased",
         message: "Your bid was updated successfully.",
@@ -760,6 +763,7 @@ export function ScheduleGameDetails() {
       amount: input.amount,
       message: input.message
     });
+    setBids(await listBids());
     setModalMessage({
       title: "Bid Submitted",
       message: "Your bid was submitted successfully.",
@@ -779,6 +783,16 @@ export function ScheduleGameDetails() {
   }) {
     await handleSubmitBid(input);
     setShowBidForm(false);
+  }
+
+  async function handleDeleteOfficialBid(bidId: string) {
+    setBusyBidId(bidId);
+    try {
+      await deleteBid(bidId);
+      setBids(await listBids());
+    } finally {
+      setBusyBidId(null);
+    }
   }
 
   function beginRating(target: RateableTarget) {
@@ -1043,6 +1057,49 @@ export function ScheduleGameDetails() {
                   onCancel={() => setShowBidForm(false)}
                 />
               ) : null}
+              <section className="bids-section">
+                <h4>Your bids on this game</h4>
+                {officialBidsForGame.length === 0 ? (
+                  <p className="empty-text">No bids yet.</p>
+                ) : (
+                  <ul className="bid-list">
+                    {officialBidsForGame.map((bid) => {
+                      const canDeleteBid = isBidEditableByOfficial(
+                        bid,
+                        activeUser.uid,
+                        officialCrews.map((crew) => crew.id)
+                      );
+
+                      return (
+                        <li key={bid.id} className="bid-item">
+                          <div>
+                            <strong>{formatCurrency(bid.amount)}</strong>{" "}
+                            {bid.bidderType === "crew" && bid.crewName
+                              ? `as ${bid.crewName}`
+                              : "as Individual"}
+                          </div>
+                          <div className="meta-line">{formatGameDate(bid.createdAtISO)}</div>
+                          <div className="meta-line">Entered by: {bid.officialName}</div>
+                          {bid.message ? (
+                            <div className="meta-line">Message: {bid.message}</div>
+                          ) : null}
+
+                          {canDeleteBid ? (
+                            <button
+                              type="button"
+                              className="button-link-danger"
+                              onClick={() => handleDeleteOfficialBid(bid.id)}
+                              disabled={busyBidId === bid.id}
+                            >
+                              {busyBidId === bid.id ? "Deleting..." : "Delete"}
+                            </button>
+                          ) : null}
+                        </li>
+                      );
+                    })}
+                  </ul>
+                )}
+              </section>
             </>
           )}
         </section>

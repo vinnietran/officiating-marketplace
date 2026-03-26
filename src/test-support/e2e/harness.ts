@@ -601,6 +601,11 @@ export const e2eFirestore = {
     return subscribe("bids", emit);
   },
 
+  async listBids(): Promise<Bid[]> {
+    ensureInitialized();
+    return sortBids(state.bids).map((bid) => cloneValue(bid));
+  },
+
   subscribeOfficialProfiles(onChange: (profiles: UserProfile[]) => void): () => void {
     ensureInitialized();
     const emit = () => {

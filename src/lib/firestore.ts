@@ -274,6 +274,14 @@ export function subscribeBids(
   return createPollingSubscription(() => callFunction<Bid[]>("listBids"), onChange, onError);
 }
 
+export async function listBids(): Promise<Bid[]> {
+  if (IS_E2E) {
+    return e2eFirestore.listBids();
+  }
+
+  return callFunction<Bid[]>("listBids");
+}
+
 export function subscribeOfficialProfiles(
   onChange: (profiles: UserProfile[]) => void,
   onError?: (error: Error) => void

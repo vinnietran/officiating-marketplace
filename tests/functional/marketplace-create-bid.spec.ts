@@ -36,6 +36,14 @@ test("creates a marketplace bid for an open game", async ({ page }) => {
 
   await expect(page.getByText("Bid Submitted")).toBeVisible();
   await dismissAlert(page);
-  await expect(gameCard).toContainText("Your highest active offer:");
+  await expect(gameCard).toContainText("Your Bid:");
   await expect(gameCard).toContainText("$160");
+
+  await gameCard.click();
+  const bidSection = page.locator(".details-card").filter({
+    has: page.getByRole("heading", { name: "Bid On This Game" })
+  });
+  await expect(bidSection).toContainText("Your bids on this game");
+  await expect(bidSection).toContainText("$160");
+  await expect(bidSection).toContainText("as Individual");
 });

@@ -771,6 +771,23 @@ button:disabled {
   grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
 }
 
+.marketplace-hero-panels {
+  margin-top: 16px;
+  display: grid;
+  gap: 14px;
+  grid-template-columns: 1fr;
+  align-items: start;
+}
+
+.marketplace-hero-panel {
+  padding: 16px;
+  border: 1px solid rgba(219, 229, 240, 0.95);
+  border-radius: 18px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.94), rgba(247, 251, 255, 0.9));
+  box-shadow: 0 12px 28px rgba(15, 23, 42, 0.06);
+}
+
 .marketplace-hero-stat {
   border: 1px solid #dce5f0;
   border-radius: 12px;
@@ -3404,12 +3421,12 @@ button.ui-button {
 }
 
 .marketplace-hero-compact {
-  padding-bottom: 24px;
+  padding-bottom: 20px;
 }
 
 .marketplace-shell {
   display: grid;
-  grid-template-columns: minmax(290px, 320px) minmax(0, 1fr);
+  grid-template-columns: 1fr;
   gap: 18px;
   align-items: start;
 }
@@ -3428,6 +3445,14 @@ button.ui-button {
   top: 96px;
 }
 
+.marketplace-toolbar-sticky-shell {
+  position: sticky;
+  top: 92px;
+  z-index: 25;
+  margin-bottom: 18px;
+  box-shadow: 0 10px 26px rgba(15, 23, 42, 0.08);
+}
+
 .marketplace-toolbar-actions-sidebar {
   flex-direction: column;
   align-items: flex-start;
@@ -3443,6 +3468,46 @@ button.ui-button {
   justify-content: space-between;
   gap: 18px;
   align-items: end;
+}
+
+.marketplace-intel-rail {
+  display: grid;
+  gap: 14px;
+}
+
+.marketplace-intel-section {
+  display: grid;
+  gap: 10px;
+  padding: 16px 18px;
+  border-radius: 18px;
+  border: 1px solid rgba(15, 76, 207, 0.1);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(245, 249, 255, 0.92));
+  box-shadow: var(--shadow-sm);
+}
+
+.marketplace-intel-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.marketplace-intel-header h3 {
+  margin: 0;
+  font-size: 1.05rem;
+}
+
+.marketplace-intel-header span {
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.marketplace-intel-subtitle {
+  margin: -2px 0 0;
 }
 
 .marketplace-results-copy h2 {
@@ -3508,6 +3573,14 @@ button.ui-button {
   gap: 10px;
 }
 
+.marketplace-insights-rail {
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+}
+
+.marketplace-insights-hero {
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+}
+
 .marketplace-insight-card {
   padding: 14px 16px;
   border: 1px solid rgba(15, 23, 42, 0.08);
@@ -3536,6 +3609,73 @@ button.ui-button {
   font-size: 0.9rem;
 }
 
+.marketplace-insight-card-compact {
+  padding: 12px 14px;
+  border-radius: 16px;
+}
+
+.marketplace-intel-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 10px;
+}
+
+.marketplace-intel-card {
+  padding: 14px 16px;
+  border-radius: 16px;
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  background: rgba(255, 255, 255, 0.94);
+}
+
+.marketplace-intel-card h3 {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.marketplace-intel-card .meta-line {
+  margin: 6px 0 0;
+}
+
+.marketplace-intel-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+
+.marketplace-intel-rank {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 34px;
+  height: 28px;
+  padding: 0 10px;
+  border-radius: 999px;
+  background: rgba(29, 78, 216, 0.08);
+  color: var(--brand-strong);
+  font-size: 0.8rem;
+  font-weight: 800;
+}
+
+.marketplace-intel-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 10px;
+}
+
+.marketplace-intel-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 5px 9px;
+  border-radius: 999px;
+  background: rgba(15, 76, 207, 0.08);
+  color: var(--brand-strong);
+  font-size: 0.74rem;
+  font-weight: 700;
+}
+
 .marketplace-game-list-list {
   grid-template-columns: 1fr;
 }
@@ -3543,6 +3683,10 @@ button.ui-button {
 .marketplace-featured-stack {
   display: grid;
   gap: 10px;
+}
+
+.marketplace-featured-stack-hero {
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
 }
 
 .market-game-card-list {
@@ -3642,18 +3786,21 @@ button.ui-button {
 }
 
 @media (max-width: 900px) {
-  .marketplace-shell {
+  .marketplace-sidebar-sticky {
+    position: static;
+  }
+
+  .marketplace-hero-panels {
     grid-template-columns: 1fr;
   }
 
-  .marketplace-sidebar-sticky {
-    position: static;
+  .marketplace-toolbar-sticky-shell {
+    top: 78px;
   }
 }
 
 @media (max-width: 640px) {
   .marketplace-results-toolbar,
-  .marketplace-spotlight,
   .game-card-list-shell,
   .game-card-list-brand {
     display: grid;
@@ -3664,6 +3811,12 @@ button.ui-button {
     min-width: 0;
   }
 
+  .marketplace-intel-header {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .marketplace-intel-cards,
   .game-card-market-meta {
     grid-template-columns: 1fr;
   }

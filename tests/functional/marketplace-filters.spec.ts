@@ -112,11 +112,13 @@ test("filters, sorts, and deletes an existing marketplace bid", async ({ page })
   await expect(sortedTitles.nth(2)).toHaveText("Alpha Academy");
 
   const bravoCard = listings.filter({ hasText: "Bravo High" }).first();
-  await expect(bravoCard).toContainText("Your highest active offer:");
+  const alphaCard = listings.filter({ hasText: "Alpha Academy" }).first();
+  await expect(bravoCard).toContainText("Your Bid:");
+  await expect(alphaCard).not.toContainText("Your Bid:");
   await bravoCard.getByRole("button", { name: "Delete" }).click();
 
   await expect(page.getByRole("button", { name: /Open Bids \(0\)/ })).toBeVisible();
-  await expect(bravoCard).not.toContainText("Your highest active offer:");
+  await expect(bravoCard).not.toContainText("Your Bid:");
 
   await page
     .getByRole("button", { name: /Open Bids \(0\)/ })

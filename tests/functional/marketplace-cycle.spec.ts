@@ -48,12 +48,16 @@ test("runs the crew-bid marketplace workflow end to end", async ({ page }) => {
   await page.getByRole("button", { name: "Place Bid" }).click();
   await expect(page.getByText("Bid Submitted")).toBeVisible();
   await dismissAlert(page);
+  await expect(officialGameCard).toContainText("Your Bid:");
+  await expect(officialGameCard).toContainText("$300");
 
   await officialGameCard.getByRole("button", { name: "Update Bid" }).click();
   await page.getByLabel("Bid Amount (USD)").fill("325");
   await page.getByRole("button", { name: "Update Bid" }).click();
   await expect(page.getByText("Offer Increased")).toBeVisible();
   await dismissAlert(page);
+  await expect(officialGameCard).toContainText("$325");
+  await expect(officialGameCard).not.toContainText("$300");
   await signOutFromProfile(page);
 
   await signIn(page, "assignor@example.com");

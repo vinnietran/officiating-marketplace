@@ -122,15 +122,7 @@ export function GameCard({
   );
   const hasSubmittedBid = officialBidsForGame.length > 0;
 
-  const highestUserBid = useMemo(() => {
-    if (officialBidsForGame.length === 0) {
-      return null;
-    }
-    return officialBidsForGame.reduce(
-      (highest, bid) => (bid.amount > highest ? bid.amount : highest),
-      officialBidsForGame[0].amount
-    );
-  }, [officialBidsForGame]);
+  const latestUserBid = officialBidsForGame[0] ?? null;
 
   const canPlaceBid = useMemo(() => {
     return (
@@ -471,9 +463,12 @@ export function GameCard({
         <p className="hint-text">{placeBidDisabledReason}</p>
       ) : null}
 
-      {highestUserBid !== null && role === "official" ? (
+      {latestUserBid && role === "official" ? (
         <p className="hint-text">
-          Your highest active offer: <strong>{formatCurrency(highestUserBid)}</strong>
+          Your Bid: <strong>{formatCurrency(latestUserBid.amount)}</strong>
+          {latestUserBid.bidderType === "crew" && latestUserBid.crewName
+            ? ` as ${latestUserBid.crewName}`
+            : ""}
         </p>
       ) : null}
 

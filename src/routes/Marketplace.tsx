@@ -18,6 +18,7 @@ import {
   deleteBid,
   getUserProfile,
   getUserProfilesByUids,
+  listBids,
   subscribeCrews,
   subscribeBids,
   subscribeGames,
@@ -27,7 +28,7 @@ import {
 } from "../lib/firestore";
 import { FIRESTORE_DATABASE_ID } from "../lib/firebase";
 import { getReadableFirestoreError } from "../lib/firebaseErrors";
-import { formatCurrency, formatGameDate } from "../lib/format";
+import { formatCurrency } from "../lib/format";
 import {
   findActiveBid,
   getBidEligibleCrews,
@@ -802,7 +803,6 @@ export function Marketplace() {
     return gamesToSort;
   }, [bestMatchScoreByGameId, distanceByGameId, filteredGames, profile?.role, sortBy]);
 
-  const featuredListing = sortedGames[0] ?? null;
   const endingSoonGame = useMemo(() => {
     return [...listingPoolGames]
       .filter((game) => Boolean(game.acceptingBidsUntilISO))
@@ -986,6 +986,7 @@ export function Marketplace() {
         amount: input.amount,
         message: input.message
       });
+      setBids(await listBids());
       setModalMessage({
         title: "Offer Increased",
         message: "Your bid was updated successfully.",
@@ -1006,6 +1007,7 @@ export function Marketplace() {
       amount: input.amount,
       message: input.message
     });
+    setBids(await listBids());
     setModalMessage({
       title: "Bid Submitted",
       message: "Your bid was submitted successfully.",
@@ -1015,6 +1017,7 @@ export function Marketplace() {
 
   async function handleDeleteBid(bidId: string) {
     await deleteBid(bidId);
+    setBids(await listBids());
   }
 
   function handleResetFilters() {
@@ -1028,6 +1031,54 @@ export function Marketplace() {
     navigate(`/schedule/games/${game.id}`, {
       state: { from: "marketplace" }
     });
+  }
+
+  function renderInsightSuggestionCard(suggestion: FeaturedSuggestion, index: number) {
+    return (
+      <article
+        key={suggestion.game.id}
+        className="marketplace-intel-card clickable-game-card"
+        role="button"
+        tabIndex={0}
+        onClick={(event) => {
+          const target = event.target as HTMLElement;
+          if (target.closest("button, input, textarea, [role='combobox'], form, a")) {
+            return;
+          }
+          handleOpenGameDetails(suggestion.game);
+        }}
+        onKeyDown={(event) => {
+          if (event.key !== "Enter" && event.key !== " ") {
+            return;
+          }
+
+          const target = event.target as HTMLElement;
+          if (target.closest("button, input, textarea, [role='combobox'], form, a")) {
+            return;
+          }
+
+          event.preventDefault();
+          handleOpenGameDetails(suggestion.game);
+        }}
+        aria-label={`Open details for ${suggestion.game.schoolName}`}
+      >
+        <div className="marketplace-intel-card-head">
+          <span className="marketplace-intel-rank">#{index + 1}</span>
+          <span className="pay-pill">{formatCurrency(suggestion.game.payPosted)}</span>
+        </div>
+        <h3>{suggestion.game.schoolName}</h3>
+        <p className="meta-line">
+          <strong>{suggestion.game.sport}</strong> • {suggestion.game.level}
+        </p>
+        <div className="marketplace-intel-badges">
+          {suggestion.badges.map((badge) => (
+            <span key={badge} className="marketplace-intel-badge">
+              {badge}
+            </span>
+          ))}
+        </div>
+      </article>
+    );
   }
 
   return (
@@ -1097,168 +1148,60 @@ export function Marketplace() {
 
       {dataError ? <p className="error-text">{dataError}</p> : null}
 
-      <div className="marketplace-shell">
-        <aside className="marketplace-sidebar">
-          <section className="marketplace-toolbar marketplace-sidebar-card marketplace-sidebar-sticky">
-            <Filters values={filters} onChange={setFilters} />
-            {activeProfile.role === "official" ? (
-              <div className="marketplace-quick-filters">
-                <button
-                  type="button"
-                  className={`marketplace-quick-filter${
-                    officialQuickFilter === "all" ? " marketplace-quick-filter-active" : ""
-                  }`}
-                  onClick={() => setOfficialQuickFilter("all")}
-                >
-                  All Games ({availableGames.length})
-                </button>
-                <button
-                  type="button"
-                  className={`marketplace-quick-filter${
-                    officialQuickFilter === "open_bids"
-                      ? " marketplace-quick-filter-active"
-                      : ""
-                  }`}
-                  onClick={() => setOfficialQuickFilter("open_bids")}
-                >
-                  Open Bids ({officialOpenBidGames.length})
-                </button>
-                <button
-                  type="button"
-                  className={`marketplace-quick-filter${
-                    officialQuickFilter === "won_bids"
-                      ? " marketplace-quick-filter-active"
-                      : ""
-                  }`}
-                  onClick={() => setOfficialQuickFilter("won_bids")}
-                >
-                  Won Bids ({officialWonBidGames.length})
-                </button>
-              </div>
-            ) : null}
-            <div className="marketplace-toolbar-actions marketplace-toolbar-actions-sidebar">
-              <span className="meta-line">
-                {sortedGames.length} of {listingPoolGames.length} listing(s) shown
-              </span>
-              {hasActiveFilters ? (
-                <button
-                  type="button"
-                  className="button-secondary"
-                  onClick={handleResetFilters}
-                >
-                  Clear Filters
-                </button>
-              ) : null}
-            </div>
-          </section>
-
-          <section className="marketplace-featured marketplace-sidebar-card">
-            <div className="results-header marketplace-results-header">
-              <h2>Market Snapshot</h2>
-              <span>Live signals</span>
-            </div>
-            <div className="marketplace-insights">
-              <article className="marketplace-insight-card">
-                <span className="marketplace-insight-label">Highest pay</span>
-                <strong>
-                  {highestPayGame ? formatCurrency(highestPayGame.payPosted) : "-"}
-                </strong>
-                <p>{highestPayGame ? highestPayGame.schoolName : "No listings yet"}</p>
-              </article>
-              <article className="marketplace-insight-card">
-                <span className="marketplace-insight-label">Closing soon</span>
-                <strong>
-                  {endingSoonGame?.acceptingBidsUntilISO
-                    ? new Date(endingSoonGame.acceptingBidsUntilISO).toLocaleDateString("en-US", {
-                        month: "short",
-                        day: "numeric"
-                      })
-                    : "-"}
-                </strong>
-                <p>{endingSoonGame ? endingSoonGame.schoolName : "No active bid windows"}</p>
-              </article>
-              {activeProfile.role === "official" ? (
-                <article className="marketplace-insight-card">
-                  <span className="marketplace-insight-label">Closest game</span>
-                  <strong>
-                    {closestGame
-                      && typeof distanceByGameId[closestGame.id] === "number"
-                      && Number.isFinite(distanceByGameId[closestGame.id])
-                      ? `${distanceByGameId[closestGame.id]?.toFixed(1)} mi`
-                      : noAddressDistanceLabel ?? "-"}
-                  </strong>
-                  <p>{closestGame ? closestGame.schoolName : "No location match yet"}</p>
-                </article>
-              ) : null}
-            </div>
-          </section>
-
-          {activeProfile.role === "official" ? (
-            <aside className="marketplace-featured marketplace-sidebar-card">
-              <div className="results-header marketplace-results-header">
-                <h2>Recommended</h2>
-                <span>{featuredSuggestions.length} picks</span>
-              </div>
-              <p className="meta-line marketplace-featured-subtitle">
-                {officialLocationContext?.hasLocation
-                  ? "Ranked by fit, pay, and travel distance."
-                  : "Add your address in Profile to improve location-based recommendations."}
-              </p>
-              {featuredSuggestions.length === 0 ? (
-                <p className="empty-state">No featured games available right now.</p>
-              ) : (
-                <div className="marketplace-featured-stack">
-                  {featuredSuggestions.map((suggestion, index) => (
-                    <article
-                      key={suggestion.game.id}
-                      className="marketplace-featured-card clickable-game-card"
-                      role="button"
-                      tabIndex={0}
-                      onClick={(event) => {
-                        const target = event.target as HTMLElement;
-                        if (target.closest("button, input, textarea, [role='combobox'], form, a")) {
-                          return;
-                        }
-                        handleOpenGameDetails(suggestion.game);
-                      }}
-                      onKeyDown={(event) => {
-                        if (event.key !== "Enter" && event.key !== " ") {
-                          return;
-                        }
-
-                        const target = event.target as HTMLElement;
-                        if (target.closest("button, input, textarea, [role='combobox'], form, a")) {
-                          return;
-                        }
-
-                        event.preventDefault();
-                        handleOpenGameDetails(suggestion.game);
-                      }}
-                      aria-label={`Open details for ${suggestion.game.schoolName}`}
-                    >
-                      <div className="marketplace-featured-card-head">
-                        <span className="marketplace-featured-rank">#{index + 1}</span>
-                        <span className="pay-pill">{formatCurrency(suggestion.game.payPosted)}</span>
-                      </div>
-                      <h3>{suggestion.game.schoolName}</h3>
-                      <p className="meta-line">
-                        <strong>{suggestion.game.sport}</strong> • {suggestion.game.level}
-                      </p>
-                      <div className="marketplace-featured-badges">
-                        {suggestion.badges.map((badge) => (
-                          <span key={badge} className="marketplace-featured-badge">
-                            {badge}
-                          </span>
-                        ))}
-                      </div>
-                    </article>
-                  ))}
-                </div>
-              )}
-            </aside>
+      <section className="marketplace-toolbar marketplace-toolbar-sticky-shell">
+        <Filters values={filters} onChange={setFilters} />
+        {activeProfile.role === "official" ? (
+          <div className="marketplace-quick-filters">
+            <button
+              type="button"
+              className={`marketplace-quick-filter${
+                officialQuickFilter === "all" ? " marketplace-quick-filter-active" : ""
+              }`}
+              onClick={() => setOfficialQuickFilter("all")}
+            >
+              All Games ({availableGames.length})
+            </button>
+            <button
+              type="button"
+              className={`marketplace-quick-filter${
+                officialQuickFilter === "open_bids"
+                  ? " marketplace-quick-filter-active"
+                  : ""
+              }`}
+              onClick={() => setOfficialQuickFilter("open_bids")}
+            >
+              Open Bids ({officialOpenBidGames.length})
+            </button>
+            <button
+              type="button"
+              className={`marketplace-quick-filter${
+                officialQuickFilter === "won_bids"
+                  ? " marketplace-quick-filter-active"
+                  : ""
+              }`}
+              onClick={() => setOfficialQuickFilter("won_bids")}
+            >
+              Won Bids ({officialWonBidGames.length})
+            </button>
+          </div>
+        ) : null}
+        <div className="marketplace-toolbar-actions">
+          <span className="meta-line">
+            {sortedGames.length} of {listingPoolGames.length} listing(s) shown
+          </span>
+          {hasActiveFilters ? (
+            <button
+              type="button"
+              className="button-secondary"
+              onClick={handleResetFilters}
+            >
+              Clear Filters
+            </button>
           ) : null}
-        </aside>
+        </div>
+      </section>
 
+      <div className="marketplace-shell">
         <section ref={listingsRef} className="marketplace-listings marketplace-results-column">
           <div className="marketplace-results-toolbar">
             <div className="marketplace-results-copy">
@@ -1306,31 +1249,65 @@ export function Marketplace() {
             </label>
           </div>
 
-          {featuredListing ? (
-            <section className="marketplace-spotlight">
-              <div className="marketplace-spotlight-copy">
-                <span className="hero-eyebrow">Top listing</span>
-                <h3>{featuredListing.schoolName}</h3>
-                <p>
-                  {featuredListing.sport} • {featuredListing.level} •{" "}
-                  {formatGameDate(featuredListing.dateISO)}
-                </p>
+          <section className="marketplace-intel-rail">
+            <section className="marketplace-intel-section">
+              <div className="marketplace-intel-header">
+                <h3>Market Snapshot</h3>
+                <span>Live signals</span>
               </div>
-              <div className="marketplace-spotlight-metrics">
-                <div>
-                  <span>Posted pay</span>
-                  <strong>{formatCurrency(featuredListing.payPosted)}</strong>
-                </div>
-                <div>
-                  <span>Status</span>
-                  <strong>{featuredListing.status}</strong>
-                </div>
-                <button type="button" onClick={() => handleOpenGameDetails(featuredListing)}>
-                  View Listing
-                </button>
+              <div className="marketplace-insights marketplace-insights-rail">
+                <article className="marketplace-insight-card marketplace-insight-card-compact">
+                  <span className="marketplace-insight-label">Highest pay</span>
+                  <strong>
+                    {highestPayGame ? formatCurrency(highestPayGame.payPosted) : "-"}
+                  </strong>
+                  <p>{highestPayGame ? highestPayGame.schoolName : "No listings yet"}</p>
+                </article>
+                <article className="marketplace-insight-card marketplace-insight-card-compact">
+                  <span className="marketplace-insight-label">Closing soon</span>
+                  <strong>
+                    {endingSoonGame?.acceptingBidsUntilISO
+                      ? new Date(endingSoonGame.acceptingBidsUntilISO).toLocaleDateString("en-US", {
+                          month: "short",
+                          day: "numeric"
+                        })
+                      : "-"}
+                  </strong>
+                  <p>{endingSoonGame ? endingSoonGame.schoolName : "No active bid windows"}</p>
+                </article>
+                {activeProfile.role === "official" ? (
+                  <article className="marketplace-insight-card marketplace-insight-card-compact">
+                    <span className="marketplace-insight-label">Closest game</span>
+                    <strong>
+                      {closestGame
+                        && typeof distanceByGameId[closestGame.id] === "number"
+                        && Number.isFinite(distanceByGameId[closestGame.id])
+                        ? `${distanceByGameId[closestGame.id]?.toFixed(1)} mi`
+                        : noAddressDistanceLabel ?? "-"}
+                    </strong>
+                    <p>{closestGame ? closestGame.schoolName : "No location match yet"}</p>
+                  </article>
+                ) : null}
               </div>
             </section>
-          ) : null}
+
+            {activeProfile.role === "official" && featuredSuggestions.length > 0 ? (
+              <section className="marketplace-intel-section">
+                <div className="marketplace-intel-header">
+                  <h3>Recommended</h3>
+                  <span>{Math.min(featuredSuggestions.length, 3)} quick picks</span>
+                </div>
+                <p className="meta-line marketplace-intel-subtitle">
+                  {officialLocationContext?.hasLocation
+                    ? "Best-fit listings based on pay, level, and travel."
+                    : "Add your address in Profile to improve location-based recommendations."}
+                </p>
+                <div className="marketplace-intel-cards">
+                  {featuredSuggestions.slice(0, 3).map(renderInsightSuggestionCard)}
+                </div>
+              </section>
+            ) : null}
+          </section>
 
           <section className="game-list marketplace-game-list marketplace-game-list-list">
             {sortedGames.length === 0 ? (

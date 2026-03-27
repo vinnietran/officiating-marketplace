@@ -4,6 +4,7 @@ export interface MarketplaceGameSubmission {
   schoolName: string;
   sport: Sport;
   level: Level;
+  requestedCrewSize: number;
   dateISO: string;
   acceptingBidsUntilISO?: string;
   location: string;
@@ -15,6 +16,7 @@ export interface MarketplaceGameFormInput {
   schoolName: string;
   sport: Sport;
   level: Level;
+  requestedCrewSize: string;
   dateLocal: string;
   acceptingBidsUntilLocal?: string;
   location: string;
@@ -45,6 +47,8 @@ export function buildMarketplaceGameSubmission(
   input: MarketplaceGameFormInput
 ): MarketplaceGameSubmission {
   const parsedPay = Number(input.payPosted);
+  const crewSizeValue = input.requestedCrewSize.trim();
+  const parsedCrewSize = crewSizeValue === "" ? null : Number(crewSizeValue);
   const gameDate = new Date(input.dateLocal);
   const bidsUntilDate = input.acceptingBidsUntilLocal
     ? new Date(input.acceptingBidsUntilLocal)
@@ -70,10 +74,21 @@ export function buildMarketplaceGameSubmission(
     throw new Error("Posted pay must be greater than 0.");
   }
 
+  if (parsedCrewSize === null) {
+    throw new Error("Crew size needed is required.");
+  }
+
+  if (
+    !Number.isInteger(parsedCrewSize) || parsedCrewSize <= 0 || parsedCrewSize > 12
+  ) {
+    throw new Error("Crew size needed must be a whole number from 1 to 12.");
+  }
+
   return {
     schoolName: input.schoolName.trim(),
     sport: input.sport,
     level: input.level,
+    requestedCrewSize: parsedCrewSize,
     dateISO: gameDate.toISOString(),
     acceptingBidsUntilISO: bidsUntilDate ? bidsUntilDate.toISOString() : undefined,
     location: input.location.trim(),

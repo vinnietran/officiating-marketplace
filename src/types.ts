@@ -110,6 +110,7 @@ export interface Game {
   schoolName: string;
   sport: Sport;
   level: Level;
+  requestedCrewSize?: number;
   dateISO: string;
   acceptingBidsUntilISO?: string;
   location: string;

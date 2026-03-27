@@ -12,6 +12,7 @@ interface PostGameFormValues {
   schoolName: string;
   sport: Sport;
   level: Level;
+  requestedCrewSize: number;
   dateISO: string;
   acceptingBidsUntilISO?: string;
   location: string;
@@ -31,12 +32,20 @@ const LEVELS: Level[] = [
   "Middle School",
   "Youth"
 ];
+const CREW_SIZE_OPTIONS = Array.from({ length: 12 }, (_, index) => {
+  const size = String(index + 1);
+  return {
+    value: size,
+    label: `${size} official${size === "1" ? "" : "s"}`
+  };
+});
 const MIN_AUTOCOMPLETE_CHARS = 3;
 
 export function PostGameForm({ onSubmit }: PostGameFormProps) {
   const [schoolName, setSchoolName] = useState("");
   const [sport, setSport] = useState<Sport>("Football");
   const [level, setLevel] = useState<Level>("Varsity");
+  const [requestedCrewSize, setRequestedCrewSize] = useState("");
   const [dateLocal, setDateLocal] = useState("");
   const [acceptingBidsUntilLocal, setAcceptingBidsUntilLocal] = useState("");
   const [location, setLocation] = useState("");
@@ -108,6 +117,7 @@ export function PostGameForm({ onSubmit }: PostGameFormProps) {
         schoolName,
         sport,
         level,
+        requestedCrewSize,
         dateLocal,
         acceptingBidsUntilLocal,
         location,
@@ -121,6 +131,7 @@ export function PostGameForm({ onSubmit }: PostGameFormProps) {
       setSchoolName("");
       setSport("Football");
       setLevel("Varsity");
+      setRequestedCrewSize("");
       setDateLocal("");
       setAcceptingBidsUntilLocal("");
       setLocation("");
@@ -178,6 +189,19 @@ export function PostGameForm({ onSubmit }: PostGameFormProps) {
               label: levelOption
             }))}
           />
+        </label>
+
+        <label>
+          Crew Size Needed
+          <Select
+            value={requestedCrewSize}
+            onValueChange={setRequestedCrewSize}
+            options={CREW_SIZE_OPTIONS}
+            placeholder="Select crew size"
+          />
+          <small className="hint-text">
+            Set how many officials you want the crew to fill for this game.
+          </small>
         </label>
 
         <label>

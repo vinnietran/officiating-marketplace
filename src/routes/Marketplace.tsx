@@ -897,6 +897,7 @@ export function Marketplace() {
       schoolName: string;
       sport: Game["sport"];
       level: Game["level"];
+      requestedCrewSize: number;
       dateISO: string;
       acceptingBidsUntilISO?: string;
       location: string;

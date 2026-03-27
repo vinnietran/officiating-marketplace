@@ -672,6 +672,7 @@ export const e2eFirestore = {
       schoolName: input.schoolName,
       sport: input.sport,
       level: input.level,
+      requestedCrewSize: input.requestedCrewSize,
       dateISO: input.dateISO,
       acceptingBidsUntilISO: input.acceptingBidsUntilISO,
       location: input.location,
@@ -736,6 +737,7 @@ export const e2eFirestore = {
       schoolName: string;
       sport: Game["sport"];
       level: Game["level"];
+      requestedCrewSize?: number;
       dateISO: string;
       acceptingBidsUntilISO?: string;
       location: string;
@@ -753,6 +755,7 @@ export const e2eFirestore = {
     game.schoolName = input.schoolName;
     game.sport = input.sport;
     game.level = input.level;
+    game.requestedCrewSize = input.requestedCrewSize;
     game.dateISO = input.dateISO;
     game.acceptingBidsUntilISO = input.acceptingBidsUntilISO;
     game.location = input.location;

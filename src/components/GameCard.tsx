@@ -44,6 +44,7 @@ interface GameCardProps {
       schoolName: string;
       sport: Game["sport"];
       level: Game["level"];
+      requestedCrewSize: number;
       dateISO: string;
       acceptingBidsUntilISO?: string;
       location: string;
@@ -236,6 +237,7 @@ export function GameCard({
     schoolName: string;
     sport: Game["sport"];
     level: Game["level"];
+    requestedCrewSize: number;
     dateISO: string;
     acceptingBidsUntilISO?: string;
     location: string;
@@ -307,6 +309,11 @@ export function GameCard({
                 <p className="meta-line">
                   <MapPin aria-hidden="true" /> {game.location}
                 </p>
+                {game.requestedCrewSize ? (
+                <p className="meta-line">
+                    <Shield aria-hidden="true" /> Crew of {game.requestedCrewSize}
+                  </p>
+                ) : null}
                 {role === "official" ? (
                   <p className="meta-line">
                     <Shield aria-hidden="true" />{" "}
@@ -368,6 +375,11 @@ export function GameCard({
                 </p>
               ) : null}
               <p className="meta-line">{game.location}</p>
+              {game.requestedCrewSize ? (
+                <p className="meta-line">
+                  Crew of <strong>{game.requestedCrewSize}</strong>
+                </p>
+              ) : null}
               {role === "official" ? (
                 <p className="meta-line">
                   Distance:{" "}

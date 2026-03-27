@@ -941,6 +941,9 @@ export function ScheduleGameDetails() {
           <p className="meta-line">Date/Time: {formatGameDate(activeGame.dateISO)}</p>
           <p className="meta-line">Location: {activeGame.location}</p>
           <p className="meta-line">Posted pay: {formatCurrency(activeGame.payPosted)}</p>
+          {activeGame.requestedCrewSize ? (
+            <p className="meta-line">Crew of {activeGame.requestedCrewSize}</p>
+          ) : null}
           <p className="meta-line">Status: {statusLabel}</p>
           <p className="meta-line">
             Assigned by: {activeGame.createdByName ?? activeGame.createdByRole}

@@ -1,7 +1,8 @@
 import { defineConfig, devices } from "@playwright/test";
 
-const PORT = 4173;
-const BASE_URL = `http://127.0.0.1:${PORT}`;
+const HOST = process.env.PLAYWRIGHT_HOST ?? "127.0.0.1";
+const PORT = Number(process.env.PLAYWRIGHT_PORT ?? 4173);
+const BASE_URL = process.env.PLAYWRIGHT_BASE_URL ?? `http://${HOST}:${PORT}`;
 
 export default defineConfig({
   testDir: "./tests/functional",
@@ -19,7 +20,7 @@ export default defineConfig({
     video: "retain-on-failure"
   },
   webServer: {
-    command: `npm run dev:e2e -- --host 127.0.0.1 --port ${PORT}`,
+    command: `npm run dev:e2e -- --host ${HOST} --port ${PORT}`,
     url: BASE_URL,
     reuseExistingServer: !process.env.CI
   },

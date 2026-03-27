@@ -318,6 +318,10 @@ function normalizeGameDocument(id, data) {
     schoolName: trimString(data.schoolName),
     sport: trimString(data.sport),
     level: trimString(data.level),
+    requestedCrewSize:
+      typeof data.requestedCrewSize === "number" && Number.isFinite(data.requestedCrewSize)
+        ? data.requestedCrewSize
+        : undefined,
     dateISO: trimString(data.dateISO),
     acceptingBidsUntilISO: trimString(data.acceptingBidsUntilISO) || undefined,
     location: trimString(data.location),
@@ -415,6 +419,10 @@ function validateNewGameInput(input, requireBidWindow) {
   const schoolName = trimString(input.schoolName);
   const location = trimString(input.location);
   const notes = trimString(input.notes);
+  const requestedCrewSize =
+    typeof input.requestedCrewSize === "number" && Number.isFinite(input.requestedCrewSize)
+      ? input.requestedCrewSize
+      : null;
   const acceptingBidsUntilISO = asOptionalIsoString(input.acceptingBidsUntilISO, "acceptingBidsUntilISO");
   const locationCoordinates = normalizeGeoPoint(input.locationCoordinates);
 
@@ -424,6 +432,12 @@ function validateNewGameInput(input, requireBidWindow) {
   assert(location, "invalid-argument", "Location is required.");
   assert(typeof input.payPosted === "number" && Number.isFinite(input.payPosted), "invalid-argument", "Posted pay must be a number.");
   assert(input.payPosted >= 0, "invalid-argument", "Posted pay must be zero or greater.");
+  assert(requestedCrewSize !== null, "invalid-argument", "requestedCrewSize is required.");
+  assert(
+    Number.isInteger(requestedCrewSize) && requestedCrewSize > 0 && requestedCrewSize <= 12,
+    "invalid-argument",
+    "requestedCrewSize must be a whole number from 1 to 12."
+  );
   assert(asIsoString(input.dateISO, "dateISO"), "invalid-argument", "dateISO is required.");
 
   if (requireBidWindow) {
@@ -434,6 +448,7 @@ function validateNewGameInput(input, requireBidWindow) {
     schoolName,
     sport,
     level,
+    requestedCrewSize,
     dateISO: asIsoString(input.dateISO, "dateISO"),
     acceptingBidsUntilISO,
     location,
@@ -909,6 +924,7 @@ exports.createGame = onClientCall(async (request) => {
     schoolName: input.schoolName,
     sport: input.sport,
     level: input.level,
+    requestedCrewSize: input.requestedCrewSize,
     dateISO: input.dateISO,
     location: input.location,
     ...(input.locationCoordinates ? { locationCoordinates: input.locationCoordinates } : {}),
@@ -966,6 +982,7 @@ exports.createAssignedGame = onClientCall(async (request) => {
     schoolName: input.schoolName,
     sport: input.sport,
     level: input.level,
+    requestedCrewSize: input.requestedCrewSize,
     dateISO: input.dateISO,
     location: input.location,
     ...(input.locationCoordinates ? { locationCoordinates: input.locationCoordinates } : {}),
@@ -1039,6 +1056,7 @@ exports.updateGame = onClientCall(async (request) => {
     schoolName: input.schoolName,
     sport: input.sport,
     level: input.level,
+    requestedCrewSize: input.requestedCrewSize,
     dateISO: input.dateISO,
     location: input.location,
     payPosted: input.payPosted,

@@ -7,6 +7,7 @@ interface EditGameFormValues {
   schoolName: string;
   sport: Sport;
   level: Level;
+  requestedCrewSize: number;
   dateISO: string;
   acceptingBidsUntilISO?: string;
   location: string;
@@ -22,11 +23,21 @@ interface EditGameFormProps {
 
 const SPORTS: Sport[] = ["Football", "Basketball", "Soccer", "Baseball"];
 const LEVELS: Level[] = ["NCAA", "Varsity", "Junior Varsity", "Middle School", "Youth"];
+const CREW_SIZE_OPTIONS = Array.from({ length: 12 }, (_, index) => {
+  const size = String(index + 1);
+  return {
+    value: size,
+    label: `${size} official${size === "1" ? "" : "s"}`
+  };
+});
 
 export function EditGameForm({ game, onSubmit, onCancel }: EditGameFormProps) {
   const [schoolName, setSchoolName] = useState(game.schoolName);
   const [sport, setSport] = useState<Sport>(game.sport);
   const [level, setLevel] = useState<Level>(game.level);
+  const [requestedCrewSize, setRequestedCrewSize] = useState(
+    game.requestedCrewSize ? String(game.requestedCrewSize) : ""
+  );
   const [dateLocal, setDateLocal] = useState(toDateTimeLocalValue(game.dateISO));
   const [acceptingBidsUntilLocal, setAcceptingBidsUntilLocal] = useState(
     toDateTimeLocalValue(game.acceptingBidsUntilISO)
@@ -46,6 +57,7 @@ export function EditGameForm({ game, onSubmit, onCancel }: EditGameFormProps) {
         schoolName,
         sport,
         level,
+        requestedCrewSize,
         dateLocal,
         acceptingBidsUntilLocal,
         location,
@@ -100,6 +112,16 @@ export function EditGameForm({ game, onSubmit, onCancel }: EditGameFormProps) {
               value: levelOption,
               label: levelOption
             }))}
+          />
+        </label>
+
+        <label>
+          Crew Size Needed
+          <Select
+            value={requestedCrewSize}
+            onValueChange={setRequestedCrewSize}
+            options={CREW_SIZE_OPTIONS}
+            placeholder="Select crew size"
           />
         </label>
 

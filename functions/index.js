@@ -382,6 +382,16 @@ function normalizeCrewDocument(id, data) {
 }
 
 function normalizeRatingDocument(id, data) {
+  const schoolExperience =
+    data.schoolExperience && typeof data.schoolExperience === "object"
+      ? {
+          greetedOnArrival: data.schoolExperience.greetedOnArrival === true,
+          satisfactoryLockerRoom: data.schoolExperience.satisfactoryLockerRoom === true,
+          towelsProvided: data.schoolExperience.towelsProvided === true,
+          foodDrinkProvided: data.schoolExperience.foodDrinkProvided === true
+        }
+      : undefined;
+
   return {
     id,
     gameId: trimString(data.gameId),
@@ -391,6 +401,7 @@ function normalizeRatingDocument(id, data) {
     ratedByRole: trimString(data.ratedByRole),
     stars: typeof data.stars === "number" ? data.stars : 0,
     comment: trimString(data.comment) || undefined,
+    schoolExperience,
     createdAtISO: trimString(data.createdAtISO),
     updatedAtISO: trimString(data.updatedAtISO)
   };
@@ -1345,28 +1356,94 @@ exports.updateCrewMemberPositions = onClientCall(async (request) => {
 
 exports.upsertGameRating = onClientCall(async (request) => {
   const profile = await getRequesterProfile(request);
-  assert(profile.role !== "evaluator", "permission-denied", "Evaluators cannot submit game ratings.");
 
   const input = request.data && request.data.input;
   assert(input && typeof input === "object", "invalid-argument", "Rating input is required.");
-  assert(RATING_TARGET_TYPES.has(trimString(input.targetType)), "invalid-argument", "Invalid rating target type.");
+  const targetType = trimString(input.targetType);
+  assert(RATING_TARGET_TYPES.has(targetType), "invalid-argument", "Invalid rating target type.");
   assert(trimString(input.gameId), "invalid-argument", "gameId is required.");
   assert(trimString(input.targetId), "invalid-argument", "targetId is required.");
   assert(Number.isInteger(input.stars) && input.stars >= 1 && input.stars <= 5, "invalid-argument", "Rating must be an integer between 1 and 5.");
+  const game = await getGameById(trimString(input.gameId));
+  if (profile.role === "assignor" || profile.role === "school") {
+    assert(targetType === "crew", "permission-denied", "Schools and assignors can only rate crews.");
+  }
+  if (profile.role === "official") {
+    assert(
+      targetType === "school" || targetType === "venue",
+      "permission-denied",
+      "Officials can only rate the school or venue."
+    );
+  }
+  if (profile.role === "evaluator") {
+    assert(
+      targetType === "crew" || targetType === "official",
+      "permission-denied",
+      "Evaluators can only rate crews or officials."
+    );
+  }
+  const schoolExperienceInput = input.schoolExperience;
+  if (schoolExperienceInput !== undefined) {
+    assert(
+      targetType === "school",
+      "invalid-argument",
+      "School experience details can only be attached to school ratings."
+    );
+    assert(
+      profile.role === "official",
+      "permission-denied",
+      "Only officials can submit school experience details."
+    );
+    const assignedEntry =
+      Array.isArray(game.assignedOfficials)
+        ? game.assignedOfficials.find((official) => official.officialUid === profile.uid)
+        : null;
+    assert(
+      assignedEntry && assignedEntry.role === "R",
+      "permission-denied",
+      "Only the assigned Referee can submit school experience details."
+    );
+    assert(
+      schoolExperienceInput && typeof schoolExperienceInput === "object",
+      "invalid-argument",
+      "School experience details are invalid."
+    );
+    [
+      "greetedOnArrival",
+      "satisfactoryLockerRoom",
+      "towelsProvided",
+      "foodDrinkProvided"
+    ].forEach((field) => {
+      assert(
+        typeof schoolExperienceInput[field] === "boolean",
+        "invalid-argument",
+        `${field} must be true or false.`
+      );
+    });
+  }
 
   const nowISO = new Date().toISOString();
-  const ratingId = `${trimString(input.gameId)}__${profile.uid}__${trimString(input.targetType)}__${trimString(input.targetId)}`;
+  const ratingId = `${trimString(input.gameId)}__${profile.uid}__${targetType}__${trimString(input.targetId)}`;
   await db.collection(RATINGS_COLLECTION).doc(ratingId).set(
     {
       gameId: trimString(input.gameId),
-      targetType: trimString(input.targetType),
+      targetType,
       targetId: trimString(input.targetId),
       ratedByUid: profile.uid,
       ratedByRole: profile.role,
       stars: input.stars,
       updatedAtISO: nowISO,
       createdAtISO: nowISO,
-      comment: trimString(input.comment) || FieldValue.delete()
+      comment: trimString(input.comment) || FieldValue.delete(),
+      schoolExperience:
+        schoolExperienceInput !== undefined
+          ? {
+              greetedOnArrival: schoolExperienceInput.greetedOnArrival,
+              satisfactoryLockerRoom: schoolExperienceInput.satisfactoryLockerRoom,
+              towelsProvided: schoolExperienceInput.towelsProvided,
+              foodDrinkProvided: schoolExperienceInput.foodDrinkProvided
+            }
+          : FieldValue.delete()
     },
     { merge: true }
   );

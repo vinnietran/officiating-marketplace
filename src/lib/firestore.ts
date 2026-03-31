@@ -17,6 +17,7 @@ import type {
   OfficiatingLevel,
   Rating,
   RatingTargetType,
+  SchoolExperienceRating,
   Sport,
   UserProfile
 } from "../types";
@@ -84,6 +85,7 @@ export interface UpsertGameRatingInput {
   targetId: string;
   stars: number;
   comment?: string;
+  schoolExperience?: SchoolExperienceRating;
 }
 
 export interface UpsertGameEvaluationInput {
@@ -515,7 +517,7 @@ export async function updateCrewMemberPositions(
 
 export async function upsertGameRating(
   input: UpsertGameRatingInput,
-  ratedBy: { uid: string; role: "assignor" | "school" | "official" }
+  ratedBy: { uid: string; role: "assignor" | "school" | "official" | "evaluator" }
 ): Promise<void> {
   if (IS_E2E) {
     await e2eFirestore.upsertGameRating(input, ratedBy);

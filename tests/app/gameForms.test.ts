@@ -11,6 +11,7 @@ test("buildMarketplaceGameSubmission trims text fields and converts local dateti
     schoolName: " Central High ",
     sport: "Football",
     level: "Varsity",
+    requestedCrewSize: "5",
     dateLocal: "2026-03-14T19:30",
     acceptingBidsUntilLocal: "2026-03-13T18:00",
     location: " 123 Main St ",
@@ -33,6 +34,7 @@ test("buildMarketplaceGameSubmission rejects invalid form states", () => {
         schoolName: "",
         sport: "Football",
         level: "Varsity",
+        requestedCrewSize: "5",
         dateLocal: "2026-03-14T19:30",
         acceptingBidsUntilLocal: "",
         location: "",
@@ -48,6 +50,7 @@ test("buildMarketplaceGameSubmission rejects invalid form states", () => {
         schoolName: "Central High",
         sport: "Football",
         level: "Varsity",
+        requestedCrewSize: "5",
         dateLocal: "2026-03-14T19:30",
         acceptingBidsUntilLocal: "2026-03-15T18:00",
         location: "123 Main St",
@@ -63,6 +66,7 @@ test("buildMarketplaceGameSubmission rejects invalid form states", () => {
         schoolName: "Central High",
         sport: "Football",
         level: "Varsity",
+        requestedCrewSize: "5",
         dateLocal: "2026-03-14T19:30",
         acceptingBidsUntilLocal: "",
         location: "123 Main St",
@@ -78,4 +82,3 @@ test("toDateTimeLocalValue round-trips a local date for the edit form", () => {
   assert.equal(toDateTimeLocalValue(localDate.toISOString()), "2026-03-11T13:45");
   assert.equal(toDateTimeLocalValue("not-a-date"), "");
 });
-

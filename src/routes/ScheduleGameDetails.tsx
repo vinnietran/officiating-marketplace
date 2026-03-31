@@ -1,9 +1,12 @@
-import { Fragment, useEffect, useMemo, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useState, type FormEvent } from "react";
+import { Building2, CheckCircle2, MapPinned, Shield, Star, Users, X } from "lucide-react";
+import * as Dialog from "@radix-ui/react-dialog";
 import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 import { AuthPanel } from "../components/AuthPanel";
 import { BidForm } from "../components/BidForm";
 import { CompleteProfilePanel } from "../components/CompleteProfilePanel";
 import { MessageModal } from "../components/MessageModal";
+import { Button } from "../components/ui/Button";
 import { Select } from "../components/ui/Select";
 import { useAuth } from "../context/AuthContext";
 import {
@@ -45,6 +48,7 @@ import type {
   Game,
   Rating,
   RatingTargetType,
+  SchoolExperienceRating,
   UserProfile
 } from "../types";
 
@@ -86,7 +90,29 @@ interface AssignedIndividual {
   name: string;
   crew: string;
   position: string;
+  positionCode?: FootballPosition;
 }
+
+type SchoolExperienceAnswer = "" | "yes" | "no";
+type SchoolExperienceFormState = Record<keyof SchoolExperienceRating, SchoolExperienceAnswer>;
+
+const SCHOOL_EXPERIENCE_QUESTIONS: Array<{
+  field: keyof SchoolExperienceRating;
+  label: string;
+}> = [
+  { field: "greetedOnArrival", label: "Did someone greet you upon arrival?" },
+  { field: "satisfactoryLockerRoom", label: "Satisfactory locker room?" },
+  { field: "towelsProvided", label: "Towels provided?" },
+  { field: "foodDrinkProvided", label: "Food/Drink provided?" }
+];
+
+const STAR_OPTIONS = [
+  { value: "5", label: "Excellent" },
+  { value: "4", label: "Strong" },
+  { value: "3", label: "Solid" },
+  { value: "2", label: "Needs work" },
+  { value: "1", label: "Poor" }
+] as const;
 
 const FOOTBALL_POSITION_LABELS: Record<FootballPosition, string> = {
   R: "Referee",
@@ -127,6 +153,78 @@ function getRatingTargetTypeLabel(targetType: RatingTargetType): string {
   return "Official";
 }
 
+function getRatingTargetPrompt(targetType: RatingTargetType): string {
+  if (targetType === "school") {
+    return "Capture the overall school-host experience for this assignment.";
+  }
+  if (targetType === "venue") {
+    return "Document how the venue setup and environment felt on game day.";
+  }
+  if (targetType === "crew") {
+    return "Rate how this crew performed and communicated during the assignment.";
+  }
+  return "Rate this official's professionalism, communication, and presence.";
+}
+
+function getRatingTargetIcon(targetType: RatingTargetType) {
+  if (targetType === "crew") {
+    return Users;
+  }
+  if (targetType === "school") {
+    return Building2;
+  }
+  if (targetType === "venue") {
+    return MapPinned;
+  }
+  return Shield;
+}
+
+function renderStarSummary(stars?: number | null): string {
+  if (!stars) {
+    return "Not rated yet";
+  }
+
+  return `${stars}/5 stars`;
+}
+
+const EMPTY_SCHOOL_EXPERIENCE_FORM: SchoolExperienceFormState = {
+  greetedOnArrival: "",
+  satisfactoryLockerRoom: "",
+  towelsProvided: "",
+  foodDrinkProvided: ""
+};
+
+function toSchoolExperienceFormState(
+  schoolExperience?: SchoolExperienceRating
+): SchoolExperienceFormState {
+  if (!schoolExperience) {
+    return { ...EMPTY_SCHOOL_EXPERIENCE_FORM };
+  }
+
+  return {
+    greetedOnArrival: schoolExperience.greetedOnArrival ? "yes" : "no",
+    satisfactoryLockerRoom: schoolExperience.satisfactoryLockerRoom ? "yes" : "no",
+    towelsProvided: schoolExperience.towelsProvided ? "yes" : "no",
+    foodDrinkProvided: schoolExperience.foodDrinkProvided ? "yes" : "no"
+  };
+}
+
+function toSchoolExperiencePayload(
+  schoolExperienceForm: SchoolExperienceFormState
+): SchoolExperienceRating | null {
+  const answers = Object.values(schoolExperienceForm);
+  if (answers.some((answer) => answer === "")) {
+    return null;
+  }
+
+  return {
+    greetedOnArrival: schoolExperienceForm.greetedOnArrival === "yes",
+    satisfactoryLockerRoom: schoolExperienceForm.satisfactoryLockerRoom === "yes",
+    towelsProvided: schoolExperienceForm.towelsProvided === "yes",
+    foodDrinkProvided: schoolExperienceForm.foodDrinkProvided === "yes"
+  };
+}
+
 export function ScheduleGameDetails() {
   const { gameId } = useParams<{ gameId: string }>();
   const location = useLocation();
@@ -149,6 +247,9 @@ export function ScheduleGameDetails() {
   const [editingRatingKey, setEditingRatingKey] = useState<string | null>(null);
   const [ratingStars, setRatingStars] = useState("5");
   const [ratingComment, setRatingComment] = useState("");
+  const [schoolExperienceForm, setSchoolExperienceForm] = useState<SchoolExperienceFormState>({
+    ...EMPTY_SCHOOL_EXPERIENCE_FORM
+  });
   const [ratingError, setRatingError] = useState<string | null>(null);
   const [savingRating, setSavingRating] = useState(false);
   const [evaluationScore, setEvaluationScore] = useState("3");
@@ -280,7 +381,8 @@ export function ScheduleGameDetails() {
           uid: official.officialUid,
           name: official.officialName,
           crew: game.awardedCrewId ? selectedBid?.crewName ?? "Crew" : "Individual",
-          position: toPositionLabel(official.role)
+          position: toPositionLabel(official.role),
+          positionCode: official.role
         }))
         .sort((a, b) => a.name.localeCompare(b.name));
     }
@@ -300,7 +402,8 @@ export function ScheduleGameDetails() {
             uid: assignment.officialUid,
             name: assignment.officialName,
             crew: "Individual",
-            position: toPositionLabel(assignment.position)
+            position: toPositionLabel(assignment.position),
+            positionCode: assignment.position
           });
           return;
         }
@@ -311,7 +414,8 @@ export function ScheduleGameDetails() {
             uid: memberUid,
             name: assignment.memberNames[index] ?? "Official",
             crew: assignment.crewName,
-            position: toPositionLabel(assignmentCrew?.memberPositions?.[memberUid])
+            position: toPositionLabel(assignmentCrew?.memberPositions?.[memberUid]),
+            positionCode: assignmentCrew?.memberPositions?.[memberUid]
           });
         });
       });
@@ -329,7 +433,8 @@ export function ScheduleGameDetails() {
           uid: official.officialUid,
           name: official.officialName,
           crew: selectedBid.crewName ?? "Crew",
-          position: toPositionLabel(official.role)
+          position: toPositionLabel(official.role),
+          positionCode: official.role
         });
       });
 
@@ -343,7 +448,8 @@ export function ScheduleGameDetails() {
             uid: member.uid,
             name: member.name,
             crew: selectedBid.crewName ?? selectedBidCrew.name,
-            position: toPositionLabel(selectedBidCrew.memberPositions[member.uid])
+            position: toPositionLabel(selectedBidCrew.memberPositions[member.uid]),
+            positionCode: selectedBidCrew.memberPositions[member.uid]
           });
         });
       } else {
@@ -495,6 +601,24 @@ export function ScheduleGameDetails() {
     setEvaluationNotes(myEvaluation?.notes ?? "");
   }, [myEvaluation, profile?.role]);
 
+  useEffect(() => {
+    if (!editingRatingKey) {
+      return;
+    }
+
+    const activeTargetStillVisible = rateableTargets.some(
+      (target) => toTargetKey(target.targetType, target.targetId) === editingRatingKey
+    );
+    const officialTargetStillVisible = officialSchoolVenueTargets.some(
+      (target) => toTargetKey(target.targetType, target.targetId) === editingRatingKey
+    );
+
+    if (!activeTargetStillVisible && !officialTargetStillVisible) {
+      setEditingRatingKey(null);
+      setRatingError(null);
+    }
+  }, [editingRatingKey, officialSchoolVenueTargets, rateableTargets]);
+
   if (loading) {
     return (
       <main className="page">
@@ -570,6 +694,11 @@ export function ScheduleGameDetails() {
   const isAssignedOfficial =
     activeProfile.role === "official" &&
     assignedIndividuals.some((entry) => entry.uid === activeUser.uid);
+  const assignedOfficialEntry =
+    activeProfile.role === "official"
+      ? assignedIndividuals.find((entry) => entry.uid === activeUser.uid) ?? null
+      : null;
+  const isAssignedReferee = assignedOfficialEntry?.positionCode === "R";
   const canViewAwardedDetails =
     activeGame.status !== "awarded" || canManageGame || isAssignedOfficial || isEvaluator;
   const shouldShowAssignmentSnapshot = isDirectAssignment || activeGame.status === "awarded";
@@ -579,13 +708,44 @@ export function ScheduleGameDetails() {
       ? selectedBid.amount
       : activeGame.payPosted;
   const gameHasBeenPlayed = new Date(activeGame.dateISO).getTime() <= nowMs;
+  const managerRatingTargets = rateableTargets.filter((target) => target.targetType === "crew");
+  const evaluatorRatingTargets = rateableTargets.filter(
+    (target) => target.targetType === "crew" || target.targetType === "official"
+  );
   const canOfficialRateSchoolOrVenue =
     activeProfile.role === "official" &&
     isAssignedOfficial &&
     gameHasBeenPlayed &&
     activeGame.status === "awarded";
-  const canSubmitRatings = canManageGame || canOfficialRateSchoolOrVenue;
-  const ratingTargets = canManageGame ? rateableTargets : officialSchoolVenueTargets;
+  const canEvaluatorRate = isEvaluator && gameHasBeenPlayed && activeGame.status === "awarded";
+  const canSubmitRatings = canManageGame || canOfficialRateSchoolOrVenue || canEvaluatorRate;
+  const ratingTargets = canManageGame
+    ? managerRatingTargets
+    : canEvaluatorRate
+      ? evaluatorRatingTargets
+    : officialSchoolVenueTargets.filter(
+        (target) => target.targetType !== "school" || isAssignedReferee
+      );
+  const activeRatingTarget =
+    ratingTargets.find((target) => toTargetKey(target.targetType, target.targetId) === editingRatingKey) ??
+    null;
+  const completedRatingsCount = ratingTargets.filter((target) =>
+    myRatingsByTargetKey.has(toTargetKey(target.targetType, target.targetId))
+  ).length;
+  const remainingRatingsCount = Math.max(ratingTargets.length - completedRatingsCount, 0);
+  const nextRatingTarget =
+    ratingTargets.find(
+      (target) => !myRatingsByTargetKey.has(toTargetKey(target.targetType, target.targetId))
+    ) ??
+    ratingTargets[0] ??
+    null;
+  const ratingIntroCopy = canManageGame
+    ? "Launch the rating studio to rate the crew as one unit after the game."
+    : canEvaluatorRate
+      ? "Use the rating studio to rate the crew overall and, when needed, the assigned officials."
+    : isAssignedReferee
+      ? "Use the rating studio to capture both the school-host experience and the venue details."
+      : "Use the rating studio to capture your school and venue experience after the game.";
   const bidWindowInfo = getBidWindowInfo(
     activeGame.acceptingBidsUntilISO,
     activeGame.status,
@@ -801,15 +961,27 @@ export function ScheduleGameDetails() {
     setEditingRatingKey(key);
     setRatingStars(existing ? String(existing.stars) : "5");
     setRatingComment(existing?.comment ?? "");
+    setSchoolExperienceForm(toSchoolExperienceFormState(existing?.schoolExperience));
+    setRatingError(null);
+  }
+
+  function closeRatingStudio() {
+    if (savingRating) {
+      return;
+    }
+
+    setEditingRatingKey(null);
     setRatingError(null);
   }
 
   async function handleSaveRating(target: RateableTarget) {
-    const currentRaterRole: "assignor" | "school" | "official" | null =
+    const currentRaterRole: "assignor" | "school" | "official" | "evaluator" | null =
       canManageGame && activeRaterRole
         ? activeRaterRole
         : canOfficialRateSchoolOrVenue
           ? "official"
+          : canEvaluatorRate
+            ? "evaluator"
           : null;
 
     if (!currentRaterRole) {
@@ -822,35 +994,109 @@ export function ScheduleGameDetails() {
       return;
     }
 
+    if ((currentRaterRole === "assignor" || currentRaterRole === "school") && target.targetType !== "crew") {
+      setRatingError("Schools and assignors can only rate crews.");
+      return;
+    }
+
+    if (currentRaterRole === "evaluator" && !["crew", "official"].includes(target.targetType)) {
+      setRatingError("Evaluators can only rate crews or officials.");
+      return;
+    }
+
+    const requiresSchoolExperience =
+      currentRaterRole === "official" && target.targetType === "school" && isAssignedReferee;
+    if (currentRaterRole === "official" && target.targetType === "school" && !isAssignedReferee) {
+      setRatingError("Only the assigned Referee can submit a school experience rating.");
+      return;
+    }
+
     const parsedStars = Number(ratingStars);
     if (!Number.isInteger(parsedStars) || parsedStars < 1 || parsedStars > 5) {
       setRatingError("Rating must be a whole number from 1 to 5.");
       return;
     }
 
+    const schoolExperience = requiresSchoolExperience
+      ? toSchoolExperiencePayload(schoolExperienceForm)
+      : undefined;
+    if (requiresSchoolExperience && !schoolExperience) {
+      setRatingError("Answer each school experience question before saving.");
+      return;
+    }
+
     setSavingRating(true);
     setRatingError(null);
     try {
+      const ratingInput: {
+        gameId: string;
+        targetType: RatingTargetType;
+        targetId: string;
+        stars: number;
+        comment?: string;
+        schoolExperience?: SchoolExperienceRating;
+      } = {
+        gameId: activeGame.id,
+        targetType: target.targetType,
+        targetId: target.targetId,
+        stars: parsedStars,
+        comment: ratingComment.trim() || undefined
+      };
+
+      if (schoolExperience) {
+        ratingInput.schoolExperience = schoolExperience;
+      }
+
       await upsertGameRating(
-        {
-          gameId: activeGame.id,
-          targetType: target.targetType,
-          targetId: target.targetId,
-          stars: parsedStars,
-          comment: ratingComment.trim() || undefined
-        },
+        ratingInput,
         {
           uid: activeUser.uid,
           role: currentRaterRole
         }
       );
 
+      const nowISO = new Date().toISOString();
+      setRatings((current) => {
+        const optimisticId = `${activeGame.id}__${activeUser.uid}__${target.targetType}__${target.targetId}`;
+        const nextRating: Rating = {
+          id: optimisticId,
+          gameId: activeGame.id,
+          targetType: target.targetType,
+          targetId: target.targetId,
+          ratedByUid: activeUser.uid,
+          ratedByRole: currentRaterRole,
+          stars: parsedStars,
+          comment: ratingInput.comment,
+          schoolExperience: ratingInput.schoolExperience,
+          createdAtISO:
+            current.find(
+              (rating) =>
+                rating.gameId === activeGame.id &&
+                rating.targetType === target.targetType &&
+                rating.targetId === target.targetId &&
+                rating.ratedByUid === activeUser.uid
+            )?.createdAtISO ?? nowISO,
+          updatedAtISO: nowISO
+        };
+
+        const nextRatings = current.filter(
+          (rating) =>
+            !(
+              rating.gameId === activeGame.id &&
+              rating.targetType === target.targetType &&
+              rating.targetId === target.targetId &&
+              rating.ratedByUid === activeUser.uid
+            )
+        );
+
+        return [...nextRatings, nextRating];
+      });
+
       setModalMessage({
         title: "Rating Saved",
         message: `Saved ${parsedStars}/5 for ${target.targetName}.`,
         autoCloseMs: 1800
       });
-      setEditingRatingKey(null);
     } catch (error) {
       setRatingError(getReadableFirestoreError(error, FIRESTORE_DATABASE_ID));
     } finally {
@@ -1247,9 +1493,28 @@ export function ScheduleGameDetails() {
         </section>
       ) : null}
 
-      {!isEvaluator ? (
-        <section className="details-card">
-          <h3>Post-Game Ratings</h3>
+      <section className="details-card">
+          <div className="rating-hub-header">
+            <div className="rating-hub-copy">
+              <span className="rating-hub-eyebrow">After the final whistle</span>
+              <h3>Post-Game Ratings</h3>
+              <p className="meta-line">{ratingIntroCopy}</p>
+            </div>
+            {canSubmitRatings && gameHasBeenPlayed && activeGame.status === "awarded" ? (
+              <Button
+                type="button"
+                variant="secondary"
+                onClick={() => {
+                  if (nextRatingTarget) {
+                    beginRating(nextRatingTarget);
+                  }
+                }}
+                disabled={!nextRatingTarget}
+              >
+                {completedRatingsCount > 0 ? "Open Rating Studio" : "Start Rating"}
+              </Button>
+            ) : null}
+          </div>
           {!canSubmitRatings ? (
             <p className="empty-text">You can rate this game after you are assigned and it is played.</p>
           ) : !gameHasBeenPlayed || activeGame.status !== "awarded" ? (
@@ -1259,107 +1524,307 @@ export function ScheduleGameDetails() {
           ) : canOfficialRateSchoolOrVenue && officialSchoolVenueTargets.length === 0 ? (
             <p className="empty-text">No school or venue found for rating.</p>
           ) : canManageGame && ratingTargets.length === 0 ? (
-            <p className="empty-text">No assignable official or crew found for rating.</p>
+            <p className="empty-text">No awarded crew found for rating.</p>
+          ) : canEvaluatorRate && ratingTargets.length === 0 ? (
+            <p className="empty-text">No crew or assigned officials found for rating.</p>
           ) : (
-            <div className="schedule-table-wrapper">
-              <table className="schedule-table">
-                <thead>
-                  <tr>
-                    <th>Target</th>
-                    <th>Type</th>
-                    <th>Details</th>
-                    <th>Your Rating</th>
-                    <th>Action</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {ratingTargets.map((target) => {
-                    const targetKey = toTargetKey(target.targetType, target.targetId);
-                    const existingRating = myRatingsByTargetKey.get(targetKey) ?? null;
-                    const isEditing = editingRatingKey === targetKey;
+            <div className="rating-hub-shell">
+              <div className="rating-hub-stats">
+                <article className="rating-hub-stat">
+                  <span className="rating-hub-stat-label">Available targets</span>
+                  <strong className="rating-hub-stat-value">{ratingTargets.length}</strong>
+                </article>
+                <article className="rating-hub-stat">
+                  <span className="rating-hub-stat-label">Completed by you</span>
+                  <strong className="rating-hub-stat-value">{completedRatingsCount}</strong>
+                </article>
+                <article className="rating-hub-stat">
+                  <span className="rating-hub-stat-label">Still open</span>
+                  <strong className="rating-hub-stat-value">{remainingRatingsCount}</strong>
+                </article>
+              </div>
 
-                    return (
-                      <Fragment key={targetKey}>
-                        <tr>
-                          <td>{target.targetName}</td>
-                          <td>{getRatingTargetTypeLabel(target.targetType)}</td>
-                          <td>{target.detail}</td>
-                          <td>{existingRating ? `${existingRating.stars}/5` : "-"}</td>
-                          <td>
-                            <button
-                              type="button"
-                              className="button-secondary"
-                              onClick={() => beginRating(target)}
-                              disabled={savingRating}
-                            >
-                              {existingRating ? "Update" : "Rate"}
-                            </button>
-                          </td>
-                        </tr>
-                        {isEditing ? (
-                          <tr className="rating-edit-row">
-                            <td colSpan={5}>
-                              <div className="rating-edit-grid">
-                                <label>
-                                  Stars
-                                  <Select
-                                    value={ratingStars}
-                                    disabled={savingRating}
-                                    onValueChange={setRatingStars}
-                                    options={[
-                                      { value: "5", label: "5" },
-                                      { value: "4", label: "4" },
-                                      { value: "3", label: "3" },
-                                      { value: "2", label: "2" },
-                                      { value: "1", label: "1" }
-                                    ]}
-                                  />
-                                </label>
-                                <label>
-                                  Comment (Optional)
-                                  <textarea
-                                    rows={2}
-                                    maxLength={200}
-                                    value={ratingComment}
-                                    onChange={(event) => setRatingComment(event.target.value)}
-                                    disabled={savingRating}
-                                  />
-                                </label>
-                                {ratingError ? <p className="error-text">{ratingError}</p> : null}
-                                <div className="bid-form-actions">
-                                  <button
-                                    type="button"
-                                    onClick={() => handleSaveRating(target)}
-                                    disabled={savingRating}
-                                  >
-                                    {savingRating ? "Saving..." : "Save Rating"}
-                                  </button>
-                                  <button
-                                    type="button"
-                                    className="button-secondary"
-                                    onClick={() => {
-                                      if (!savingRating) {
-                                        setEditingRatingKey(null);
-                                        setRatingError(null);
-                                      }
-                                    }}
-                                    disabled={savingRating}
-                                  >
-                                    Cancel
-                                  </button>
-                                </div>
-                              </div>
-                            </td>
-                          </tr>
-                        ) : null}
-                      </Fragment>
-                    );
-                  })}
-                </tbody>
-              </table>
+              <div className="rating-hub-target-grid">
+                {ratingTargets.map((target) => {
+                  const targetKey = toTargetKey(target.targetType, target.targetId);
+                  const existingRating = myRatingsByTargetKey.get(targetKey) ?? null;
+                  const TargetIcon = getRatingTargetIcon(target.targetType);
+
+                  return (
+                    <button
+                      key={targetKey}
+                      type="button"
+                      className="rating-target-card"
+                      onClick={() => beginRating(target)}
+                      disabled={savingRating}
+                    >
+                      <div className="rating-target-card-top">
+                        <span className="rating-target-card-icon" aria-hidden="true">
+                          <TargetIcon />
+                        </span>
+                        <span className="rating-target-card-type">
+                          {getRatingTargetTypeLabel(target.targetType)}
+                        </span>
+                        <span
+                          className={
+                            existingRating
+                              ? "rating-target-card-status rating-target-card-status-complete"
+                              : "rating-target-card-status"
+                          }
+                        >
+                          {existingRating ? "Saved" : "Needs rating"}
+                        </span>
+                      </div>
+                      <strong>{target.targetName}</strong>
+                      <p>{target.detail}</p>
+                      <div className="rating-target-card-footer">
+                        <span className="rating-target-card-stars">
+                          <Star aria-hidden="true" />
+                          {renderStarSummary(existingRating?.stars)}
+                        </span>
+                        {existingRating ? (
+                          <span>{formatGameDate(existingRating.updatedAtISO)}</span>
+                        ) : (
+                          <span>Open studio</span>
+                        )}
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
             </div>
           )}
-        </section>
+      </section>
+
+      {activeRatingTarget ? (
+        <Dialog.Root open onOpenChange={(open) => (!open ? closeRatingStudio() : undefined)}>
+          <Dialog.Portal>
+            <Dialog.Overlay className="rating-studio-overlay" />
+            <Dialog.Content className="rating-studio-dialog">
+              <div className="rating-studio-shell">
+                <aside className="rating-studio-sidebar">
+                  <div className="rating-studio-sidebar-header">
+                    <span className="rating-hub-eyebrow">Rating Studio</span>
+                    <Dialog.Title className="rating-studio-title">
+                      Post-Game Ratings
+                    </Dialog.Title>
+                    <Dialog.Description className="rating-studio-description">
+                      Select a target, review your existing score, and save feedback in one focused
+                      place.
+                    </Dialog.Description>
+                  </div>
+
+                  <div className="rating-studio-progress">
+                    <div>
+                      <span className="rating-hub-stat-label">Completed</span>
+                      <strong className="rating-hub-stat-value">{completedRatingsCount}</strong>
+                    </div>
+                    <div>
+                      <span className="rating-hub-stat-label">Remaining</span>
+                      <strong className="rating-hub-stat-value">{remainingRatingsCount}</strong>
+                    </div>
+                  </div>
+
+                  <div className="rating-studio-target-list" role="list" aria-label="Rating targets">
+                    {ratingTargets.map((target) => {
+                      const targetKey = toTargetKey(target.targetType, target.targetId);
+                      const existingRating = myRatingsByTargetKey.get(targetKey) ?? null;
+                      const TargetIcon = getRatingTargetIcon(target.targetType);
+                      const isActive = targetKey === editingRatingKey;
+
+                      return (
+                        <button
+                          key={targetKey}
+                          type="button"
+                          className={
+                            isActive
+                              ? "rating-studio-target rating-studio-target-active"
+                              : "rating-studio-target"
+                          }
+                          onClick={() => beginRating(target)}
+                          disabled={savingRating}
+                          aria-pressed={isActive}
+                        >
+                          <span className="rating-studio-target-icon" aria-hidden="true">
+                            <TargetIcon />
+                          </span>
+                          <span className="rating-studio-target-copy">
+                            <strong>{target.targetName}</strong>
+                            <span>{target.detail}</span>
+                          </span>
+                          <span className="rating-studio-target-meta">
+                            {existingRating ? `${existingRating.stars}/5` : "New"}
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </aside>
+
+                <section className="rating-studio-editor">
+                  <div className="rating-studio-editor-head">
+                    <div>
+                      <span className="rating-studio-type-pill">
+                        {getRatingTargetTypeLabel(activeRatingTarget.targetType)}
+                      </span>
+                      <h4>{activeRatingTarget.targetName}</h4>
+                      <p>{getRatingTargetPrompt(activeRatingTarget.targetType)}</p>
+                    </div>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="rating-studio-close"
+                      onClick={closeRatingStudio}
+                      disabled={savingRating}
+                      aria-label="Close rating studio"
+                    >
+                      <X />
+                    </Button>
+                  </div>
+
+                  <div className="rating-studio-current">
+                    <div>
+                      <span className="rating-hub-stat-label">Current rating</span>
+                      <strong className="rating-hub-stat-value">
+                        {renderStarSummary(
+                          myRatingsByTargetKey.get(
+                            toTargetKey(activeRatingTarget.targetType, activeRatingTarget.targetId)
+                          )?.stars
+                        )}
+                      </strong>
+                    </div>
+                    <div>
+                      <span className="rating-hub-stat-label">Details</span>
+                      <strong className="rating-studio-current-detail">
+                        {activeRatingTarget.detail}
+                      </strong>
+                    </div>
+                  </div>
+
+                  {activeProfile.role === "official" &&
+                  activeRatingTarget.targetType === "school" &&
+                  isAssignedReferee ? (
+                    <div className="rating-question-grid">
+                      {SCHOOL_EXPERIENCE_QUESTIONS.map((question) => (
+                        <div key={question.field} className="rating-question-card">
+                          <span className="rating-question-label">{question.label}</span>
+                          <div className="rating-choice-group" role="group" aria-label={question.label}>
+                            {(["yes", "no"] as const).map((answer) => {
+                              const isActive = schoolExperienceForm[question.field] === answer;
+
+                              return (
+                                <button
+                                  key={answer}
+                                  type="button"
+                                  className={
+                                    isActive
+                                      ? "rating-choice-button rating-choice-button-active"
+                                      : "rating-choice-button"
+                                  }
+                                  onClick={() =>
+                                    setSchoolExperienceForm((current) => ({
+                                      ...current,
+                                      [question.field]: answer
+                                    }))
+                                  }
+                                  disabled={savingRating}
+                                  aria-pressed={isActive}
+                                >
+                                  {answer === "yes" ? "Yes" : "No"}
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : null}
+
+                  <div className="rating-stars-panel">
+                    <span className="rating-question-label">
+                      {activeProfile.role === "official" &&
+                      activeRatingTarget.targetType === "school" &&
+                      isAssignedReferee
+                        ? "Overall school experience"
+                        : "Overall rating"}
+                    </span>
+                    <div className="rating-stars-grid" role="group" aria-label="Overall rating">
+                      {STAR_OPTIONS.map((option) => {
+                        const isActive = ratingStars === option.value;
+
+                        return (
+                          <button
+                            key={option.value}
+                            type="button"
+                            className={
+                              isActive
+                                ? "rating-star-button rating-star-button-active"
+                                : "rating-star-button"
+                            }
+                            onClick={() => setRatingStars(option.value)}
+                            disabled={savingRating}
+                            aria-pressed={isActive}
+                            aria-label={`${option.value} star${option.value === "1" ? "" : "s"}`}
+                          >
+                            <span className="rating-star-button-value">
+                              <Star aria-hidden="true" />
+                              {option.value}
+                            </span>
+                            <span className="rating-star-button-label">{option.label}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  <label className="rating-comment-field">
+                    {activeProfile.role === "official" &&
+                    activeRatingTarget.targetType === "school" &&
+                    isAssignedReferee
+                      ? "Comments"
+                      : "Comment (Optional)"}
+                    <textarea
+                      rows={4}
+                      maxLength={200}
+                      value={ratingComment}
+                      onChange={(event) => setRatingComment(event.target.value)}
+                      disabled={savingRating}
+                      placeholder="Add context that would help on future assignments."
+                    />
+                  </label>
+
+                  {ratingError ? <p className="error-text">{ratingError}</p> : null}
+
+                  <div className="rating-studio-actions">
+                    <Button
+                      type="button"
+                      onClick={() => handleSaveRating(activeRatingTarget)}
+                      disabled={savingRating}
+                    >
+                      {savingRating ? "Saving..." : "Save Rating"}
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      onClick={closeRatingStudio}
+                      disabled={savingRating}
+                    >
+                      Close
+                    </Button>
+                  </div>
+
+                  {completedRatingsCount === ratingTargets.length && ratingTargets.length > 0 ? (
+                    <div className="rating-studio-success">
+                      <CheckCircle2 aria-hidden="true" />
+                      <span>All available targets for this game have been rated.</span>
+                    </div>
+                  ) : null}
+                </section>
+              </div>
+            </Dialog.Content>
+          </Dialog.Portal>
+        </Dialog.Root>
       ) : null}
 
       {modalMessage ? (

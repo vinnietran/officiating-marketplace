@@ -14,7 +14,8 @@ test("completes onboarding for an authenticated user without a saved profile", a
   await expect(page.getByRole("heading", { name: "Official Dashboard" })).toBeVisible();
 
   await page.goto("/profile");
-  await expect(page.getByRole("heading", { name: "Profile" })).toBeVisible();
+  await expect(page.getByText("My Profile")).toBeVisible();
+  await expect(page.locator("h1", { hasText: "Pat Pending" })).toBeVisible();
   await page.getByRole("checkbox", { name: "Varsity", exact: true }).check();
   await page.getByRole("checkbox", { name: "NCAA DI", exact: true }).check();
   await page.getByLabel("Address Line 1").fill("123 Main St");

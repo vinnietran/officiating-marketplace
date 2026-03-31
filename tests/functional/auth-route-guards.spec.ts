@@ -49,8 +49,9 @@ test("signs up a new school account and routes it into the operations workspace"
   await expect(main.getByRole("link", { name: "Post a Game" })).toBeVisible();
 
   await page.goto("/profile");
-  await expect(page.getByText("Name: Taylor School Ops")).toBeVisible();
-  await expect(page.getByText("Role: School")).toBeVisible();
+  await expect(page.getByText("My Profile")).toBeVisible();
+  await expect(page.locator("h1", { hasText: "Taylor School Ops" })).toBeVisible();
+  await expect(page.locator(".profile-role-pill", { hasText: "School" }).first()).toBeVisible();
 
   await signOutFromProfile(page);
 

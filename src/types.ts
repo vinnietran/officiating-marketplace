@@ -145,15 +145,23 @@ export interface Bid {
   createdAtISO: string;
 }
 
+export interface SchoolExperienceRating {
+  greetedOnArrival: boolean;
+  satisfactoryLockerRoom: boolean;
+  towelsProvided: boolean;
+  foodDrinkProvided: boolean;
+}
+
 export interface Rating {
   id: string;
   gameId: string;
   targetType: RatingTargetType;
   targetId: string;
   ratedByUid: string;
-  ratedByRole: "assignor" | "school" | "official";
+  ratedByRole: "assignor" | "school" | "official" | "evaluator";
   stars: number;
   comment?: string;
+  schoolExperience?: SchoolExperienceRating;
   createdAtISO: string;
   updatedAtISO: string;
 }

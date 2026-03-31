@@ -14,6 +14,7 @@ test("creates a marketplace bid for an open game", async ({ page }) => {
   await page.goto("/post-game");
   await page.getByLabel("School Name").fill("Bid Test Academy");
   await selectOption(page, page.locator("form"), "Level", "Junior Varsity");
+  await selectOption(page, page.locator("form"), "Crew Size Needed", "5 officials");
   await page.getByLabel("Date & Time").fill("2030-09-12T19:00");
   await page.getByLabel("Accepting Bids Until").fill("2030-09-10T18:00");
   await page.getByLabel("Location").fill("200 Market St, Pittsburgh, PA");

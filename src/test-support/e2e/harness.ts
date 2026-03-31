@@ -940,10 +940,32 @@ export const e2eFirestore = {
       targetId: string;
       stars: number;
       comment?: string;
+      schoolExperience?: Rating["schoolExperience"];
     },
-    ratedBy: { uid: string; role: "assignor" | "school" | "official" }
+    ratedBy: { uid: string; role: "assignor" | "school" | "official" | "evaluator" }
   ): Promise<void> {
     ensureInitialized();
+
+    if ((ratedBy.role === "assignor" || ratedBy.role === "school") && input.targetType !== "crew") {
+      throw new Error("Schools and assignors can only rate crews.");
+    }
+
+    if (
+      ratedBy.role === "official" &&
+      input.targetType !== "school" &&
+      input.targetType !== "venue"
+    ) {
+      throw new Error("Officials can only rate the school or venue.");
+    }
+
+    if (
+      ratedBy.role === "evaluator" &&
+      input.targetType !== "crew" &&
+      input.targetType !== "official"
+    ) {
+      throw new Error("Evaluators can only rate crews or officials.");
+    }
+
     const existing = state.ratings.find(
       (rating) =>
         rating.gameId === input.gameId &&
@@ -955,6 +977,7 @@ export const e2eFirestore = {
     if (existing) {
       existing.stars = input.stars;
       existing.comment = input.comment;
+      existing.schoolExperience = input.schoolExperience;
       existing.updatedAtISO = nowIso();
     } else {
       state.ratings.push({
@@ -966,6 +989,7 @@ export const e2eFirestore = {
         ratedByRole: ratedBy.role,
         stars: input.stars,
         comment: input.comment,
+        schoolExperience: input.schoolExperience,
         createdAtISO: nowIso(),
         updatedAtISO: nowIso()
       });

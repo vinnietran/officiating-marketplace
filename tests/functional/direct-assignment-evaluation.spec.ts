@@ -56,9 +56,59 @@ test("supports direct assignment workflows and evaluator submissions", async ({ 
   await expect(page.getByText("North Hills")).toBeVisible();
   await signOutFromProfile(page);
 
+  await page.evaluate(() => {
+    const controller = window.__OFFICIATING_E2E__;
+    if (!controller) {
+      throw new Error("E2E harness is not available.");
+    }
+
+    const nextState = controller.getState();
+    const game = nextState.games.find((candidate) => candidate.schoolName === "North Hills");
+    if (!game) {
+      throw new Error("North Hills game not found.");
+    }
+
+    game.dateISO = "2020-10-05T18:30:00.000Z";
+    controller.replaceState(nextState);
+  });
+
   await signIn(page, "evaluator@example.com");
   await page.goto("/schedule");
   await page.getByRole("button", { name: /Open details for North Hills/i }).click();
+  const ratingsSection = page.locator(".details-card").filter({
+    has: page.getByRole("heading", { name: "Post-Game Ratings" })
+  });
+  await ratingsSection.getByRole("button", { name: "Start Rating" }).click();
+  const ratingDialog = page.getByRole("dialog");
+  const crewTarget = ratingDialog.locator(".rating-studio-target").filter({
+    hasText: "2 members"
+  });
+  await expect(crewTarget).toHaveCount(1);
+  await expect(crewTarget).toBeVisible();
+  await expect(ratingDialog.getByText("Olivia Official", { exact: true })).toBeVisible();
+  await expect(ratingDialog.getByText("Noah Official", { exact: true })).toBeVisible();
+  await crewTarget.click();
+  await ratingDialog.getByRole("button", { name: "4 stars" }).click();
+  await ratingDialog.locator("textarea").fill("Crew stayed organized throughout the assignment.");
+  await ratingDialog.getByRole("button", { name: "Save Rating" }).click();
+  await expect(page.getByText("Rating Saved")).toBeVisible();
+  await dismissAlert(page);
+  await ratingDialog.getByText("Olivia Official", { exact: true }).click();
+  await ratingDialog.getByRole("button", { name: "5 stars" }).click();
+  await ratingDialog
+    .locator("textarea")
+    .fill("Lead official managed communication and tempo well.");
+  await ratingDialog.getByRole("button", { name: "Save Rating" }).click();
+  await expect(page.getByText("Rating Saved")).toBeVisible();
+  await dismissAlert(page);
+  await ratingDialog.getByRole("button", { name: "Close", exact: true }).click();
+  await expect(
+    ratingsSection.locator(".rating-target-card").filter({ hasText: "2 members" })
+  ).toContainText("4/5 stars");
+  await expect(
+    ratingsSection.locator(".rating-target-card").filter({ hasText: "Olivia Official" })
+  ).toContainText("5/5 stars");
+
   await page.getByRole("button", { name: "Add Evaluation" }).click();
   await selectOptionInRegion(
     page,

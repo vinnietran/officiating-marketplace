@@ -1,6 +1,7 @@
 import { expect, test, type Page } from "@playwright/test";
 import {
   dismissAlert,
+  selectOption,
   signIn,
   withScenario
 } from "./helpers";
@@ -138,6 +139,8 @@ test("shows bid notifications and ranks marketplace games by proximity", async (
   await signIn(page, "assignor@example.com");
   await page.goto("/post-game");
   await page.getByLabel("School Name").fill("Notification Test Academy");
+  await selectOption(page, page.locator("form"), "Level", "Junior Varsity");
+  await selectOption(page, page.locator("form"), "Crew Size Needed", "5 officials");
   await page.getByLabel("Date & Time").fill("2030-09-10T19:00");
   await page.getByLabel("Accepting Bids Until").fill("2030-09-08T18:00");
   await page.getByLabel("Location").fill("10 Signal Rd, Pittsburgh, PA");

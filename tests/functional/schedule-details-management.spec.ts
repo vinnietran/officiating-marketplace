@@ -1,6 +1,7 @@
 import { expect, test, type Page } from "@playwright/test";
 import {
   dismissAlert,
+  selectOption,
   selectOptionInRegion,
   signIn,
   signOutFromProfile,
@@ -34,7 +35,8 @@ async function seedAwardedGameWithExistingSubmissions(page: Page) {
         createdAtISO: "2024-09-01T12:00:00.000Z",
         status: "awarded",
         mode: "marketplace",
-        selectedBidId: "bid-1"
+        selectedBidId: "bid-1",
+        awardedCrewId: "crew-1"
       }
     ];
 
@@ -44,10 +46,44 @@ async function seedAwardedGameWithExistingSubmissions(page: Page) {
         gameId: "game-1",
         officialUid: "official-1",
         officialName: "Olivia Official",
-        bidderType: "individual",
+        bidderType: "crew",
+        crewId: "crew-1",
+        baseCrewId: "crew-1",
+        crewName: "Replay Crew",
         amount: 190,
         message: "Ready to work the assignment.",
         createdAtISO: "2024-09-08T15:00:00.000Z"
+      }
+    ];
+
+    nextState.crews = [
+      {
+        id: "crew-1",
+        name: "Replay Crew",
+        createdByUid: "official-1",
+        createdByName: "Olivia Official",
+        createdByRole: "official",
+        createdAtISO: "2024-09-01T12:00:00.000Z",
+        crewChiefUid: "official-1",
+        crewChiefName: "Olivia Official",
+        refereeOfficialId: "official-1",
+        memberUids: ["official-1", "official-2"],
+        members: [
+          {
+            uid: "official-1",
+            name: "Olivia Official",
+            email: "official1@example.com"
+          },
+          {
+            uid: "official-2",
+            name: "Noah Official",
+            email: "official2@example.com"
+          }
+        ],
+        memberPositions: {
+          "official-1": "R",
+          "official-2": "U"
+        }
       }
     ];
 
@@ -55,8 +91,8 @@ async function seedAwardedGameWithExistingSubmissions(page: Page) {
       {
         id: "rating-1",
         gameId: "game-1",
-        targetType: "official",
-        targetId: "official-1",
+        targetType: "crew",
+        targetId: "crew-1",
         ratedByUid: "assignor-1",
         ratedByRole: "assignor",
         stars: 3,
@@ -98,6 +134,8 @@ test("deletes games from schedule details and edits previously submitted feedbac
   await signIn(page, "assignor@example.com");
   await page.goto("/post-game");
   await page.getByLabel("School Name").fill("Delete Test Academy");
+  await selectOption(page, page.locator("form"), "Level", "Junior Varsity");
+  await selectOption(page, page.locator("form"), "Crew Size Needed", "5 officials");
   await page.getByLabel("Date & Time").fill("2030-10-10T19:00");
   await page.getByLabel("Accepting Bids Until").fill("2030-10-08T18:00");
   await page.getByLabel("Location").fill("50 Stadium Dr, Pittsburgh, PA");
@@ -153,18 +191,18 @@ test("deletes games from schedule details and edits previously submitted feedbac
   const ratingsSection = page.locator(".details-card").filter({
     has: page.getByRole("heading", { name: "Post-Game Ratings" })
   });
-  await expect(ratingsSection).toContainText("3/5");
-  await ratingsSection.getByRole("button", { name: "Update" }).click();
-  await selectOptionInRegion(page, ratingsSection.locator(".rating-edit-row"), "5");
-  await ratingsSection.locator(".rating-edit-row textarea").fill(
-    "Stronger follow-through after review."
-  );
-  await ratingsSection.getByRole("button", { name: "Save Rating" }).click();
+  await expect(ratingsSection).toContainText("3/5 stars");
+  await ratingsSection.getByRole("button", { name: "Open Rating Studio" }).click();
+  const ratingDialog = page.getByRole("dialog");
+  await ratingDialog.getByRole("button", { name: "5 stars" }).click();
+  await ratingDialog.locator("textarea").fill("Stronger follow-through after review.");
+  await ratingDialog.getByRole("button", { name: "Save Rating" }).click();
   await expect(page.getByText("Rating Saved")).toBeVisible();
   await dismissAlert(page);
+  await ratingDialog.getByRole("button", { name: "Close", exact: true }).click();
   await expect(
-    ratingsSection.locator("tbody tr").filter({ hasText: "Olivia Official" }).first()
-  ).toContainText("5/5");
+    ratingsSection.locator(".rating-target-card").filter({ hasText: "Replay Crew" })
+  ).toContainText("5/5 stars");
 
   await signOutFromProfile(page);
 

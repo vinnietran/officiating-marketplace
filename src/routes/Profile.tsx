@@ -1,8 +1,20 @@
 import { useEffect, useMemo, useState, type FormEvent } from "react";
+import {
+  Award,
+  BadgeCheck,
+  BriefcaseBusiness,
+  CalendarRange,
+  LayoutGrid,
+  LogOut,
+  Mail,
+  MapPin,
+  ShieldCheck,
+  Star,
+  UserRound
+} from "lucide-react";
 import { Link } from "react-router-dom";
 import { AuthPanel } from "../components/AuthPanel";
 import { CompleteProfilePanel } from "../components/CompleteProfilePanel";
-import { PageHeader } from "../components/ui/PageHeader";
 import { useAuth } from "../context/AuthContext";
 import {
   isOfficialAssignedToAwardedMarketplaceGame,
@@ -53,6 +65,33 @@ function formatRoleLabel(role: "official" | "assignor" | "school" | "evaluator")
     return "Evaluator";
   }
   return "School";
+}
+
+function getProfileInitials(name: string): string {
+  const parts = name
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2);
+
+  if (parts.length === 0) {
+    return "OM";
+  }
+
+  return parts.map((part) => part[0]?.toUpperCase() ?? "").join("");
+}
+
+function formatRatingTargetLabel(rating: Rating): string {
+  if (rating.targetType === "crew") {
+    return "Crew";
+  }
+  if (rating.targetType === "official") {
+    return "Official";
+  }
+  if (rating.targetType === "school") {
+    return "School";
+  }
+  return "Venue";
 }
 
 export function Profile() {
@@ -306,6 +345,12 @@ export function Profile() {
     return ratings.filter((rating) => rating.ratedByUid === currentUserId);
   }, [currentUserId, profile?.role, ratings]);
 
+  const recentRoleRatings = useMemo(() => {
+    const source =
+      profile?.role === "official" ? officialReceivedRatings : submittedRatings;
+    return [...source].sort((a, b) => b.updatedAtISO.localeCompare(a.updatedAtISO)).slice(0, 4);
+  }, [officialReceivedRatings, profile?.role, submittedRatings]);
+
   if (loading) {
     return (
       <main className="page">
@@ -346,6 +391,126 @@ export function Profile() {
   }
 
   const roleLabel = formatRoleLabel(profile.role);
+  const isOfficial = profile.role === "official";
+  const isManager = profile.role === "assignor" || profile.role === "school";
+  const initials = getProfileInitials(profile.displayName);
+  const locationSummary = [addressLine1, addressLine2, city, stateRegion, postalCode]
+    .map((value) => value.trim())
+    .filter(Boolean)
+    .join(", ");
+  const levelsSummary = levelsOfficiated.length > 0 ? levelsOfficiated.join(", ") : "No levels saved yet";
+  const roleDescription = isOfficial
+    ? "Track assignments, sharpen your profile details, and watch how schools and evaluators rate your work."
+    : isManager
+      ? "Monitor the assignments you post, the response they receive, and the ratings you have submitted."
+      : "Review assignment activity, evaluations, and crew performance from one control point.";
+  const profileMetrics = isOfficial
+    ? [
+        {
+          label: "Active bids",
+          value: String(currentUserBids.length),
+          detail: `${officialOpenBidGameCount} still open`,
+          tone: "blue"
+        },
+        {
+          label: "Awarded games",
+          value: String(officialAwardedGames.length),
+          detail: "Confirmed assignments",
+          tone: "mint"
+        },
+        {
+          label: "Average rating",
+          value: averageRating === null ? "-" : averageRating.toFixed(2),
+          detail: `${officialReceivedRatings.length} ratings received`,
+          tone: "gold"
+        },
+        {
+          label: "Top offer",
+          value: highestOfficialOffer === null ? "-" : formatCurrency(highestOfficialOffer),
+          detail: "Highest active bid",
+          tone: "rose"
+        }
+      ]
+    : [
+        {
+          label: "Games posted",
+          value: String(postedGames.length),
+          detail: `${postedGames.filter((game) => game.status === "open").length} still open`,
+          tone: "blue"
+        },
+        {
+          label: "Awarded games",
+          value: String(postedGames.filter((game) => game.status === "awarded").length),
+          detail: "Closed assignments",
+          tone: "mint"
+        },
+        {
+          label: "Bids received",
+          value: String(postedGamesBidCount),
+          detail: "Across your postings",
+          tone: "gold"
+        },
+        {
+          label: "Ratings activity",
+          value: String(submittedRatings.length),
+          detail: "Ratings submitted",
+          tone: "rose"
+        }
+      ];
+  const spotlightItems = isOfficial
+    ? officialAwardedGames.slice(0, 3).map(({ game, selectedBid }) => ({
+        id: game.id,
+        title: game.schoolName,
+        meta: `${game.sport} • ${game.level}`,
+        date: formatGameDate(game.dateISO),
+        detail:
+          selectedBid ? formatCurrency(selectedBid.amount) : formatCurrency(game.payPosted),
+        tone: game.status === "awarded" ? "blue" : "mint"
+      }))
+    : postedGames.slice(0, 3).map((game) => ({
+        id: game.id,
+        title: game.schoolName,
+        meta: `${game.sport} • ${game.level}`,
+        date: formatGameDate(game.dateISO),
+        detail: `${bidCountByGameId.get(game.id) ?? 0} bids`,
+        tone: game.status === "awarded" ? "mint" : "gold"
+      }));
+  const detailRows = [
+    {
+      label: "Full Name",
+      value: profile.displayName,
+      icon: UserRound
+    },
+    {
+      label: "Email",
+      value: profile.email,
+      icon: Mail
+    },
+    {
+      label: "Role",
+      value: roleLabel,
+      icon: ShieldCheck
+    },
+    {
+      label: "Member Since",
+      value: formatAccountCreatedAt(profile.createdAtISO),
+      icon: CalendarRange
+    },
+    ...(isOfficial
+      ? [
+          {
+            label: "Base Location",
+            value: locationSummary || "Add address details for better matching",
+            icon: MapPin
+          },
+          {
+            label: "Levels Officiated",
+            value: levelsSummary,
+            icon: BadgeCheck
+          }
+        ]
+      : [])
+  ];
 
   async function handleSignOut() {
     setSignOutError(null);
@@ -403,312 +568,381 @@ export function Profile() {
   }
 
   return (
-    <main className="page">
-      <PageHeader
-        eyebrow="Account and performance"
-        title="Profile"
-        description="Account details, activity metrics, and profile settings for your role."
-        badges={
-          <>
+    <main className="page profile-page">
+      <section className="profile-dashboard">
+        <div className="profile-dashboard-header">
+          <div>
+            <span className="hero-eyebrow">My Profile</span>
+            <h1>{profile.displayName}</h1>
+            <p>{roleDescription}</p>
+          </div>
+          <div className="profile-dashboard-actions">
             <span className="hero-badge">{roleLabel}</span>
             <span className="hero-badge">
               Member since {formatAccountCreatedAt(profile.createdAtISO)}
             </span>
-          </>
-        }
-        stats={[
-          {
-            label: profile.role === "official" ? "Total Bids" : "Games Posted",
-            value: profile.role === "official" ? currentUserBids.length : postedGames.length
-          },
-          {
-            label: profile.role === "official" ? "Awarded Games" : "Bids Received",
-            value:
-              profile.role === "official" ? officialAwardedGames.length : postedGamesBidCount
-          },
-          {
-            label: "Average Rating",
-            value: averageRating === null ? "-" : averageRating.toFixed(2)
-          }
-        ]}
-      />
-
-      {dataError ? <p className="error-text">{dataError}</p> : null}
-
-      <section className="profile-layout">
-        <article className="profile-panel">
-          <h3>Account</h3>
-          <p className="meta-line">
-            <strong>Name:</strong> {profile.displayName}
-          </p>
-          <p className="meta-line">
-            <strong>Email:</strong> {profile.email}
-          </p>
-          <p className="meta-line">
-            <strong>Role:</strong> {roleLabel}
-          </p>
-          <p className="meta-line">
-            <strong>Member Since:</strong> {formatAccountCreatedAt(profile.createdAtISO)}
-          </p>
-          {signOutError ? <p className="error-text">{signOutError}</p> : null}
-
-          <div className="profile-actions">
-            <button
-              type="button"
-              className="button-secondary"
-              onClick={handleSignOut}
-              disabled={signingOut}
-            >
-              {signingOut ? "Signing Out..." : "Sign Out"}
-            </button>
-            <Link to="/marketplace" className="button-secondary details-back-link">
-              Go to Marketplace
-            </Link>
-            <Link to="/schedule" className="button-secondary details-back-link">
-              Go to Schedule
-            </Link>
           </div>
-        </article>
+        </div>
 
-        {profile.role === "official" ? (
-          <article className="profile-panel">
-            <h3>Official Details</h3>
-            <p className="meta-line">
-              Add levels officiated and address details for upcoming smart matching.
-            </p>
+        {dataError ? <p className="error-text">{dataError}</p> : null}
 
-            <form className="profile-details-form" onSubmit={handleSaveOfficialProfile}>
-              <div className="profile-levels-grid">
-                {OFFICIATING_LEVEL_OPTIONS.map((levelOption) => {
-                  const isChecked = levelsOfficiated.includes(levelOption);
+        <section className="profile-shell">
+          <div className="profile-sidebar-column">
+            <article className="profile-hero-card">
+              <div className="profile-hero-head">
+                <div className="profile-hero-avatar">{initials}</div>
+                <div className="profile-hero-copy">
+                  <h2>{profile.displayName}</h2>
+                  <p>{roleLabel}</p>
+                </div>
+              </div>
+              <div className="profile-hero-badges">
+                <span className="profile-role-pill">{roleLabel}</span>
+                <span className="profile-role-pill profile-role-pill-muted">
+                  {profile.email}
+                </span>
+              </div>
+              <p className="profile-hero-description">{roleDescription}</p>
+              {signOutError ? <p className="error-text">{signOutError}</p> : null}
+              <div className="profile-actions profile-actions-hero">
+                <Link to="/marketplace" className="ui-button ui-button-secondary ui-button-link">
+                  <LayoutGrid /> Marketplace
+                </Link>
+                <Link to="/schedule" className="ui-button ui-button-secondary ui-button-link">
+                  <CalendarRange /> Schedule
+                </Link>
+                <button
+                  type="button"
+                  className="ui-button ui-button-secondary ui-button-link"
+                  onClick={handleSignOut}
+                  disabled={signingOut}
+                >
+                  <LogOut />
+                  {signingOut ? "Signing Out..." : "Sign Out"}
+                </button>
+              </div>
+            </article>
+
+            <article className="profile-side-card">
+              <div className="profile-card-heading">
+                <h3>Detailed Information</h3>
+                <span className="profile-card-chip">Live profile</span>
+              </div>
+              <div className="profile-detail-list">
+                {detailRows.map((row) => {
+                  const Icon = row.icon;
                   return (
-                    <label key={levelOption} className="profile-level-option">
-                      <input
-                        type="checkbox"
-                        checked={isChecked}
-                        onChange={() => handleToggleOfficiatingLevel(levelOption)}
-                      />
-                      <span>{levelOption}</span>
-                    </label>
+                    <div key={row.label} className="profile-detail-row">
+                      <span className="profile-detail-icon" aria-hidden="true">
+                        <Icon />
+                      </span>
+                      <div className="profile-detail-copy">
+                        <span>{row.label}</span>
+                        <strong>{row.value}</strong>
+                      </div>
+                    </div>
                   );
                 })}
               </div>
+            </article>
 
-              <label>
-                Address Line 1
-                <input
-                  type="text"
-                  value={addressLine1}
-                  onChange={(event) => setAddressLine1(event.target.value)}
-                  placeholder="123 Main St"
-                />
-              </label>
+            {isOfficial ? (
+              <article className="profile-side-card">
+                <div className="profile-card-heading">
+                  <h3>Official Details</h3>
+                  <span className="profile-card-chip">Editable</span>
+                </div>
+                <p className="meta-line">
+                  Keep this current so assignment matching and distance ranking improve over time.
+                </p>
 
-              <label>
-                Address Line 2 (Optional)
-                <input
-                  type="text"
-                  value={addressLine2}
-                  onChange={(event) => setAddressLine2(event.target.value)}
-                  placeholder="Apt, Suite, Unit"
-                />
-              </label>
+                <form className="profile-details-form" onSubmit={handleSaveOfficialProfile}>
+                  <div className="profile-levels-grid">
+                    {OFFICIATING_LEVEL_OPTIONS.map((levelOption) => {
+                      const isChecked = levelsOfficiated.includes(levelOption);
+                      return (
+                        <label key={levelOption} className="profile-level-option">
+                          <input
+                            type="checkbox"
+                            checked={isChecked}
+                            onChange={() => handleToggleOfficiatingLevel(levelOption)}
+                          />
+                          <span>{levelOption}</span>
+                        </label>
+                      );
+                    })}
+                  </div>
 
-              <div className="profile-address-grid">
-                <label>
-                  City
-                  <input
-                    type="text"
-                    value={city}
-                    onChange={(event) => setCity(event.target.value)}
-                    placeholder="City"
-                  />
-                </label>
+                  <label>
+                    Address Line 1
+                    <input
+                      type="text"
+                      value={addressLine1}
+                      onChange={(event) => setAddressLine1(event.target.value)}
+                      placeholder="123 Main St"
+                    />
+                  </label>
 
-                <label>
-                  State
-                  <input
-                    type="text"
-                    value={stateRegion}
-                    onChange={(event) => setStateRegion(event.target.value)}
-                    placeholder="State"
-                  />
-                </label>
+                  <label>
+                    Address Line 2 (Optional)
+                    <input
+                      type="text"
+                      value={addressLine2}
+                      onChange={(event) => setAddressLine2(event.target.value)}
+                      placeholder="Apt, Suite, Unit"
+                    />
+                  </label>
 
-                <label>
-                  ZIP
-                  <input
-                    type="text"
-                    value={postalCode}
-                    onChange={(event) => setPostalCode(event.target.value)}
-                    placeholder="ZIP code"
-                  />
-                </label>
-              </div>
+                  <div className="profile-address-grid">
+                    <label>
+                      City
+                      <input
+                        type="text"
+                        value={city}
+                        onChange={(event) => setCity(event.target.value)}
+                        placeholder="City"
+                      />
+                    </label>
 
-              {profileSaveError ? <p className="error-text">{profileSaveError}</p> : null}
-              {profileSaveSuccess ? (
-                <p className="hint-text">{profileSaveSuccess}</p>
-              ) : null}
+                    <label>
+                      State
+                      <input
+                        type="text"
+                        value={stateRegion}
+                        onChange={(event) => setStateRegion(event.target.value)}
+                        placeholder="State"
+                      />
+                    </label>
 
-              <div className="profile-actions">
-                <button type="submit" disabled={savingProfileDetails}>
-                  {savingProfileDetails ? "Saving..." : "Save Official Details"}
-                </button>
-              </div>
-            </form>
-          </article>
-        ) : null}
+                    <label>
+                      ZIP
+                      <input
+                        type="text"
+                        value={postalCode}
+                        onChange={(event) => setPostalCode(event.target.value)}
+                        placeholder="ZIP code"
+                      />
+                    </label>
+                  </div>
 
-        {profile.role === "official" ? (
-          <article className="profile-panel">
-            <h3>Official Snapshot</h3>
-            <div className="profile-stats-grid">
-              <div className="profile-stat">
-                <span className="profile-stat-label">Total Bids</span>
-                <strong className="profile-stat-value">{currentUserBids.length}</strong>
-              </div>
-              <div className="profile-stat">
-                <span className="profile-stat-label">Open Bid Games</span>
-                <strong className="profile-stat-value">{officialOpenBidGameCount}</strong>
-              </div>
-              <div className="profile-stat">
-                <span className="profile-stat-label">Awarded Games</span>
-                <strong className="profile-stat-value">{officialAwardedGames.length}</strong>
-              </div>
-              <div className="profile-stat">
-                <span className="profile-stat-label">Highest Offer</span>
-                <strong className="profile-stat-value">
-                  {highestOfficialOffer === null
-                    ? "-"
-                    : formatCurrency(highestOfficialOffer)}
-                </strong>
-              </div>
-            </div>
+                  {profileSaveError ? <p className="error-text">{profileSaveError}</p> : null}
+                  {profileSaveSuccess ? <p className="hint-text">{profileSaveSuccess}</p> : null}
 
-            <h4>Upcoming Assignments</h4>
-            {officialAwardedGames.length === 0 ? (
-              <p className="empty-text">No awarded games yet.</p>
-            ) : (
-              <ul className="profile-list">
-                {officialAwardedGames.slice(0, 5).map(({ game, selectedBid }) => (
-                  <li key={game.id} className="profile-list-item">
-                    <div>
-                      <strong>{game.schoolName}</strong> • {game.sport} • {game.level}
-                    </div>
-                    <div>{formatGameDate(game.dateISO)}</div>
-                    <div>{game.location}</div>
-                    <div>
-                      Assigned by {game.createdByName ?? game.createdByRole} •{" "}
-                      {selectedBid
-                        ? formatCurrency(selectedBid.amount)
-                        : formatCurrency(game.payPosted)}
-                    </div>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </article>
-        ) : (
-          <article className="profile-panel">
-            <h3>{roleLabel} Snapshot</h3>
-            <div className="profile-stats-grid">
-              <div className="profile-stat">
-                <span className="profile-stat-label">Games Posted</span>
-                <strong className="profile-stat-value">{postedGames.length}</strong>
-              </div>
-              <div className="profile-stat">
-                <span className="profile-stat-label">Open Games</span>
-                <strong className="profile-stat-value">
-                  {postedGames.filter((game) => game.status === "open").length}
-                </strong>
-              </div>
-              <div className="profile-stat">
-                <span className="profile-stat-label">Awarded Games</span>
-                <strong className="profile-stat-value">
-                  {postedGames.filter((game) => game.status === "awarded").length}
-                </strong>
-              </div>
-              <div className="profile-stat">
-                <span className="profile-stat-label">Total Bids Received</span>
-                <strong className="profile-stat-value">{postedGamesBidCount}</strong>
-              </div>
-            </div>
-
-            <h4>Recent Posted Games</h4>
-            {postedGames.length === 0 ? (
-              <p className="empty-text">No posted games yet.</p>
-            ) : (
-              <div className="profile-table-wrapper">
-                <table className="profile-table">
-                  <thead>
-                    <tr>
-                      <th>Date/Time</th>
-                      <th>School</th>
-                      <th>Sport/Level</th>
-                      <th>Status</th>
-                      <th>Total Bids</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {postedGames.slice(0, 8).map((game) => (
-                      <tr key={game.id}>
-                        <td>{formatGameDate(game.dateISO)}</td>
-                        <td>{game.schoolName}</td>
-                        <td>
-                          {game.sport} • {game.level}
-                        </td>
-                        <td>{getGameStatusLabel(game.status, game.mode)}</td>
-                        <td>{bidCountByGameId.get(game.id) ?? 0}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </article>
-        )}
-
-        <article className="profile-panel">
-          <h3>Ratings</h3>
-          <div className="profile-stats-grid">
-            <div className="profile-stat">
-              <span className="profile-stat-label">Average Rating</span>
-              <strong className="profile-stat-value">
-                {averageRating === null ? "-" : averageRating.toFixed(2)}
-              </strong>
-            </div>
-            <div className="profile-stat">
-              <span className="profile-stat-label">
-                {profile.role === "official" ? "Ratings Received" : "Ratings Submitted"}
-              </span>
-              <strong className="profile-stat-value">
-                {profile.role === "official"
-                  ? officialReceivedRatings.length
-                  : submittedRatings.length}
-              </strong>
-            </div>
-            <div className="profile-stat">
-              <span className="profile-stat-label">5-Star Ratings</span>
-              <strong className="profile-stat-value">{fiveStarRatingCount}</strong>
-            </div>
-            <div className="profile-stat">
-              <span className="profile-stat-label">Most Recent Rating</span>
-              <strong className="profile-stat-value">
-                {mostRecentRating ? `${mostRecentRating.stars}/5` : "-"}
-              </strong>
-            </div>
+                  <div className="profile-actions">
+                    <button type="submit" disabled={savingProfileDetails}>
+                      {savingProfileDetails ? "Saving..." : "Save Official Details"}
+                    </button>
+                  </div>
+                </form>
+              </article>
+            ) : null}
           </div>
-          {mostRecentRating ? (
-            <>
-              <p className="meta-line">
-                <strong>Updated:</strong> {formatGameDate(mostRecentRating.updatedAtISO)}
-              </p>
-            </>
-          ) : (
-            <p className="meta-line">No ratings yet.</p>
-          )}
-        </article>
+
+          <div className="profile-main-column">
+            <article className="profile-main-card profile-main-card-hero">
+              <div className="profile-card-heading">
+                <div>
+                  <h3>{isOfficial ? "Performance Snapshot" : `${roleLabel} Snapshot`}</h3>
+                  <p className="meta-line">
+                    A role-specific view of your current activity, outcomes, and profile readiness.
+                  </p>
+                </div>
+                <span className="profile-card-chip">
+                  {isOfficial ? "Assignment View" : "Operations View"}
+                </span>
+              </div>
+              <div className="profile-metric-grid">
+                {profileMetrics.map((metric) => (
+                  <article
+                    key={metric.label}
+                    className={`profile-metric-card profile-metric-card-${metric.tone}`}
+                  >
+                    <span className="profile-metric-label">{metric.label}</span>
+                    <strong className="profile-metric-value">{metric.value}</strong>
+                    <span className="profile-metric-detail">{metric.detail}</span>
+                  </article>
+                ))}
+              </div>
+            </article>
+
+            <div className="profile-feature-grid">
+              <article className="profile-main-card">
+                <div className="profile-card-heading">
+                  <div>
+                    <h3>{isOfficial ? "Upcoming Assignments" : "Recent Posted Games"}</h3>
+                    <p className="meta-line">
+                      {isOfficial
+                        ? "The next games currently tied to your profile."
+                        : "The games your organization has most recently put into market."}
+                    </p>
+                  </div>
+                  <span className="profile-card-chip">
+                    {isOfficial ? officialAwardedGames.length : postedGames.length} total
+                  </span>
+                </div>
+                {spotlightItems.length === 0 ? (
+                  <p className="empty-text">
+                    {isOfficial ? "No awarded games yet." : "No posted games yet."}
+                  </p>
+                ) : (
+                  <div className="profile-spotlight-grid">
+                    {spotlightItems.map((item) => (
+                      <article
+                        key={item.id}
+                        className={`profile-spotlight-card profile-spotlight-card-${item.tone}`}
+                      >
+                        <span className="profile-spotlight-date">{item.date}</span>
+                        <strong>{item.title}</strong>
+                        <p>{item.meta}</p>
+                        <span className="profile-spotlight-footer">{item.detail}</span>
+                      </article>
+                    ))}
+                  </div>
+                )}
+              </article>
+
+              <article className="profile-main-card">
+                <div className="profile-card-heading">
+                  <div>
+                    <h3>Ratings Lens</h3>
+                    <p className="meta-line">
+                      {isOfficial
+                        ? "How your recent ratings are trending across assignments."
+                        : "A quick look at the ratings activity tied to your account."}
+                    </p>
+                  </div>
+                  <span className="profile-card-chip">
+                    {isOfficial ? officialReceivedRatings.length : submittedRatings.length} entries
+                  </span>
+                </div>
+                <div className="profile-ratings-summary">
+                  <div className="profile-ratings-score">
+                    <Star />
+                    <strong>{averageRating === null ? "-" : averageRating.toFixed(2)}</strong>
+                    <span>{isOfficial ? "average received" : "average shown when applicable"}</span>
+                  </div>
+                  <div className="profile-ratings-kpis">
+                    <div>
+                      <span>5-Star Ratings</span>
+                      <strong>{fiveStarRatingCount}</strong>
+                    </div>
+                    <div>
+                      <span>Most Recent</span>
+                      <strong>{mostRecentRating ? `${mostRecentRating.stars}/5` : "-"}</strong>
+                    </div>
+                    <div>
+                      <span>
+                        {isOfficial ? "Ratings Received" : "Ratings Submitted"}
+                      </span>
+                      <strong>{isOfficial ? officialReceivedRatings.length : submittedRatings.length}</strong>
+                    </div>
+                  </div>
+                </div>
+
+                {recentRoleRatings.length === 0 ? (
+                  <p className="empty-text">No ratings yet.</p>
+                ) : (
+                  <div className="profile-rating-feed">
+                    {recentRoleRatings.map((rating) => (
+                      <div key={rating.id} className="profile-rating-feed-item">
+                        <div className="profile-rating-feed-head">
+                          <span>{formatRatingTargetLabel(rating)}</span>
+                          <strong>{rating.stars}/5</strong>
+                        </div>
+                        <p>{rating.comment ?? "No written notes attached to this rating."}</p>
+                        <span className="profile-rating-feed-date">
+                          {formatGameDate(rating.updatedAtISO)}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </article>
+            </div>
+
+            <article className="profile-main-card">
+              <div className="profile-card-heading">
+                <div>
+                  <h3>{isOfficial ? "Assignment Table" : "Operations Table"}</h3>
+                  <p className="meta-line">
+                    {isOfficial
+                      ? "A detailed list of awarded games tied to your profile."
+                      : "A sortable-style table of the assignments your account owns."}
+                  </p>
+                </div>
+                <span className="profile-card-chip">
+                  {isOfficial ? <BriefcaseBusiness /> : <Award />}
+                  {isOfficial ? "Assignments" : "Posted games"}
+                </span>
+              </div>
+              {isOfficial ? (
+                officialAwardedGames.length === 0 ? (
+                  <p className="empty-text">No awarded games yet.</p>
+                ) : (
+                  <div className="profile-table-wrapper">
+                    <table className="profile-table">
+                      <thead>
+                        <tr>
+                          <th>Date/Time</th>
+                          <th>School</th>
+                          <th>Sport/Level</th>
+                          <th>Location</th>
+                          <th>Fee</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {officialAwardedGames.slice(0, 8).map(({ game, selectedBid }) => (
+                          <tr key={game.id}>
+                            <td>{formatGameDate(game.dateISO)}</td>
+                            <td>{game.schoolName}</td>
+                            <td>
+                              {game.sport} • {game.level}
+                            </td>
+                            <td>{game.location}</td>
+                            <td>
+                              {selectedBid
+                                ? formatCurrency(selectedBid.amount)
+                                : formatCurrency(game.payPosted)}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )
+              ) : postedGames.length === 0 ? (
+                <p className="empty-text">No posted games yet.</p>
+              ) : (
+                <div className="profile-table-wrapper">
+                  <table className="profile-table">
+                    <thead>
+                      <tr>
+                        <th>Date/Time</th>
+                        <th>School</th>
+                        <th>Sport/Level</th>
+                        <th>Status</th>
+                        <th>Total Bids</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {postedGames.slice(0, 8).map((game) => (
+                        <tr key={game.id}>
+                          <td>{formatGameDate(game.dateISO)}</td>
+                          <td>{game.schoolName}</td>
+                          <td>
+                            {game.sport} • {game.level}
+                          </td>
+                          <td>{getGameStatusLabel(game.status, game.mode)}</td>
+                          <td>{bidCountByGameId.get(game.id) ?? 0}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </article>
+          </div>
+        </section>
       </section>
     </main>
   );

@@ -84,6 +84,7 @@ test("buildAssignedGameSubmission builds mixed direct assignments", () => {
   assert.equal(result.schoolName, "Central High");
   assert.equal(result.location, "Stadium");
   assert.equal(result.payPosted, 250);
+  assert.equal(result.scheduledDateKey, "2026-03-20");
   assert.equal(result.directAssignments.length, 2);
   assert.deepEqual(result.directAssignments[0], {
     assignmentType: "individual",
@@ -111,4 +112,3 @@ test("buildAssignedGameSubmission rejects missing roster entries", () => {
     /Add at least one individual or one crew/
   );
 });
-

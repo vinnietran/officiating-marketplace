@@ -121,6 +121,7 @@ export function AssignGame() {
     sport: Game["sport"];
     level: Game["level"];
     dateISO: string;
+    scheduledDateKey: string;
     location: string;
     payPosted: number;
     notes?: string;

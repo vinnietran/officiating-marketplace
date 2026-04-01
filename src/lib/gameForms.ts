@@ -6,6 +6,7 @@ export interface MarketplaceGameSubmission {
   level: Level;
   requestedCrewSize: number;
   dateISO: string;
+  scheduledDateKey: string;
   acceptingBidsUntilISO?: string;
   location: string;
   payPosted: number;
@@ -90,6 +91,7 @@ export function buildMarketplaceGameSubmission(
     level: input.level,
     requestedCrewSize: parsedCrewSize,
     dateISO: gameDate.toISOString(),
+    scheduledDateKey: input.dateLocal.slice(0, 10),
     acceptingBidsUntilISO: bidsUntilDate ? bidsUntilDate.toISOString() : undefined,
     location: input.location.trim(),
     payPosted: parsedPay,

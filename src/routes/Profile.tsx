@@ -17,6 +17,11 @@ import { AuthPanel } from "../components/AuthPanel";
 import { CompleteProfilePanel } from "../components/CompleteProfilePanel";
 import { useAuth } from "../context/AuthContext";
 import {
+  formatAvailabilityDate,
+  getAvailabilityDateKeyFromDate,
+  normalizeBlockedDateKeys
+} from "../lib/availability";
+import {
   isOfficialAssignedToAwardedMarketplaceGame,
   isOfficialAssignedToDirectGame
 } from "../lib/gameAssignments";
@@ -109,6 +114,7 @@ export function Profile() {
   const [city, setCity] = useState("");
   const [stateRegion, setStateRegion] = useState("");
   const [postalCode, setPostalCode] = useState("");
+  const [blockedDateKeys, setBlockedDateKeys] = useState<string[]>([]);
   const [profileSaveError, setProfileSaveError] = useState<string | null>(null);
   const [profileSaveSuccess, setProfileSaveSuccess] = useState<string | null>(null);
   const [savingProfileDetails, setSavingProfileDetails] = useState(false);
@@ -151,6 +157,7 @@ export function Profile() {
       setCity("");
       setStateRegion("");
       setPostalCode("");
+      setBlockedDateKeys([]);
       return;
     }
 
@@ -160,6 +167,7 @@ export function Profile() {
     setCity(profile.contactInfo?.city ?? "");
     setStateRegion(profile.contactInfo?.state ?? "");
     setPostalCode(profile.contactInfo?.postalCode ?? "");
+    setBlockedDateKeys(profile.availability?.blockedDateKeys ?? []);
 
     let cancelled = false;
 
@@ -175,6 +183,7 @@ export function Profile() {
         setCity(freshProfile.contactInfo?.city ?? "");
         setStateRegion(freshProfile.contactInfo?.state ?? "");
         setPostalCode(freshProfile.contactInfo?.postalCode ?? "");
+        setBlockedDateKeys(freshProfile.availability?.blockedDateKeys ?? []);
       })
       .catch(() => undefined);
 
@@ -399,6 +408,12 @@ export function Profile() {
     .filter(Boolean)
     .join(", ");
   const levelsSummary = levelsOfficiated.length > 0 ? levelsOfficiated.join(", ") : "No levels saved yet";
+  const availabilitySummary =
+    blockedDateKeys.length === 0 ? "No blocked dates saved" : `${blockedDateKeys.length} blocked dates saved`;
+  const todayDateKey = getAvailabilityDateKeyFromDate(new Date());
+  const nextBlockedDates = blockedDateKeys
+    .filter((dateKey) => dateKey >= todayDateKey)
+    .slice(0, 6);
   const roleDescription = isOfficial
     ? "Track assignments, sharpen your profile details, and watch how schools and evaluators rate your work."
     : isManager
@@ -507,6 +522,11 @@ export function Profile() {
             label: "Levels Officiated",
             value: levelsSummary,
             icon: BadgeCheck
+          },
+          {
+            label: "Availability",
+            value: availabilitySummary,
+            icon: CalendarRange
           }
         ]
       : [])
@@ -526,12 +546,30 @@ export function Profile() {
   }
 
   function handleToggleOfficiatingLevel(level: OfficiatingLevel) {
+    setProfileSaveError(null);
+    setProfileSaveSuccess(null);
     setLevelsOfficiated((currentLevels) => {
       if (currentLevels.includes(level)) {
         return currentLevels.filter((currentLevel) => currentLevel !== level);
       }
       return [...currentLevels, level];
     });
+  }
+
+  function buildOfficialProfileInput() {
+    return {
+      levelsOfficiated,
+      contactInfo: {
+        addressLine1,
+        addressLine2,
+        city,
+        state: stateRegion,
+        postalCode
+      },
+      availability: {
+        blockedDateKeys: normalizeBlockedDateKeys(blockedDateKeys)
+      }
+    };
   }
 
   async function handleSaveOfficialProfile(event: FormEvent<HTMLFormElement>) {
@@ -546,16 +584,7 @@ export function Profile() {
     setSavingProfileDetails(true);
 
     try {
-      await updateOfficialProfile(profile.uid, {
-        levelsOfficiated,
-        contactInfo: {
-          addressLine1,
-          addressLine2,
-          city,
-          state: stateRegion,
-          postalCode
-        }
-      });
+      await updateOfficialProfile(profile.uid, buildOfficialProfileInput());
 
       setProfileSaveSuccess("Official details saved.");
     } catch (error) {
@@ -764,6 +793,72 @@ export function Profile() {
                 ))}
               </div>
             </article>
+
+            {isOfficial ? (
+              <article className="profile-main-card profile-availability-card">
+                <div className="profile-card-heading">
+                  <div>
+                    <h3>Availability Snapshot</h3>
+                    <p className="meta-line">
+                      Keep your calendar current so assignors and schools can staff around your blocked dates.
+                    </p>
+                  </div>
+                  <Link to="/availability" className="ui-button ui-button-secondary ui-button-link">
+                    <CalendarRange />
+                    Open Calendar
+                  </Link>
+                </div>
+
+                <div className="profile-availability-summary">
+                  <div className="profile-availability-kpis">
+                    <div>
+                      <span>Saved Blocks</span>
+                      <strong>{blockedDateKeys.length}</strong>
+                    </div>
+                    <div>
+                      <span>Next Blocked Date</span>
+                      <strong>
+                        {nextBlockedDates.length > 0 ? formatAvailabilityDate(nextBlockedDates[0]) : "None"}
+                      </strong>
+                    </div>
+                    <div>
+                      <span>Status</span>
+                      <strong>{blockedDateKeys.length === 0 ? "Wide open" : "Calendar active"}</strong>
+                    </div>
+                  </div>
+
+                  <div className="profile-availability-feed">
+                    <div className="profile-card-heading">
+                      <div>
+                        <h4>Upcoming Blocks</h4>
+                        <p className="meta-line">Your next saved dates off the board.</p>
+                      </div>
+                      <span className="profile-card-chip">{nextBlockedDates.length} upcoming</span>
+                    </div>
+
+                    {nextBlockedDates.length === 0 ? (
+                      <p className="empty-text">No blocked dates scheduled yet.</p>
+                    ) : (
+                      <div className="profile-availability-list">
+                        {nextBlockedDates.map((dateKey) => (
+                          <div key={dateKey} className="profile-availability-list-item">
+                            <strong>{formatAvailabilityDate(dateKey)}</strong>
+                            <span className="profile-card-chip">Off board</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    <div className="profile-actions">
+                      <Link to="/availability" className="ui-button ui-button-secondary ui-button-link">
+                        <CalendarRange />
+                        Manage Availability
+                      </Link>
+                    </div>
+                  </div>
+                </div>
+              </article>
+            ) : null}
 
             <div className="profile-feature-grid">
               <article className="profile-main-card">

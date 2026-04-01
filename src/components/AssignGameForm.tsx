@@ -1,4 +1,6 @@
 import { Fragment, useEffect, useMemo, useState } from "react";
+import * as Dialog from "@radix-ui/react-dialog";
+import { CalendarRange, Search, X } from "lucide-react";
 import {
   getLocationSuggestions,
   hasGooglePlacesApiKey,
@@ -10,6 +12,12 @@ import {
   getCrewMemberPositionLabel,
   type IndividualAssignee
 } from "../lib/assignGame";
+import {
+  formatAvailabilityDate,
+  getAvailabilityDateKeyFromDateTimeLocal,
+  isOfficialBlockedOnDateKey
+} from "../lib/availability";
+import { Button } from "./ui/Button";
 import { Select } from "./ui/Select";
 import type {
   Crew,
@@ -24,6 +32,7 @@ interface AssignGameFormValues {
   sport: Sport;
   level: Level;
   dateISO: string;
+  scheduledDateKey: string;
   location: string;
   payPosted: number;
   notes?: string;
@@ -73,6 +82,7 @@ const FOOTBALL_POSITIONS: Array<{ code: FootballPosition; label: string }> = [
   { code: "ALT", label: "Alternate (ALT)" }
 ];
 const MIN_AUTOCOMPLETE_CHARS = 3;
+type AvailabilityFilter = "all" | "available" | "blocked";
 
 export function AssignGameForm({
   availableCrews,
@@ -94,6 +104,9 @@ export function AssignGameForm({
   const [individualAssignments, setIndividualAssignments] = useState<IndividualAssignee[]>([]);
   const [selectedCrewIds, setSelectedCrewIds] = useState<string[]>([]);
   const [selectedCrewId, setSelectedCrewId] = useState("");
+  const [availabilityDialogOpen, setAvailabilityDialogOpen] = useState(false);
+  const [availabilityFilter, setAvailabilityFilter] = useState<AvailabilityFilter>("all");
+  const [availabilitySearch, setAvailabilitySearch] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const placesEnabled = hasGooglePlacesApiKey();
@@ -107,10 +120,19 @@ export function AssignGameForm({
     () => availableCrews.filter((crew) => selectedCrewIds.includes(crew.id)),
     [availableCrews, selectedCrewIds]
   );
+  const officialProfilesByUid = useMemo(
+    () => new Map(availableOfficials.map((official) => [official.uid, official])),
+    [availableOfficials]
+  );
   const selectableCrews = useMemo(
     () => availableCrews.filter((crew) => !selectedCrewIds.includes(crew.id)),
     [availableCrews, selectedCrewIds]
   );
+  const gameDateKey = useMemo(
+    () => getAvailabilityDateKeyFromDateTimeLocal(dateLocal),
+    [dateLocal]
+  );
+  const gameDateLabel = gameDateKey ? formatAvailabilityDate(gameDateKey) : "";
   const officialSearchTerm = officialDirectorySearch.trim().toLowerCase();
   const hasOfficialSearch = officialSearchTerm.length > 0;
   const filteredOfficials = useMemo(
@@ -122,6 +144,77 @@ export function AssignGameForm({
   );
   const assignmentRosterCount = individualAssignments.length + selectedCrews.length;
   const hasAssignmentRosterEntries = assignmentRosterCount > 0;
+  const selectedCrew = useMemo(
+    () => availableCrews.find((crew) => crew.id === selectedCrewId) ?? null,
+    [availableCrews, selectedCrewId]
+  );
+
+  function isOfficialBlockedForGameDate(officialUid: string): boolean {
+    const official = officialProfilesByUid.get(officialUid);
+    return official ? isOfficialBlockedOnDateKey(official, gameDateKey) : false;
+  }
+
+  const selectedCrewUnavailableNames = useMemo(() => {
+    if (!selectedCrew || !gameDateKey) {
+      return [];
+    }
+
+    return selectedCrew.members
+      .filter((member) => isOfficialBlockedForGameDate(member.uid))
+      .map((member) => member.name);
+  }, [gameDateKey, selectedCrew, officialProfilesByUid]);
+  const unavailableRosterNames = useMemo(() => {
+    if (!gameDateKey) {
+      return [];
+    }
+
+    const individualNames = individualAssignments
+      .filter((assignee) => isOfficialBlockedForGameDate(assignee.officialUid))
+      .map((assignee) => assignee.officialName);
+    const crewMemberNames = selectedCrews.flatMap((crew) =>
+      crew.members.filter((member) => isOfficialBlockedForGameDate(member.uid)).map((member) => member.name)
+    );
+
+    return Array.from(new Set([...individualNames, ...crewMemberNames]));
+  }, [gameDateKey, individualAssignments, selectedCrews, officialProfilesByUid]);
+  const hasUnavailableRosterEntries = unavailableRosterNames.length > 0;
+  const availableOfficialCount = useMemo(
+    () =>
+      availableOfficials.filter((official) => !isOfficialBlockedOnDateKey(official, gameDateKey)).length,
+    [availableOfficials, gameDateKey]
+  );
+  const blockedOfficialCount = availableOfficials.length - availableOfficialCount;
+  const filteredAvailabilityOfficials = useMemo(() => {
+    const searchTerm = availabilitySearch.trim().toLowerCase();
+
+    return [...availableOfficials]
+      .filter((official) => {
+        const matchesSearch =
+          searchTerm.length === 0 ||
+          official.displayName.toLowerCase().includes(searchTerm) ||
+          official.email.toLowerCase().includes(searchTerm);
+        if (!matchesSearch) {
+          return false;
+        }
+
+        const isBlocked = isOfficialBlockedOnDateKey(official, gameDateKey);
+        if (availabilityFilter === "available") {
+          return !isBlocked;
+        }
+        if (availabilityFilter === "blocked") {
+          return isBlocked;
+        }
+        return true;
+      })
+      .sort((left, right) => {
+        const leftBlocked = isOfficialBlockedOnDateKey(left, gameDateKey);
+        const rightBlocked = isOfficialBlockedOnDateKey(right, gameDateKey);
+        if (leftBlocked !== rightBlocked) {
+          return leftBlocked ? 1 : -1;
+        }
+        return left.displayName.localeCompare(right.displayName);
+      });
+  }, [availabilityFilter, availabilitySearch, availableOfficials, gameDateKey]);
 
   useEffect(() => {
     const trimmedLocation = location.trim();
@@ -170,6 +263,15 @@ export function AssignGameForm({
       );
     }
   }, [sport]);
+
+  useEffect(() => {
+    if (!availabilityDialogOpen) {
+      return;
+    }
+
+    setAvailabilityFilter("all");
+    setAvailabilitySearch("");
+  }, [availabilityDialogOpen, gameDateKey]);
 
   function selectLocationSuggestion(suggestion: PlaceSuggestion) {
     setLocation(suggestion.description);
@@ -391,7 +493,21 @@ export function AssignGameForm({
               onChange={(event) => setOfficialDirectorySearch(event.target.value)}
               placeholder="Search officials by name or email"
             />
+            <Button
+              type="button"
+              variant="secondary"
+              className="assign-availability-trigger"
+              onClick={() => setAvailabilityDialogOpen(true)}
+              disabled={!gameDateKey}
+            >
+              <CalendarRange />
+              Browse Availability
+            </Button>
           </div>
+
+          {!gameDateKey ? (
+            <p className="hint-text">Set the game date to browse all officials by availability.</p>
+          ) : null}
 
           {!hasOfficialSearch ? (
             <p className="hint-text">Start typing a name or email to search officials.</p>
@@ -401,20 +517,52 @@ export function AssignGameForm({
                 const alreadyAdded = individualAssignments.some(
                   (assignee) => assignee.officialUid === match.uid
                 );
+                const isBlockedForGameDate = gameDateKey
+                  ? isOfficialBlockedOnDateKey(match, gameDateKey)
+                  : false;
 
                 return (
                   <div key={match.uid} className="assign-match-item">
                     <div>
                       <strong>{match.displayName}</strong>
                       <div className="meta-line">{match.email}</div>
+                      <div className="assign-availability-meta">
+                        <span
+                          className={[
+                            "assign-availability-badge",
+                            !gameDateKey
+                              ? "assign-availability-badge-pending"
+                              : isBlockedForGameDate
+                                ? "assign-availability-badge-blocked"
+                                : "assign-availability-badge-open"
+                          ].join(" ")}
+                        >
+                          {!gameDateKey
+                            ? "Set game date"
+                            : isBlockedForGameDate
+                              ? "Blocked"
+                              : "Available"}
+                        </span>
+                        <span className="meta-line">
+                          {!gameDateKey
+                            ? "Pick the game date to preview availability."
+                            : isBlockedForGameDate
+                              ? `Blocked on ${gameDateLabel}`
+                              : `Open on ${gameDateLabel}`}
+                        </span>
+                      </div>
                     </div>
                     <button
                       type="button"
                       className="button-secondary"
                       onClick={() => addIndividual(match)}
-                      disabled={alreadyAdded}
+                      disabled={alreadyAdded || isBlockedForGameDate}
                     >
-                      {alreadyAdded ? "Added" : "Assign"}
+                      {alreadyAdded
+                        ? "Added"
+                        : isBlockedForGameDate
+                          ? "Blocked"
+                          : "Assign"}
                     </button>
                   </div>
                 );
@@ -446,12 +594,24 @@ export function AssignGameForm({
                 <button
                   type="button"
                   className="button-secondary"
-                  disabled={!selectedCrewId}
+                  disabled={!selectedCrewId || selectedCrewUnavailableNames.length > 0}
                   onClick={() => addCrew(selectedCrewId)}
                 >
                   Add Crew
                 </button>
               </div>
+
+              {selectedCrewId && !gameDateKey ? (
+                <p className="hint-text">Choose the game date to preview crew availability.</p>
+              ) : null}
+              {selectedCrewUnavailableNames.length > 0 ? (
+                <p className="error-text">
+                  Blocked on {gameDateLabel}: {selectedCrewUnavailableNames.join(", ")}.
+                </p>
+              ) : null}
+              {selectedCrewId && gameDateKey && selectedCrewUnavailableNames.length === 0 ? (
+                <p className="hint-text">All crew members are open on {gameDateLabel}.</p>
+              ) : null}
 
               {selectedCrews.length === 0 ? (
                 <p className="assign-roster-empty">No crews assigned yet.</p>
@@ -501,6 +661,7 @@ export function AssignGameForm({
                         <th>#</th>
                         <th>Crew</th>
                         <th>Members</th>
+                        <th>Availability</th>
                         <th>Action</th>
                       </tr>
                     </thead>
@@ -511,6 +672,23 @@ export function AssignGameForm({
                             <td>{index + 1}</td>
                             <td>{crew.name}</td>
                             <td>{crew.memberUids.length}</td>
+                            <td>
+                              {gameDateKey ? (
+                                crew.members.some((member) => isOfficialBlockedForGameDate(member.uid)) ? (
+                                  <span className="assign-availability-badge assign-availability-badge-blocked">
+                                    Blocked members
+                                  </span>
+                                ) : (
+                                  <span className="assign-availability-badge assign-availability-badge-open">
+                                    Available
+                                  </span>
+                                )
+                              ) : (
+                                <span className="assign-availability-badge assign-availability-badge-pending">
+                                  Set game date
+                                </span>
+                              )}
+                            </td>
                             <td>
                               <button
                                 type="button"
@@ -531,6 +709,7 @@ export function AssignGameForm({
                                     <tr>
                                       <th>Name</th>
                                       <th>Position</th>
+                                      <th>Availability</th>
                                     </tr>
                                   </thead>
                                   <tbody>
@@ -538,6 +717,21 @@ export function AssignGameForm({
                                       <tr key={member.uid}>
                                         <td>{member.name}</td>
                                         <td>{getCrewMemberPositionLabel(crew, member.uid)}</td>
+                                        <td>
+                                          {!gameDateKey ? (
+                                            <span className="assign-availability-badge assign-availability-badge-pending">
+                                              Set game date
+                                            </span>
+                                          ) : isOfficialBlockedForGameDate(member.uid) ? (
+                                            <span className="assign-availability-badge assign-availability-badge-blocked">
+                                              Blocked
+                                            </span>
+                                          ) : (
+                                            <span className="assign-availability-badge assign-availability-badge-open">
+                                              Available
+                                            </span>
+                                          )}
+                                        </td>
                                       </tr>
                                     ))}
                                   </tbody>
@@ -560,6 +754,7 @@ export function AssignGameForm({
                         <th>#</th>
                         <th>Name</th>
                         <th>Email</th>
+                        <th>Availability</th>
                         <th>Position</th>
                         <th>Action</th>
                       </tr>
@@ -570,6 +765,21 @@ export function AssignGameForm({
                           <td>{index + 1}</td>
                           <td>{assignee.officialName}</td>
                           <td>{assignee.officialEmail}</td>
+                          <td>
+                            {!gameDateKey ? (
+                              <span className="assign-availability-badge assign-availability-badge-pending">
+                                Set game date
+                              </span>
+                            ) : isOfficialBlockedForGameDate(assignee.officialUid) ? (
+                              <span className="assign-availability-badge assign-availability-badge-blocked">
+                                Blocked
+                              </span>
+                            ) : (
+                              <span className="assign-availability-badge assign-availability-badge-open">
+                                Available
+                              </span>
+                            )}
+                          </td>
                           <td>
                             {sport === "Football" ? (
                               <Select
@@ -606,13 +816,138 @@ export function AssignGameForm({
         </section>
 
         {error ? <p className="error-text full-width">{error}</p> : null}
+        {hasUnavailableRosterEntries ? (
+          <p className="error-text full-width">
+            Blocked on {gameDateLabel}: {unavailableRosterNames.join(", ")}. Remove them from the roster or change the game date.
+          </p>
+        ) : null}
 
         <div className="full-width post-game-submit-row">
-          <button type="submit" disabled={submitting}>
+          <button type="submit" disabled={submitting || hasUnavailableRosterEntries}>
             {submitting ? "Assigning..." : "Assign Game"}
           </button>
         </div>
       </form>
+
+      <Dialog.Root open={availabilityDialogOpen} onOpenChange={setAvailabilityDialogOpen}>
+        <Dialog.Portal>
+          <Dialog.Overlay className="rating-studio-overlay" />
+          <Dialog.Content className="assign-availability-dialog">
+            <div className="assign-availability-dialog-head">
+              <div>
+                <Dialog.Title className="assign-availability-dialog-title">
+                  Availability Finder
+                </Dialog.Title>
+                <Dialog.Description className="assign-availability-dialog-description">
+                  Review every official against {gameDateLabel || "the selected game date"} and add available officials directly to the roster.
+                </Dialog.Description>
+              </div>
+              <Dialog.Close asChild>
+                <button
+                  type="button"
+                  className="rating-studio-close"
+                  aria-label="Close availability finder"
+                >
+                  <X />
+                </button>
+              </Dialog.Close>
+            </div>
+
+            <div className="assign-availability-dialog-kpis">
+              <article className="assign-availability-kpi">
+                <span>Game date</span>
+                <strong>{gameDateLabel || "Choose a date first"}</strong>
+              </article>
+              <article className="assign-availability-kpi">
+                <span>Available</span>
+                <strong>{availableOfficialCount}</strong>
+              </article>
+              <article className="assign-availability-kpi">
+                <span>Blocked</span>
+                <strong>{blockedOfficialCount}</strong>
+              </article>
+            </div>
+
+            <div className="assign-availability-dialog-toolbar">
+              <label className="assign-availability-search">
+                <Search />
+                <input
+                  type="text"
+                  value={availabilitySearch}
+                  onChange={(event) => setAvailabilitySearch(event.target.value)}
+                  placeholder="Search all officials by name or email"
+                />
+              </label>
+
+              <div className="assign-availability-filter-group" role="tablist" aria-label="Availability filter">
+                {[
+                  { value: "all", label: "All" },
+                  { value: "available", label: "Available" },
+                  { value: "blocked", label: "Blocked" }
+                ].map((option) => (
+                  <button
+                    key={option.value}
+                    type="button"
+                    className={`assign-availability-filter${
+                      availabilityFilter === option.value ? " assign-availability-filter-active" : ""
+                    }`}
+                    onClick={() => setAvailabilityFilter(option.value as AvailabilityFilter)}
+                    aria-pressed={availabilityFilter === option.value}
+                  >
+                    {option.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="assign-availability-dialog-list">
+              {filteredAvailabilityOfficials.length === 0 ? (
+                <p className="empty-text">No officials match that filter.</p>
+              ) : (
+                filteredAvailabilityOfficials.map((official) => {
+                  const alreadyAdded = individualAssignments.some(
+                    (assignee) => assignee.officialUid === official.uid
+                  );
+                  const isBlocked = isOfficialBlockedOnDateKey(official, gameDateKey);
+
+                  return (
+                    <article key={official.uid} className="assign-availability-dialog-item">
+                      <div className="assign-availability-dialog-copy">
+                        <div className="assign-availability-dialog-name-row">
+                          <strong>{official.displayName}</strong>
+                          <span
+                            className={`assign-availability-badge ${
+                              isBlocked
+                                ? "assign-availability-badge-blocked"
+                                : "assign-availability-badge-open"
+                            }`}
+                          >
+                            {isBlocked ? "Blocked" : "Available"}
+                          </span>
+                        </div>
+                        <span>{official.email}</span>
+                        <span>
+                          {isBlocked
+                            ? `Unavailable on ${gameDateLabel}`
+                            : `Open on ${gameDateLabel}`}
+                        </span>
+                      </div>
+                      <Button
+                        type="button"
+                        variant="secondary"
+                        onClick={() => addIndividual(official)}
+                        disabled={alreadyAdded || isBlocked}
+                      >
+                        {alreadyAdded ? "Added" : isBlocked ? "Blocked" : "Add to Roster"}
+                      </Button>
+                    </article>
+                  );
+                })
+              )}
+            </div>
+          </Dialog.Content>
+        </Dialog.Portal>
+      </Dialog.Root>
     </section>
   );
 }

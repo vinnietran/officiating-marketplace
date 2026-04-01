@@ -290,6 +290,33 @@ function getProfileByUid(uid: string): UserProfile | null {
   return state.profiles.find((profile) => profile.uid === uid) ?? null;
 }
 
+function getUnavailableRosterNames(
+  scheduledDateKey: string | undefined,
+  roster: Array<Pick<CrewRosterOfficial, "officialUid" | "officialName">>
+): string[] {
+  if (!scheduledDateKey) {
+    return [];
+  }
+
+  return Array.from(
+    new Set(
+      roster
+        .map((official) => {
+          const profile = getProfileByUid(official.officialUid);
+          if (
+            !profile ||
+            !(profile.availability?.blockedDateKeys ?? []).includes(scheduledDateKey)
+          ) {
+            return "";
+          }
+
+          return official.officialName || profile.displayName;
+        })
+        .filter(Boolean)
+    )
+  );
+}
+
 function updateAuthUserDisplayName(uid: string, displayName: string): void {
   const user = state.authUsers.find((candidate) => candidate.uid === uid);
   if (!user) {
@@ -558,6 +585,7 @@ export const e2eFirestore = {
       levelsOfficiated: UserProfile["levelsOfficiated"];
       contactInfo: NonNullable<UserProfile["contactInfo"]>;
       locationCoordinates: GeoPoint | null;
+      availability: NonNullable<UserProfile["availability"]>;
     }
   ): Promise<void> {
     ensureInitialized();
@@ -569,6 +597,10 @@ export const e2eFirestore = {
     profile.levelsOfficiated = cloneValue(input.levelsOfficiated ?? []);
     profile.contactInfo = cloneValue(input.contactInfo);
     profile.locationCoordinates = input.locationCoordinates ?? undefined;
+    profile.availability =
+      input.availability?.blockedDateKeys?.length
+        ? cloneValue(input.availability)
+        : undefined;
     persistState();
     notifyChannels("profiles");
   },
@@ -674,6 +706,7 @@ export const e2eFirestore = {
       level: input.level,
       requestedCrewSize: input.requestedCrewSize,
       dateISO: input.dateISO,
+      scheduledDateKey: input.scheduledDateKey,
       acceptingBidsUntilISO: input.acceptingBidsUntilISO,
       location: input.location,
       locationCoordinates: input.locationCoordinates ?? undefined,
@@ -696,6 +729,7 @@ export const e2eFirestore = {
       sport: Game["sport"];
       level: Game["level"];
       dateISO: string;
+      scheduledDateKey: string;
       location: string;
       locationCoordinates?: GeoPoint | null;
       payPosted: number;
@@ -705,12 +739,23 @@ export const e2eFirestore = {
     createdBy: { uid: string; role: "assignor" | "school"; displayName: string }
   ): Promise<void> {
     ensureInitialized();
+    const assignedOfficials = buildAssignedOfficialsForDirectAssignments(
+      input.directAssignments,
+      state.crews
+    );
+    if (getUnavailableRosterNames(input.scheduledDateKey, assignedOfficials).length > 0) {
+      throw new Error(
+        "One or more officials on this roster have marked themselves unavailable for this game date."
+      );
+    }
+
     state.games.push({
       id: nextId("game"),
       schoolName: input.schoolName,
       sport: input.sport,
       level: input.level,
       dateISO: input.dateISO,
+      scheduledDateKey: input.scheduledDateKey,
       location: input.location,
       locationCoordinates: input.locationCoordinates ?? undefined,
       payPosted: input.payPosted,
@@ -722,10 +767,7 @@ export const e2eFirestore = {
       status: "awarded",
       mode: "direct_assignment",
       directAssignments: cloneValue(input.directAssignments),
-      assignedOfficials: buildAssignedOfficialsForDirectAssignments(
-        input.directAssignments,
-        state.crews
-      )
+      assignedOfficials
     });
     persistState();
     notifyChannels("games");
@@ -739,6 +781,7 @@ export const e2eFirestore = {
       level: Game["level"];
       requestedCrewSize?: number;
       dateISO: string;
+      scheduledDateKey: string;
       acceptingBidsUntilISO?: string;
       location: string;
       locationCoordinates?: GeoPoint | null;
@@ -757,6 +800,7 @@ export const e2eFirestore = {
     game.level = input.level;
     game.requestedCrewSize = input.requestedCrewSize;
     game.dateISO = input.dateISO;
+    game.scheduledDateKey = input.scheduledDateKey;
     game.acceptingBidsUntilISO = input.acceptingBidsUntilISO;
     game.location = input.location;
     game.locationCoordinates = input.locationCoordinates ?? undefined;
@@ -779,6 +823,21 @@ export const e2eFirestore = {
     message?: string;
   }): Promise<void> {
     ensureInitialized();
+    const game = state.games.find((candidate) => candidate.id === input.gameId);
+    if (!game) {
+      throw new Error("Game not found.");
+    }
+
+    const roster =
+      input.bidderType === "crew" && input.proposedRoster?.length
+        ? input.proposedRoster
+        : [{ officialUid: input.officialUid, officialName: input.officialName }];
+    if (getUnavailableRosterNames(game.scheduledDateKey, roster).length > 0) {
+      throw new Error(
+        "One or more officials on this bid have marked themselves unavailable for the game date."
+      );
+    }
+
     state.bids.push({
       id: nextId("bid"),
       gameId: input.gameId,
@@ -814,6 +873,21 @@ export const e2eFirestore = {
     const bid = state.bids.find((candidate) => candidate.id === bidId);
     if (!bid) {
       throw new Error("Bid not found.");
+    }
+    const game = state.games.find((candidate) => candidate.id === bid.gameId);
+    if (!game) {
+      throw new Error("Game not found.");
+    }
+
+    const nextBidderType = input.bidderType ?? bid.bidderType ?? "individual";
+    const roster =
+      nextBidderType === "crew" && input.proposedRoster?.length
+        ? input.proposedRoster
+        : [{ officialUid: bid.officialUid, officialName: input.officialName }];
+    if (getUnavailableRosterNames(game.scheduledDateKey, roster).length > 0) {
+      throw new Error(
+        "One or more officials on this bid have marked themselves unavailable for the game date."
+      );
     }
 
     bid.officialName = input.officialName;
@@ -1041,10 +1115,17 @@ export const e2eFirestore = {
       throw new Error("Game or bid not found.");
     }
 
+    const assignedOfficials = buildAssignedOfficialsForBid(bid, state.crews);
+    if (getUnavailableRosterNames(game.scheduledDateKey, assignedOfficials).length > 0) {
+      throw new Error(
+        "One or more officials on this roster have marked themselves unavailable for the game date."
+      );
+    }
+
     game.status = "awarded";
     game.selectedBidId = bid.id;
     game.awardedCrewId = bid.bidderType === "crew" ? bid.baseCrewId ?? bid.crewId : undefined;
-    game.assignedOfficials = buildAssignedOfficialsForBid(bid, state.crews);
+    game.assignedOfficials = assignedOfficials;
     persistState();
     notifyChannels("games", "bids");
   },

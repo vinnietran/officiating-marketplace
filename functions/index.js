@@ -145,6 +145,11 @@ function normalizeUserProfile(id, data) {
   }
 
   const email = trimString(data.email);
+  const blockedDateKeys = normalizeBlockedDateKeys(
+    data.availability && typeof data.availability === "object"
+      ? data.availability.blockedDateKeys
+      : []
+  );
   return {
     uid: trimString(data.uid) || id,
     email,
@@ -165,7 +170,8 @@ function normalizeUserProfile(id, data) {
             postalCode: trimString(data.contactInfo.postalCode)
           }
         : undefined,
-    locationCoordinates: normalizeGeoPoint(data.locationCoordinates) || undefined
+    locationCoordinates: normalizeGeoPoint(data.locationCoordinates) || undefined,
+    availability: blockedDateKeys.length > 0 ? { blockedDateKeys } : undefined
   };
 }
 
@@ -203,6 +209,46 @@ function normalizeGeoPoint(value) {
   }
 
   return { lat, lng };
+}
+
+function normalizeAvailabilityDateKey(value) {
+  const trimmed = trimString(value);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) {
+    return "";
+  }
+
+  const [yearPart, monthPart, dayPart] = trimmed.split("-");
+  const year = Number(yearPart);
+  const month = Number(monthPart);
+  const day = Number(dayPart);
+  const candidate = new Date(year, month - 1, day);
+
+  if (
+    !Number.isInteger(year) ||
+    !Number.isInteger(month) ||
+    !Number.isInteger(day) ||
+    candidate.getFullYear() !== year ||
+    candidate.getMonth() !== month - 1 ||
+    candidate.getDate() !== day
+  ) {
+    return "";
+  }
+
+  return trimmed;
+}
+
+function normalizeBlockedDateKeys(rawBlockedDateKeys) {
+  if (!Array.isArray(rawBlockedDateKeys)) {
+    return [];
+  }
+
+  return Array.from(
+    new Set(
+      rawBlockedDateKeys
+        .map((value) => normalizeAvailabilityDateKey(value))
+        .filter(Boolean)
+    )
+  ).sort((left, right) => left.localeCompare(right));
 }
 
 function normalizeCrewMember(member) {
@@ -323,6 +369,7 @@ function normalizeGameDocument(id, data) {
         ? data.requestedCrewSize
         : undefined,
     dateISO: trimString(data.dateISO),
+    scheduledDateKey: normalizeAvailabilityDateKey(data.scheduledDateKey) || undefined,
     acceptingBidsUntilISO: trimString(data.acceptingBidsUntilISO) || undefined,
     location: trimString(data.location),
     locationCoordinates: normalizeGeoPoint(data.locationCoordinates) || undefined,
@@ -434,6 +481,7 @@ function validateNewGameInput(input, requireBidWindow) {
     typeof input.requestedCrewSize === "number" && Number.isFinite(input.requestedCrewSize)
       ? input.requestedCrewSize
       : null;
+  const scheduledDateKey = normalizeAvailabilityDateKey(input.scheduledDateKey);
   const acceptingBidsUntilISO = asOptionalIsoString(input.acceptingBidsUntilISO, "acceptingBidsUntilISO");
   const locationCoordinates = normalizeGeoPoint(input.locationCoordinates);
 
@@ -444,6 +492,7 @@ function validateNewGameInput(input, requireBidWindow) {
   assert(typeof input.payPosted === "number" && Number.isFinite(input.payPosted), "invalid-argument", "Posted pay must be a number.");
   assert(input.payPosted >= 0, "invalid-argument", "Posted pay must be zero or greater.");
   assert(requestedCrewSize !== null, "invalid-argument", "requestedCrewSize is required.");
+  assert(scheduledDateKey, "invalid-argument", "scheduledDateKey is required.");
   assert(
     Number.isInteger(requestedCrewSize) && requestedCrewSize > 0 && requestedCrewSize <= 12,
     "invalid-argument",
@@ -461,12 +510,17 @@ function validateNewGameInput(input, requireBidWindow) {
     level,
     requestedCrewSize,
     dateISO: asIsoString(input.dateISO, "dateISO"),
+    scheduledDateKey,
     acceptingBidsUntilISO,
     location,
     locationCoordinates,
     payPosted: input.payPosted,
     notes
   };
+}
+
+function getGameScheduledDateKey(game) {
+  return normalizeAvailabilityDateKey(game && game.scheduledDateKey) || "";
 }
 
 function isBidWindowClosed(game) {
@@ -657,13 +711,14 @@ async function checkRosterConflicts(input) {
   );
 
   if (rosterOfficialUids.length === 0) {
-    return { hasConflict: false, conflicts: [] };
+    return { hasConflict: false, conflicts: [], unavailableOfficials: [] };
   }
 
-  const [gamesSnapshot, bidsSnapshot, crewsSnapshot] = await Promise.all([
+  const [gamesSnapshot, bidsSnapshot, crewsSnapshot, officialProfilesByUid] = await Promise.all([
     db.collection(GAMES_COLLECTION).where("status", "==", "awarded").get(),
     db.collection(BIDS_COLLECTION).get(),
-    db.collection(CREWS_COLLECTION).get()
+    db.collection(CREWS_COLLECTION).get(),
+    getOfficialProfilesByUids(rosterOfficialUids)
   ]);
   const bidsById = new Map(
     bidsSnapshot.docs.map((doc) => {
@@ -677,6 +732,27 @@ async function checkRosterConflicts(input) {
       return [crew.id, crew];
     })
   );
+
+  const targetDateKey = getGameScheduledDateKey(targetGame);
+  const unavailableOfficials = targetDateKey
+    ? rosterOfficialUids
+        .map((officialUid) => {
+          const officialProfile = officialProfilesByUid.get(officialUid);
+          if (
+            !officialProfile ||
+            !(officialProfile.availability?.blockedDateKeys ?? []).includes(targetDateKey)
+          ) {
+            return null;
+          }
+
+          return {
+            officialUid,
+            officialName: officialProfile.displayName,
+            blockedDateKey: targetDateKey
+          };
+        })
+        .filter(Boolean)
+    : [];
 
   const conflicts = [];
   gamesSnapshot.docs.forEach((doc) => {
@@ -714,9 +790,20 @@ async function checkRosterConflicts(input) {
   });
 
   return {
-    hasConflict: conflicts.length > 0,
-    conflicts
+    hasConflict: conflicts.length > 0 || unavailableOfficials.length > 0,
+    conflicts,
+    unavailableOfficials
   };
+}
+
+function buildRosterSchedulingIssueMessage(checkResult, unavailableMessage, conflictMessage, combinedMessage) {
+  if (checkResult.unavailableOfficials.length > 0 && checkResult.conflicts.length > 0) {
+    return combinedMessage;
+  }
+  if (checkResult.unavailableOfficials.length > 0) {
+    return unavailableMessage;
+  }
+  return conflictMessage;
 }
 
 function canManageCrew(crew, uid) {
@@ -824,13 +911,16 @@ exports.updateOfficialProfile = onClientCall(async (request) => {
     state: trimString(contactInfo.state),
     postalCode: trimString(contactInfo.postalCode)
   };
+  const availability = input.availability && typeof input.availability === "object" ? input.availability : {};
+  const blockedDateKeys = normalizeBlockedDateKeys(availability.blockedDateKeys);
   const hasContactInfo = Object.values(normalizedContactInfo).some(Boolean);
   const locationCoordinates = normalizeGeoPoint(input.locationCoordinates);
 
   const payload = {
     levelsOfficiated: normalizedLevels,
     contactInfo: hasContactInfo ? normalizedContactInfo : FieldValue.delete(),
-    locationCoordinates: hasContactInfo && locationCoordinates ? locationCoordinates : FieldValue.delete()
+    locationCoordinates: hasContactInfo && locationCoordinates ? locationCoordinates : FieldValue.delete(),
+    availability: blockedDateKeys.length > 0 ? { blockedDateKeys } : FieldValue.delete()
   };
 
   await db.collection(USER_PROFILES_COLLECTION).doc(uid).update(payload);
@@ -937,6 +1027,7 @@ exports.createGame = onClientCall(async (request) => {
     level: input.level,
     requestedCrewSize: input.requestedCrewSize,
     dateISO: input.dateISO,
+    scheduledDateKey: input.scheduledDateKey,
     location: input.location,
     ...(input.locationCoordinates ? { locationCoordinates: input.locationCoordinates } : {}),
     payPosted: input.payPosted,
@@ -980,13 +1071,18 @@ exports.createAssignedGame = onClientCall(async (request) => {
   );
   assertNoDuplicateRosterOfficials(assignedOfficials);
   const directAssignmentConflictCheck = await checkRosterConflicts({
-    game: { dateISO: input.dateISO },
+    game: { dateISO: input.dateISO, scheduledDateKey: input.scheduledDateKey },
     roster: assignedOfficials
   });
   assert(
     !directAssignmentConflictCheck.hasConflict,
     "failed-precondition",
-    "One or more officials on this roster are already assigned to another overlapping game."
+    buildRosterSchedulingIssueMessage(
+      directAssignmentConflictCheck,
+      "One or more officials on this roster have marked themselves unavailable for this game date.",
+      "One or more officials on this roster are already assigned to another overlapping game.",
+      "One or more officials on this roster are unavailable or already assigned to another overlapping game."
+    )
   );
   const nowISO = new Date().toISOString();
   await db.collection(GAMES_COLLECTION).add({
@@ -995,6 +1091,7 @@ exports.createAssignedGame = onClientCall(async (request) => {
     level: input.level,
     requestedCrewSize: input.requestedCrewSize,
     dateISO: input.dateISO,
+    scheduledDateKey: input.scheduledDateKey,
     location: input.location,
     ...(input.locationCoordinates ? { locationCoordinates: input.locationCoordinates } : {}),
     payPosted: input.payPosted,
@@ -1052,14 +1149,19 @@ exports.updateGame = onClientCall(async (request) => {
             );
     if (assignedOfficials.length > 0) {
       const awardedConflictCheck = await checkRosterConflicts({
-        game: { dateISO: input.dateISO },
+        game: { dateISO: input.dateISO, scheduledDateKey: input.scheduledDateKey },
         roster: assignedOfficials,
         ignoreGameId: gameId
       });
       assert(
         !awardedConflictCheck.hasConflict,
         "failed-precondition",
-        "One or more assigned officials would conflict with another overlapping game."
+        buildRosterSchedulingIssueMessage(
+          awardedConflictCheck,
+          "One or more assigned officials have marked themselves unavailable for the updated game date.",
+          "One or more assigned officials would conflict with another overlapping game.",
+          "One or more assigned officials are unavailable or would conflict with another overlapping game."
+        )
       );
     }
   }
@@ -1069,6 +1171,7 @@ exports.updateGame = onClientCall(async (request) => {
     level: input.level,
     requestedCrewSize: input.requestedCrewSize,
     dateISO: input.dateISO,
+    scheduledDateKey: input.scheduledDateKey,
     location: input.location,
     payPosted: input.payPosted,
     acceptingBidsUntilISO: input.acceptingBidsUntilISO || FieldValue.delete(),
@@ -1105,6 +1208,12 @@ exports.createBid = onClientCall(async (request) => {
 
   let crewName;
   let proposedRoster;
+  let rosterForScheduling = [
+    {
+      officialUid: profile.uid,
+      officialName: profile.displayName
+    }
+  ];
   if (bidderType === "crew") {
     assert(baseCrewId, "invalid-argument", "baseCrewId is required for crew bids.");
     const crew = await getCrewById(baseCrewId);
@@ -1115,16 +1224,22 @@ exports.createBid = onClientCall(async (request) => {
     );
     crewName = crew.name;
     proposedRoster = await normalizeProposedRoster(input.proposedRoster, crew);
-    const rosterConflictCheck = await checkRosterConflicts({
-      game,
-      roster: proposedRoster
-    });
-    assert(
-      !rosterConflictCheck.hasConflict,
-      "failed-precondition",
-      "One or more officials on this roster are already assigned to another overlapping game."
-    );
+    rosterForScheduling = proposedRoster;
   }
+  const rosterConflictCheck = await checkRosterConflicts({
+    game,
+    roster: rosterForScheduling
+  });
+  assert(
+    !rosterConflictCheck.hasConflict,
+    "failed-precondition",
+    buildRosterSchedulingIssueMessage(
+      rosterConflictCheck,
+      "One or more officials on this bid have marked themselves unavailable for the game date.",
+      "One or more officials on this roster are already assigned to another overlapping game.",
+      "One or more officials on this bid are unavailable or already assigned to another overlapping game."
+    )
+  );
 
   await db.collection(BIDS_COLLECTION).add({
     gameId,
@@ -1184,6 +1299,12 @@ exports.updateBid = onClientCall(async (request) => {
 
   let crewName;
   let proposedRoster;
+  let rosterForScheduling = [
+    {
+      officialUid: profile.uid,
+      officialName: profile.displayName
+    }
+  ];
   if (bidderType === "crew") {
     assert(baseCrewId, "invalid-argument", "baseCrewId is required for crew bids.");
     const crew = await getCrewById(baseCrewId);
@@ -1194,16 +1315,22 @@ exports.updateBid = onClientCall(async (request) => {
     );
     crewName = crew.name;
     proposedRoster = await normalizeProposedRoster(input.proposedRoster, crew);
-    const rosterConflictCheck = await checkRosterConflicts({
-      game,
-      roster: proposedRoster
-    });
-    assert(
-      !rosterConflictCheck.hasConflict,
-      "failed-precondition",
-      "One or more officials on this roster are already assigned to another overlapping game."
-    );
+    rosterForScheduling = proposedRoster;
   }
+  const rosterConflictCheck = await checkRosterConflicts({
+    game,
+    roster: rosterForScheduling
+  });
+  assert(
+    !rosterConflictCheck.hasConflict,
+    "failed-precondition",
+    buildRosterSchedulingIssueMessage(
+      rosterConflictCheck,
+      "One or more officials on this bid have marked themselves unavailable for the game date.",
+      "One or more officials on this roster are already assigned to another overlapping game.",
+      "One or more officials on this bid are unavailable or already assigned to another overlapping game."
+    )
+  );
 
   await db.collection(BIDS_COLLECTION).doc(bidId).update({
     officialName: profile.displayName,
@@ -1506,7 +1633,12 @@ exports.selectBid = onClientCall(async (request) => {
   assert(
     !rosterConflictCheck.hasConflict,
     "failed-precondition",
-    "One or more officials on this roster are already assigned to another overlapping game."
+    buildRosterSchedulingIssueMessage(
+      rosterConflictCheck,
+      "One or more officials on this roster have marked themselves unavailable for the game date.",
+      "One or more officials on this roster are already assigned to another overlapping game.",
+      "One or more officials on this roster are unavailable or already assigned to another overlapping game."
+    )
   );
 
   await db.collection(GAMES_COLLECTION).doc(gameId).update({

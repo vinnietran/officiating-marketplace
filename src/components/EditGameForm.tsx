@@ -9,6 +9,7 @@ interface EditGameFormValues {
   level: Level;
   requestedCrewSize: number;
   dateISO: string;
+  scheduledDateKey: string;
   acceptingBidsUntilISO?: string;
   location: string;
   payPosted: number;

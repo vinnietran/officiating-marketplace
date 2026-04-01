@@ -32,6 +32,7 @@ export interface NewGameInput {
   level: Level;
   requestedCrewSize: number;
   dateISO: string;
+  scheduledDateKey: string;
   acceptingBidsUntilISO?: string;
   location: string;
   payPosted: number;
@@ -43,6 +44,7 @@ export interface NewAssignedGameInput {
   sport: Sport;
   level: Level;
   dateISO: string;
+  scheduledDateKey: string;
   location: string;
   payPosted: number;
   notes?: string;
@@ -102,6 +104,9 @@ export interface UpdateOfficialProfileInput {
     city?: string;
     state?: string;
     postalCode?: string;
+  };
+  availability: {
+    blockedDateKeys: string[];
   };
 }
 

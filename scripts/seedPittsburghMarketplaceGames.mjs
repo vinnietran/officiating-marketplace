@@ -57,8 +57,18 @@ const SCHOOL_LOCATIONS = [
   }
 ];
 
-const BASE_FRIDAYS = ["2026-04-10", "2026-04-17", "2026-04-24"];
-const VARSITY_PRICES = [85, 93, 100];
+const FALL_FRIDAYS = [
+  "2026-09-04",
+  "2026-09-18",
+  "2026-10-02",
+  "2026-10-16",
+  "2026-10-30"
+];
+const VARSITY_PRICES_BY_SCHOOL = [
+  [95, 98, 102, 106, 110],
+  [92, 96, 100, 104, 108],
+  [90, 94, 99, 103, 107]
+];
 
 function parseSchoolCredentials() {
   const rawAccounts = process.env.SEED_SCHOOL_ACCOUNTS;
@@ -154,45 +164,15 @@ function localEasternToIso(datePart, timePart) {
 }
 
 function buildScheduleForSchool(index) {
-  const friday = BASE_FRIDAYS[index];
-  const saturday = addDays(friday, 1);
-  const wednesday = addDays(friday, 5);
-  const sunday = addDays(friday, 9);
-
-  return [
-    {
-      slot: "varsity_friday",
-      sport: "Football",
-      level: "Varsity",
-      payPosted: VARSITY_PRICES[index],
-      dateISO: localEasternToIso(friday, "19:00"),
-      notes: "Friday night varsity matchup."
-    },
-    {
-      slot: "junior_varsity_saturday",
-      sport: "Football",
-      level: "Junior Varsity",
-      payPosted: 60,
-      dateISO: localEasternToIso(saturday, "10:00"),
-      notes: "Saturday morning junior varsity assignment."
-    },
-    {
-      slot: "middle_school_wednesday",
-      sport: "Basketball",
-      level: "Middle School",
-      payPosted: 50,
-      dateISO: localEasternToIso(wednesday, "16:30"),
-      notes: "Wednesday middle school assignment."
-    },
-    {
-      slot: "youth_sunday",
-      sport: "Soccer",
-      level: "Youth",
-      payPosted: 40,
-      dateISO: localEasternToIso(sunday, "10:00"),
-      notes: "Sunday morning youth game."
-    }
-  ];
+  return FALL_FRIDAYS.map((friday, fridayIndex) => ({
+    slot: `varsity_friday_week_${fridayIndex + 1}`,
+    sport: "Football",
+    level: "Varsity",
+    requestedCrewSize: 5,
+    payPosted: VARSITY_PRICES_BY_SCHOOL[index][fridayIndex],
+    dateISO: localEasternToIso(friday, "19:00"),
+    notes: `Friday night varsity football game for week ${fridayIndex + 1} of the fall 2026 slate.`
+  }));
 }
 
 function slugify(value) {
@@ -357,7 +337,9 @@ async function seedSchoolGames(credential, schoolMeta, schedule, index) {
       schoolName: schoolMeta.schoolName,
       sport: gameTemplate.sport,
       level: gameTemplate.level,
+      requestedCrewSize: gameTemplate.requestedCrewSize,
       dateISO: gameTemplate.dateISO,
+      scheduledDateKey: gameTemplate.dateISO.slice(0, 10),
       acceptingBidsUntilISO: biddingCloseISO,
       location: schoolMeta.location,
       locationCoordinates: schoolMeta.locationCoordinates,
@@ -396,16 +378,16 @@ async function main() {
   const credentials = parseSchoolCredentials();
 
   console.info(
-    `Seeding 12 marketplace games in Firestore database "${configuredDatabaseId}" for project "${FIREBASE_PROJECT_ID}".`
+    `Seeding 15 marketplace games in Firestore database "${configuredDatabaseId}" for project "${FIREBASE_PROJECT_ID}".`
   );
   console.info(`School accounts: ${SCHOOL_ACCOUNT_EMAILS.join(", ")}`);
   console.info("Constraints enforced:");
-  console.info("  - 3 school accounts x 4 games each");
-  console.info("  - No NCAA games");
-  console.info("  - Varsity Friday 7:00 PM ($85-$100, varied per school)");
-  console.info("  - Junior Varsity Saturday 10:00 AM ($60)");
-  console.info("  - Middle School Wednesday 4:30 PM ($50)");
-  console.info("  - Youth Sunday 10:00 AM ($40)");
+  console.info("  - 3 school accounts x 5 games each");
+  console.info("  - 15 total marketplace games");
+  console.info("  - All games are Varsity Football");
+  console.info("  - Every game is scheduled on a different fall 2026 Friday night slot set");
+  console.info("  - Requested crew size is 5 officials");
+  console.info("  - Friday 7:00 PM local starts with varied varsity fees by school/week");
   console.info("  - Bidding closes exactly 3 weeks before each game");
 
   for (let index = 0; index < credentials.length; index += 1) {

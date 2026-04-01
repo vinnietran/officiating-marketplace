@@ -12,6 +12,7 @@ export interface AssignGameSubmission {
   sport: Sport;
   level: Level;
   dateISO: string;
+  scheduledDateKey: string;
   location: string;
   payPosted: number;
   notes?: string;
@@ -116,6 +117,7 @@ export function buildAssignedGameSubmission(input: {
     sport: input.sport,
     level: input.level,
     dateISO: gameDate.toISOString(),
+    scheduledDateKey: input.dateLocal.slice(0, 10),
     location: input.location.trim(),
     payPosted: parsedPay,
     notes: input.notes.trim() || undefined,

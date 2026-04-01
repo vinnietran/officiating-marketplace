@@ -1,4 +1,5 @@
 import { Navigate, Route, Routes } from "react-router-dom";
+import { Availability } from "./routes/Availability";
 import { NavBar } from "./components/NavBar";
 import { useAuth } from "./context/AuthContext";
 import { getHomeRouteRedirect } from "./lib/auth";
@@ -45,6 +46,7 @@ export default function App() {
         <Route path="/dashboard" element={<Dashboard />} />
         <Route path="/marketplace" element={<Marketplace />} />
         <Route path="/schedule" element={<Schedule />} />
+        <Route path="/availability" element={<Availability />} />
         <Route path="/schedule/games/:gameId" element={<ScheduleGameDetails />} />
         <Route path="/crews" element={<Crews />} />
         <Route path="/assign-game" element={<AssignGame />} />

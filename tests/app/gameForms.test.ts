@@ -23,6 +23,7 @@ test("buildMarketplaceGameSubmission trims text fields and converts local dateti
   assert.equal(result.location, "123 Main St");
   assert.equal(result.payPosted, 125);
   assert.equal(result.notes, "Bring white hat");
+  assert.equal(result.scheduledDateKey, "2026-03-14");
   assert.ok(result.dateISO.endsWith(":30:00.000Z") || result.dateISO.includes("T"));
   assert.ok(result.acceptingBidsUntilISO);
 });

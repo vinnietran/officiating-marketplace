@@ -81,6 +81,7 @@ export function PostGame() {
     level: Game["level"];
     requestedCrewSize: number;
     dateISO: string;
+    scheduledDateKey: string;
     acceptingBidsUntilISO?: string;
     location: string;
     payPosted: number;

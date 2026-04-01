@@ -39,6 +39,10 @@ export interface GeoPoint {
   lng: number;
 }
 
+export interface OfficialAvailability {
+  blockedDateKeys: string[];
+}
+
 export interface UserProfile {
   uid: string;
   email: string;
@@ -50,11 +54,12 @@ export interface UserProfile {
   contactInfo?: {
     addressLine1?: string;
     addressLine2?: string;
-    city?: string;
-    state?: string;
-    postalCode?: string;
+      city?: string;
+      state?: string;
+      postalCode?: string;
   };
   locationCoordinates?: GeoPoint;
+  availability?: OfficialAvailability;
 }
 
 export interface CrewMember {
@@ -112,6 +117,7 @@ export interface Game {
   level: Level;
   requestedCrewSize?: number;
   dateISO: string;
+  scheduledDateKey?: string;
   acceptingBidsUntilISO?: string;
   location: string;
   locationCoordinates?: GeoPoint;

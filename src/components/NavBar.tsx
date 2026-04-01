@@ -3,6 +3,7 @@ import * as ScrollArea from "@radix-ui/react-scroll-area";
 import {
   Bell,
   CalendarDays,
+  CalendarRange,
   ChevronDown,
   ClipboardPlus,
   LayoutDashboard,
@@ -369,6 +370,15 @@ export function NavBar() {
                 <CalendarDays aria-hidden="true" />
                 Schedule
               </NavLink>
+              {user && profile && profile.role === "official" ? (
+                <NavLink
+                  to="/availability"
+                  className={({ isActive }) => `nav-link${isActive ? " active" : ""}`}
+                >
+                  <CalendarRange aria-hidden="true" />
+                  Availability
+                </NavLink>
+              ) : null}
               {user &&
               profile &&
               (profile.role === "official" ||

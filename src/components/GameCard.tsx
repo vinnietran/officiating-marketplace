@@ -46,6 +46,7 @@ interface GameCardProps {
       level: Game["level"];
       requestedCrewSize: number;
       dateISO: string;
+      scheduledDateKey: string;
       acceptingBidsUntilISO?: string;
       location: string;
       payPosted: number;
@@ -239,6 +240,7 @@ export function GameCard({
     level: Game["level"];
     requestedCrewSize: number;
     dateISO: string;
+    scheduledDateKey: string;
     acceptingBidsUntilISO?: string;
     location: string;
     payPosted: number;

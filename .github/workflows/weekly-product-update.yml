@@ -1,8 +1,6 @@
 name: Weekly Product Update
 
 on:
-  schedule:
-    - cron: "0 13 * * 1"
   workflow_dispatch:
     inputs:
       report_start:
@@ -15,6 +13,10 @@ on:
         type: string
       recipient_override:
         description: Optional comma-separated recipient override
+        required: false
+        type: string
+      custom_message:
+        description: Optional custom note to include in the email
         required: false
         type: string
       dry_run:
@@ -41,7 +43,8 @@ jobs:
       REPORT_START: ${{ inputs.report_start }}
       REPORT_END: ${{ inputs.report_end }}
       RECIPIENT_OVERRIDE: ${{ inputs.recipient_override }}
-      DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && (inputs.dry_run && 'true' || 'false') || vars.PRODUCT_UPDATE_DRY_RUN || 'false' }}
+      CUSTOM_MESSAGE: ${{ inputs.custom_message }}
+      DRY_RUN: ${{ inputs.dry_run && 'true' || 'false' }}
       REPORT_RECIPIENTS: ${{ vars.PRODUCT_UPDATE_RECIPIENTS }}
       REPORT_SENDER_NAME: ${{ vars.PRODUCT_UPDATE_SENDER_NAME || 'Product Updates' }}
       REPORT_SENDER_EMAIL: ${{ vars.PRODUCT_UPDATE_SENDER_EMAIL }}

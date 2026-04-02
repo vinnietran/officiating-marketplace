@@ -348,42 +348,6 @@ export function Marketplace() {
     );
   }, [filters, officialQuickFilter, profile?.role]);
 
-  const uniqueOpenBidGameCount = useMemo(() => {
-    if (!user || profile?.role !== "official") {
-      return 0;
-    }
-
-    return officialOpenBidGames.length;
-  }, [officialOpenBidGames, profile?.role, user]);
-
-  const postedOpenGameCount = useMemo(() => {
-    if (!user || (profile?.role !== "assignor" && profile?.role !== "school")) {
-      return 0;
-    }
-    return availableGames.filter((game) => game.createdByUid === user.uid).length;
-  }, [availableGames, profile?.role, user]);
-
-  const postedOpenBidCount = useMemo(() => {
-    if (!user || (profile?.role !== "assignor" && profile?.role !== "school")) {
-      return 0;
-    }
-
-    const openGameIds = new Set(
-      availableGames
-        .filter((game) => game.createdByUid === user.uid)
-        .map((game) => game.id)
-    );
-    return bids.filter((bid) => openGameIds.has(bid.gameId)).length;
-  }, [availableGames, bids, profile?.role, user]);
-
-  const averageOpenPay = useMemo(() => {
-    if (availableGames.length === 0) {
-      return 0;
-    }
-    const total = availableGames.reduce((sum, game) => sum + game.payPosted, 0);
-    return total / availableGames.length;
-  }, [availableGames]);
-
   const officialLocationContext = useMemo<OfficialLocationContext | null>(() => {
     if (!distanceProfile || distanceProfile.role !== "official") {
       return null;
@@ -1086,65 +1050,31 @@ export function Marketplace() {
   return (
     <main className="page marketplace-page">
       <header className="hero marketplace-hero marketplace-hero-compact">
-        <span className="hero-eyebrow">Live marketplace</span>
-        <h1>Officiating Marketplace</h1>
-        <p>
-          Search, compare, and act on live game listings with marketplace-style ranking and
-          listing intelligence.
-        </p>
-        <div className="hero-actions">
-          {canPostGames ? (
-            <>
-              <button type="button" onClick={() => navigate("/post-game")}>
-                Post a Game
+        <div className="marketplace-hero-row">
+          <div className="marketplace-hero-title">
+            <span className="hero-eyebrow">Live marketplace</span>
+            <h1>Officiating Marketplace</h1>
+          </div>
+          <div className="hero-actions">
+            {canPostGames ? (
+              <>
+                <button type="button" onClick={() => navigate("/post-game")}>
+                  Post a Game
+                </button>
+                <button
+                  type="button"
+                  className="button-secondary"
+                  onClick={() => navigate("/assign-game")}
+                >
+                  Assign Directly
+                </button>
+              </>
+            ) : (
+              <button type="button" className="button-secondary" onClick={() => navigate("/schedule")}>
+                View Schedule
               </button>
-              <button
-                type="button"
-                className="button-secondary"
-                onClick={() => navigate("/assign-game")}
-              >
-                Assign Directly
-              </button>
-            </>
-          ) : (
-            <button type="button" className="button-secondary" onClick={() => navigate("/schedule")}>
-              View Schedule
-            </button>
-          )}
-        </div>
-        <div className="marketplace-hero-stats">
-          <article className="marketplace-hero-stat">
-            <span className="marketplace-hero-stat-label">Open Listings</span>
-            <strong className="marketplace-hero-stat-value">{availableGames.length}</strong>
-          </article>
-          <article className="marketplace-hero-stat">
-            <span className="marketplace-hero-stat-label">Average Posted Pay</span>
-            <strong className="marketplace-hero-stat-value">
-              ${Math.round(averageOpenPay)}
-            </strong>
-          </article>
-          <article className="marketplace-hero-stat">
-            <span className="marketplace-hero-stat-label">
-              {activeProfile.role === "official"
-                ? "Your Active Bid Games"
-                : canPostGames
-                  ? "Your Open Games"
-                  : "Open Listings"}
-            </span>
-            <strong className="marketplace-hero-stat-value">
-              {activeProfile.role === "official"
-                ? uniqueOpenBidGameCount
-                : canPostGames
-                  ? postedOpenGameCount
-                  : availableGames.length}
-            </strong>
-          </article>
-          {canPostGames ? (
-            <article className="marketplace-hero-stat">
-              <span className="marketplace-hero-stat-label">Bids On Your Open Games</span>
-              <strong className="marketplace-hero-stat-value">{postedOpenBidCount}</strong>
-            </article>
-          ) : null}
+            )}
+          </div>
         </div>
       </header>
 
@@ -1187,11 +1117,8 @@ export function Marketplace() {
             </button>
           </div>
         ) : null}
-        <div className="marketplace-toolbar-actions">
-          <span className="meta-line">
-            {sortedGames.length} of {listingPoolGames.length} listing(s) shown
-          </span>
-          {hasActiveFilters ? (
+        {hasActiveFilters ? (
+          <div className="marketplace-toolbar-actions">
             <button
               type="button"
               className="button-secondary"
@@ -1199,15 +1126,14 @@ export function Marketplace() {
             >
               Clear Filters
             </button>
-          ) : null}
-        </div>
+          </div>
+        ) : null}
       </section>
 
       <div className="marketplace-shell">
         <section ref={listingsRef} className="marketplace-listings marketplace-results-column">
           <div className="marketplace-results-toolbar">
             <div className="marketplace-results-copy">
-              <span className="hero-eyebrow">Browse listings</span>
               <h2>
                 {activeProfile.role === "official" && officialQuickFilter === "open_bids"
                   ? "Open Bid Games"
@@ -1216,7 +1142,7 @@ export function Marketplace() {
                     : "Available Games"}
               </h2>
               <p className="meta-line">
-                Showing {sortedGames.length} results sorted for{" "}
+                {sortedGames.length} of {listingPoolGames.length} shown, sorted for{" "}
                 {sortBy === "best_match"
                   ? "best match"
                   : sortBy === "date_soonest"
@@ -1251,7 +1177,38 @@ export function Marketplace() {
             </label>
           </div>
 
-          <section className="marketplace-intel-rail">
+          <section className="game-list marketplace-game-list marketplace-game-grid">
+            {sortedGames.length === 0 ? (
+              <div className="empty-state">No games match your filters.</div>
+            ) : (
+              sortedGames.map((game) => (
+                <GameCard
+                  key={game.id}
+                  game={game}
+                  bids={bids}
+                  role={activeProfile.role}
+                  currentUserId={activeUser.uid}
+                  currentUserName={activeProfile.displayName}
+                  availableCrews={officialCrews}
+                  availableOfficials={officialProfiles}
+                  crewBidUnavailableReason={crewBidUnavailableReason}
+                  userDistanceMiles={
+                    activeProfile.role === "official"
+                      ? distanceByGameId[game.id]
+                      : null
+                  }
+                  distanceUnavailableLabel={noAddressDistanceLabel}
+                  canManageGame={canPostGames && game.createdByUid === activeUser.uid}
+                  onSubmitBid={handleSubmitBid}
+                  onDeleteBid={handleDeleteBid}
+                  onUpdateGame={handleUpdateGame}
+                  layout="grid"
+                />
+              ))
+            )}
+          </section>
+
+          <section className="marketplace-intel-rail marketplace-intel-rail-secondary">
             <section className="marketplace-intel-section">
               <div className="marketplace-intel-header">
                 <h3>Market Snapshot</h3>
@@ -1309,37 +1266,6 @@ export function Marketplace() {
                 </div>
               </section>
             ) : null}
-          </section>
-
-          <section className="game-list marketplace-game-list marketplace-game-list-list">
-            {sortedGames.length === 0 ? (
-              <div className="empty-state">No games match your filters.</div>
-            ) : (
-              sortedGames.map((game) => (
-                <GameCard
-                  key={game.id}
-                  game={game}
-                  bids={bids}
-                  role={activeProfile.role}
-                  currentUserId={activeUser.uid}
-                  currentUserName={activeProfile.displayName}
-                  availableCrews={officialCrews}
-                  availableOfficials={officialProfiles}
-                  crewBidUnavailableReason={crewBidUnavailableReason}
-                  userDistanceMiles={
-                    activeProfile.role === "official"
-                      ? distanceByGameId[game.id]
-                      : null
-                  }
-                  distanceUnavailableLabel={noAddressDistanceLabel}
-                  canManageGame={canPostGames && game.createdByUid === activeUser.uid}
-                  onSubmitBid={handleSubmitBid}
-                  onDeleteBid={handleDeleteBid}
-                  onUpdateGame={handleUpdateGame}
-                  layout="list"
-                />
-              ))
-            )}
           </section>
         </section>
       </div>

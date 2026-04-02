@@ -177,6 +177,7 @@ async function main() {
       companyName: config.senderName || config.projectName,
       email: config.senderEmail,
     },
+    customMessage: config.customMessage,
     completedStories,
     inProgressItems,
     mergedPullRequests: mergedPullRequests.map(summarizePullRequest),

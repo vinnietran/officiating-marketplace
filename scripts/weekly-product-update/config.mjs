@@ -92,6 +92,7 @@ export function loadConfig(env = process.env) {
     senderName: env.REPORT_SENDER_NAME || "Product Updates",
     senderEmail: env.REPORT_SENDER_EMAIL || "",
     sendgridApiKey: env.SENDGRID_API_KEY || "",
+    customMessage: String(env.CUSTOM_MESSAGE || "").trim(),
     logoPath: path.resolve(env.REPORT_LOGO_PATH ?? "vsventureslogo.png"),
     labels: {
       inProgress: splitCsv(env.IN_PROGRESS_LABELS || "in-progress,doing,active"),

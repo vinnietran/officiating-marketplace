@@ -15,6 +15,7 @@ export function createSampleReport() {
       companyName: "V&S Ventures LLC",
       email: "team@vs-venturesllc.com",
     },
+    customMessage: "",
     completedStories: [
       {
         number: 24,

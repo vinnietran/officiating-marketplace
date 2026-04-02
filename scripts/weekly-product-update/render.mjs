@@ -145,6 +145,14 @@ export function buildEmailSubject(projectName, reportWindow) {
 export function renderEmailHtml(report, options = {}) {
   const companyName = report.branding?.companyName || report.projectName;
   const logoSrc = options.logoSrc || "";
+  const customMessageSection = report.customMessage
+    ? `
+        <section class="overview overview-note">
+          <h2>Custom Note</h2>
+          <div class="summary-copy">${renderMultilineText(report.customMessage)}</div>
+        </section>
+      `
+    : "";
   const completedSection = report.completedStories.length
     ? report.completedStories.map(renderStoryCard).join("")
     : `<p class="empty-copy">No completed milestones were finalized in this reporting period.</p>`;
@@ -270,6 +278,9 @@ export function renderEmailHtml(report, options = {}) {
         font-size: 15px;
         line-height: 1.6;
         color: #50627f;
+      }
+      .overview-note {
+        margin-bottom: 0;
       }
       .metrics {
         width: 100%;
@@ -518,6 +529,7 @@ export function renderEmailHtml(report, options = {}) {
             </tr>
           </table>
         </section>
+        ${customMessageSection}
 
         <section class="content-section">
           <h2>Completed This Period</h2>
@@ -553,9 +565,16 @@ export function renderEmailText(report) {
     `Company: ${report.branding?.companyName || report.projectName}`,
     `Reporting period: ${formatDateRangeLabel(report.reportWindow)}`,
     `Generated: ${formatLongDisplayDate(report.generatedAt)}`,
+  ];
+
+  if (report.customMessage) {
+    lines.push("", "Custom note:", report.customMessage);
+  }
+
+  lines.push(
     "",
     "Completed this period:",
-  ];
+  );
 
   if (!report.completedStories.length) {
     lines.push("- No completed milestones were finalized in this reporting period.");

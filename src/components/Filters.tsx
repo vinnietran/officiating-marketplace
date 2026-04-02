@@ -32,11 +32,7 @@ const LEVEL_OPTIONS: Array<"All" | Level> = [
 
 export function Filters({ values, onChange }: FiltersProps) {
   return (
-    <section className="filters">
-      <div className="filters-header">
-        <span className="hero-eyebrow">Search and refine</span>
-        <h2>Find Games</h2>
-      </div>
+    <section className="filters filters-compact">
       <div className="filters-grid">
         <label>
           School

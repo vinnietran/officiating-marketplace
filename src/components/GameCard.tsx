@@ -498,7 +498,7 @@ export function GameCard({
         />
       ) : null}
 
-      {role === "official" && !isDirectAssignment ? (
+      {role === "official" && !isDirectAssignment && layout === "list" ? (
         <section className="bids-section">
           <h4>Your bids on this game</h4>
           {gameBids.length === 0 ? (

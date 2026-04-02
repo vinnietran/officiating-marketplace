@@ -42,3 +42,18 @@ test("renderEmailText includes the key stakeholder sections", () => {
   assert.match(text, /Marked done:/);
   assert.doesNotMatch(text, /https:\/\/github\.com/);
 });
+
+test("renderers include a custom note when provided", () => {
+  const report = createSampleReport();
+  report.customMessage = "Please keep an eye on staffing coverage this week.\nPriority remains high.";
+
+  const html = renderEmailHtml(report);
+  const text = renderEmailText(report);
+
+  assert.match(html, /Custom Note/);
+  assert.match(html, /Please keep an eye on staffing coverage this week\./);
+  assert.match(html, /Priority remains high\./);
+  assert.match(text, /Custom note:/);
+  assert.match(text, /Please keep an eye on staffing coverage this week\./);
+  assert.match(text, /Priority remains high\./);
+});

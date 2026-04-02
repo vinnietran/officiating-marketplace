@@ -125,6 +125,13 @@ export function GameCard({
   const hasSubmittedBid = officialBidsForGame.length > 0;
 
   const latestUserBid = officialBidsForGame[0] ?? null;
+  const canDeleteLatestUserBid = latestUserBid
+    ? isBidEditableByOfficial(
+        latestUserBid,
+        currentUserId,
+        availableCrews.map((crew) => crew.id)
+      )
+    : false;
 
   const canPlaceBid = useMemo(() => {
     return (
@@ -438,6 +445,17 @@ export function GameCard({
                 disabled={!canPlaceBid}
               >
                 {showBidForm ? "Close" : hasSubmittedBid ? "Update Bid" : "Place Bid"}
+              </button>
+            ) : null}
+
+            {role === "official" && layout === "grid" && latestUserBid && canDeleteLatestUserBid ? (
+              <button
+                type="button"
+                className="button-secondary"
+                onClick={() => void handleDeleteBid(latestUserBid.id)}
+                disabled={busyBidId === latestUserBid.id}
+              >
+                {busyBidId === latestUserBid.id ? "Deleting..." : "Delete"}
               </button>
             ) : null}
 

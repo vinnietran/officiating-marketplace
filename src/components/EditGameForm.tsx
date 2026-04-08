@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { buildMarketplaceGameSubmission, toDateTimeLocalValue } from "../lib/gameForms";
+import { buildRequestedCrewSizeOptions } from "../lib/crewSize";
 import type { Game, Level, Sport } from "../types";
 import { Select } from "./ui/Select";
 
@@ -24,13 +25,7 @@ interface EditGameFormProps {
 
 const SPORTS: Sport[] = ["Football", "Basketball", "Soccer", "Baseball"];
 const LEVELS: Level[] = ["NCAA", "Varsity", "Junior Varsity", "Middle School", "Youth"];
-const CREW_SIZE_OPTIONS = Array.from({ length: 12 }, (_, index) => {
-  const size = String(index + 1);
-  return {
-    value: size,
-    label: `${size} official${size === "1" ? "" : "s"}`
-  };
-});
+const CREW_SIZE_OPTIONS = buildRequestedCrewSizeOptions();
 
 export function EditGameForm({ game, onSubmit, onCancel }: EditGameFormProps) {
   const [schoolName, setSchoolName] = useState(game.schoolName);

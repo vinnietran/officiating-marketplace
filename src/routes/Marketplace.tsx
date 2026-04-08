@@ -14,7 +14,6 @@ import {
   getDistanceMilesFromCoordinatesToAddress
 } from "../lib/googlePlaces";
 import {
-  createBid,
   deleteBid,
   getUserProfile,
   getUserProfilesByUids,
@@ -22,20 +21,12 @@ import {
   subscribeCrews,
   subscribeBids,
   subscribeGames,
-  subscribeOfficialProfiles,
-  updateBid,
   updateGame
 } from "../lib/firestore";
 import { FIRESTORE_DATABASE_ID } from "../lib/firebase";
 import { getReadableFirestoreError } from "../lib/firebaseErrors";
 import { formatCurrency } from "../lib/format";
-import {
-  findActiveBid,
-  getBidEligibleCrews,
-  getCrewMemberCrews,
-  isBidEditableByOfficial,
-  requiresCrewBidForGame
-} from "../lib/bids";
+import { getBidEligibleCrews } from "../lib/bids";
 import {
   buildQualifiedGameLevels,
   filterAvailableMarketplaceGames,
@@ -126,7 +117,6 @@ export function Marketplace() {
   const [games, setGames] = useState<Game[]>([]);
   const [bids, setBids] = useState<Bid[]>([]);
   const [crews, setCrews] = useState<Crew[]>([]);
-  const [officialProfiles, setOfficialProfiles] = useState<UserProfile[]>([]);
   const [freshOfficialProfile, setFreshOfficialProfile] = useState<UserProfile | null>(null);
   const [distanceByGameId, setDistanceByGameId] = useState<Record<string, number | null>>({});
   const [dataError, setDataError] = useState<string | null>(null);
@@ -152,7 +142,6 @@ export function Marketplace() {
       setGames([]);
       setBids([]);
       setCrews([]);
-      setOfficialProfiles([]);
       setOfficialQuickFilter("all");
       return;
     }
@@ -166,15 +155,11 @@ export function Marketplace() {
     const unsubscribeCrews = subscribeCrews(setCrews, (error) =>
       setDataError(getReadableFirestoreError(error, FIRESTORE_DATABASE_ID))
     );
-    const unsubscribeOfficialProfiles = subscribeOfficialProfiles(setOfficialProfiles, (error) =>
-      setDataError(getReadableFirestoreError(error, FIRESTORE_DATABASE_ID))
-    );
 
     return () => {
       unsubscribeGames();
       unsubscribeBids();
       unsubscribeCrews();
-      unsubscribeOfficialProfiles();
     };
   }, [user]);
 
@@ -306,37 +291,13 @@ export function Marketplace() {
     });
   }, [deferredFilters, listingPoolGames]);
 
-  const memberCrews = useMemo(() => {
-    if (!user || profile?.role !== "official") {
-      return [];
-    }
-
-    return getCrewMemberCrews(crews, user.uid);
-  }, [crews, profile?.role, user]);
-
   const officialCrews = useMemo(() => {
     if (!user || profile?.role !== "official") {
       return [];
     }
 
-    return getBidEligibleCrews(memberCrews, user.uid);
-  }, [memberCrews, profile?.role, user]);
-
-  const crewBidUnavailableReason = useMemo(() => {
-    if (!user || profile?.role !== "official") {
-      return null;
-    }
-
-    if (officialCrews.length > 0) {
-      return null;
-    }
-
-    if (memberCrews.length > 0) {
-      return "You are a member of one or more crews, but you are not the Referee for any crew eligible to place this bid.";
-    }
-
-    return "Varsity games require crew bids. Join or create a crew to bid.";
-  }, [memberCrews.length, officialCrews.length, profile?.role, user]);
+    return getBidEligibleCrews(crews, user.uid);
+  }, [crews, profile?.role, user]);
 
   const hasActiveFilters = useMemo(() => {
     return Boolean(
@@ -882,105 +843,6 @@ export function Marketplace() {
     await updateGame(gameId, values);
   }
 
-  async function handleSubmitBid(
-    gameId: string,
-    input: {
-      officialName: string;
-      bidderType: "individual" | "crew";
-      crewId?: string;
-      baseCrewId?: string;
-      crewName?: string;
-      proposedRoster?: Bid["proposedRoster"];
-      amount: number;
-      message?: string;
-    }
-  ) {
-    if (activeProfile.role !== "official") {
-      throw new Error("Only officials can place bids.");
-    }
-
-    const game = games.find((candidate) => candidate.id === gameId);
-    if (!game) {
-      throw new Error("Game not found.");
-    }
-
-    if (game.status !== "open") {
-      throw new Error("Bidding is closed for this game.");
-    }
-    if (game.mode === "direct_assignment") {
-      throw new Error("This game was directly assigned and cannot accept bids.");
-    }
-    if (requiresCrewBidForGame(game) && input.bidderType !== "crew") {
-      throw new Error("Varsity games require crew bids.");
-    }
-
-    const gameBids = bids.filter((bid) => bid.gameId === gameId);
-    const selectedCrew =
-      input.bidderType === "crew" && input.crewId
-        ? officialCrews.find((crew) => crew.id === input.crewId) ?? null
-        : null;
-
-    if (input.bidderType === "crew" && !selectedCrew) {
-      throw new Error("Only the Referee for this crew can place a crew bid.");
-    }
-
-    const latestOfficialBid = findActiveBid({
-      bidderType: input.bidderType,
-      existingBids: gameBids.filter((bid) =>
-        isBidEditableByOfficial(
-          bid,
-          activeUser.uid,
-          officialCrews.map((crew) => crew.id)
-        )
-      ),
-      selectedCrewId: selectedCrew?.id ?? "",
-      singleBidMode: false
-    });
-
-    if (latestOfficialBid) {
-      if (input.amount <= latestOfficialBid.amount) {
-        throw new Error("New offer must be higher than your current bid.");
-      }
-
-      await updateBid(latestOfficialBid.id, {
-        officialName: input.officialName,
-        bidderType: input.bidderType,
-        crewId: selectedCrew?.id,
-        baseCrewId: selectedCrew?.id,
-        crewName: selectedCrew?.name,
-        proposedRoster: input.proposedRoster,
-        amount: input.amount,
-        message: input.message
-      });
-      setBids(await listBids());
-      setModalMessage({
-        title: "Offer Increased",
-        message: "Your bid was updated successfully.",
-        autoCloseMs: 1800
-      });
-      return;
-    }
-
-    await createBid({
-      gameId,
-      officialUid: activeUser.uid,
-      officialName: input.officialName,
-      bidderType: input.bidderType,
-      crewId: selectedCrew?.id,
-      baseCrewId: selectedCrew?.id,
-      crewName: selectedCrew?.name,
-      proposedRoster: input.proposedRoster,
-      amount: input.amount,
-      message: input.message
-    });
-    setBids(await listBids());
-    setModalMessage({
-      title: "Bid Submitted",
-      message: "Your bid was submitted successfully.",
-      autoCloseMs: 1800
-    });
-  }
-
   async function handleDeleteBid(bidId: string) {
     await deleteBid(bidId);
     setBids(await listBids());
@@ -1188,10 +1050,7 @@ export function Marketplace() {
                   bids={bids}
                   role={activeProfile.role}
                   currentUserId={activeUser.uid}
-                  currentUserName={activeProfile.displayName}
                   availableCrews={officialCrews}
-                  availableOfficials={officialProfiles}
-                  crewBidUnavailableReason={crewBidUnavailableReason}
                   userDistanceMiles={
                     activeProfile.role === "official"
                       ? distanceByGameId[game.id]
@@ -1199,7 +1058,6 @@ export function Marketplace() {
                   }
                   distanceUnavailableLabel={noAddressDistanceLabel}
                   canManageGame={canPostGames && game.createdByUid === activeUser.uid}
-                  onSubmitBid={handleSubmitBid}
                   onDeleteBid={handleDeleteBid}
                   onUpdateGame={handleUpdateGame}
                   layout="grid"

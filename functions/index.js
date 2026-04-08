@@ -35,6 +35,8 @@ const OFFICIATING_LEVELS = new Set([
 const GAME_STATUSES = new Set(["open", "awarded"]);
 const GAME_MODES = new Set(["marketplace", "direct_assignment"]);
 const BIDDER_TYPES = new Set(["individual", "crew"]);
+const MIN_REQUESTED_CREW_SIZE = 2;
+const MAX_REQUESTED_CREW_SIZE = 11;
 const RATING_TARGET_TYPES = new Set(["official", "crew", "school", "venue"]);
 const FOOTBALL_POSITIONS = new Set([
   "R",
@@ -494,9 +496,11 @@ function validateNewGameInput(input, requireBidWindow) {
   assert(requestedCrewSize !== null, "invalid-argument", "requestedCrewSize is required.");
   assert(scheduledDateKey, "invalid-argument", "scheduledDateKey is required.");
   assert(
-    Number.isInteger(requestedCrewSize) && requestedCrewSize > 0 && requestedCrewSize <= 12,
+    Number.isInteger(requestedCrewSize) &&
+      requestedCrewSize >= MIN_REQUESTED_CREW_SIZE &&
+      requestedCrewSize <= MAX_REQUESTED_CREW_SIZE,
     "invalid-argument",
-    "requestedCrewSize must be a whole number from 1 to 12."
+    `requestedCrewSize must be a whole number from ${MIN_REQUESTED_CREW_SIZE} to ${MAX_REQUESTED_CREW_SIZE}.`
   );
   assert(asIsoString(input.dateISO, "dateISO"), "invalid-argument", "dateISO is required.");
 
@@ -540,8 +544,52 @@ function requiresCrewBidForGame(game) {
   return game.level === "Varsity";
 }
 
+function getRequestedCrewSizeRequirement(requestedCrewSize) {
+  return Number.isInteger(requestedCrewSize) && requestedCrewSize > 0 ? requestedCrewSize : null;
+}
+
 function getCrewRefereeOfficialId(crew) {
   return trimString(crew.refereeOfficialId) || getRefereeOfficialIdFromMemberPositions(crew.memberPositions);
+}
+
+function getCrewMemberCount(crew) {
+  return new Set([
+    ...(Array.isArray(crew.memberUids) ? crew.memberUids : []),
+    ...((Array.isArray(crew.members) ? crew.members : []).map((member) => trimString(member.uid)))
+  ].filter(Boolean)).size;
+}
+
+function getRosterOfficialCount(roster) {
+  if (!Array.isArray(roster) || roster.length === 0) {
+    return 0;
+  }
+
+  return new Set(
+    roster
+      .map((official) => trimString(official.officialUid || official.officialId))
+      .filter(Boolean)
+  ).size;
+}
+
+function assertCrewBidMeetsRequestedCrewSize(crew, proposedRoster, requestedCrewSize) {
+  const minimumCrewSize = getRequestedCrewSizeRequirement(requestedCrewSize);
+  if (!minimumCrewSize) {
+    return;
+  }
+
+  const crewMemberCount = getCrewMemberCount(crew);
+  assert(
+    crewMemberCount >= minimumCrewSize,
+    "failed-precondition",
+    `${crew.name} only has ${crewMemberCount} official${crewMemberCount === 1 ? "" : "s"}. This game requires at least ${minimumCrewSize} officials.`
+  );
+
+  const rosterCount = getRosterOfficialCount(proposedRoster);
+  assert(
+    rosterCount >= minimumCrewSize,
+    "failed-precondition",
+    `Game roster must include at least ${minimumCrewSize} officials.`
+  );
 }
 
 function buildDefaultCrewRoster(crew) {
@@ -1224,6 +1272,7 @@ exports.createBid = onClientCall(async (request) => {
     );
     crewName = crew.name;
     proposedRoster = await normalizeProposedRoster(input.proposedRoster, crew);
+    assertCrewBidMeetsRequestedCrewSize(crew, proposedRoster, game.requestedCrewSize);
     rosterForScheduling = proposedRoster;
   }
   const rosterConflictCheck = await checkRosterConflicts({
@@ -1315,6 +1364,7 @@ exports.updateBid = onClientCall(async (request) => {
     );
     crewName = crew.name;
     proposedRoster = await normalizeProposedRoster(input.proposedRoster, crew);
+    assertCrewBidMeetsRequestedCrewSize(crew, proposedRoster, game.requestedCrewSize);
     rosterForScheduling = proposedRoster;
   }
   const rosterConflictCheck = await checkRosterConflicts({

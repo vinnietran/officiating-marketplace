@@ -1,7 +1,6 @@
 import { CalendarDays, Clock3, Gavel, MapPin, Shield, Wallet } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { BidForm } from "./BidForm";
 import { EditGameForm } from "./EditGameForm";
 import { isBidEditableByOfficial, requiresCrewBidForGame } from "../lib/bids";
 import {
@@ -10,33 +9,17 @@ import {
   getBidWindowInfo,
   getGameStatusLabel
 } from "../lib/format";
-import type { Bid, Crew, Game, UserProfile, UserRole } from "../types";
+import type { Bid, Crew, Game, UserRole } from "../types";
 
 interface GameCardProps {
   game: Game;
   bids: Bid[];
   role: UserRole;
   currentUserId: string;
-  currentUserName: string;
   availableCrews: Crew[];
-  availableOfficials: UserProfile[];
-  crewBidUnavailableReason?: string | null;
   userDistanceMiles?: number | null;
   distanceUnavailableLabel?: string;
   canManageGame: boolean;
-  onSubmitBid: (
-    gameId: string,
-    input: {
-      officialName: string;
-      bidderType: "individual" | "crew";
-      crewId?: string;
-      baseCrewId?: string;
-      crewName?: string;
-      proposedRoster?: Bid["proposedRoster"];
-      amount: number;
-      message?: string;
-    }
-  ) => Promise<void>;
   onDeleteBid: (bidId: string) => Promise<void>;
   onUpdateGame: (
     gameId: string,
@@ -61,20 +44,15 @@ export function GameCard({
   bids,
   role,
   currentUserId,
-  currentUserName,
   availableCrews,
-  availableOfficials,
-  crewBidUnavailableReason,
   userDistanceMiles,
   distanceUnavailableLabel,
   canManageGame,
-  onSubmitBid,
   onDeleteBid,
   onUpdateGame,
   layout = "grid"
 }: GameCardProps) {
   const navigate = useNavigate();
-  const [showBidForm, setShowBidForm] = useState(false);
   const [showEditForm, setShowEditForm] = useState(false);
   const [busyBidId, setBusyBidId] = useState<string | null>(null);
   const [nowMs, setNowMs] = useState(() => Date.now());
@@ -122,7 +100,6 @@ export function GameCard({
       ),
     [allGameBids, availableCrews, currentUserId]
   );
-  const hasSubmittedBid = officialBidsForGame.length > 0;
 
   const latestUserBid = officialBidsForGame[0] ?? null;
   const canDeleteLatestUserBid = latestUserBid
@@ -132,38 +109,6 @@ export function GameCard({
         availableCrews.map((crew) => crew.id)
       )
     : false;
-
-  const canPlaceBid = useMemo(() => {
-    return (
-      role === "official" &&
-      game.status === "open" &&
-      !isDirectAssignment &&
-      (!requiresCrewBid || availableCrews.length > 0)
-    );
-  }, [role, game.status, isDirectAssignment, requiresCrewBid, availableCrews.length]);
-
-  const placeBidDisabledReason = useMemo(() => {
-    if (role !== "official") {
-      return null;
-    }
-    if (isDirectAssignment) {
-      return "This game was directly assigned. Bidding is not available.";
-    }
-    if (game.status !== "open") {
-      return "Bidding is closed for this game.";
-    }
-    if (requiresCrewBid && availableCrews.length === 0) {
-      return crewBidUnavailableReason ?? "Varsity games require crew bids. Join or create a crew to bid.";
-    }
-    return null;
-  }, [
-    role,
-    game.status,
-    isDirectAssignment,
-    requiresCrewBid,
-    availableCrews.length,
-    crewBidUnavailableReason
-  ]);
 
   const gameBids = useMemo(() => {
     if (role === "official") {
@@ -216,20 +161,6 @@ export function GameCard({
 
     event.preventDefault();
     openDetails();
-  }
-
-  async function handleBidSubmit(values: {
-    officialName: string;
-    bidderType: "individual" | "crew";
-    crewId?: string;
-    baseCrewId?: string;
-    crewName?: string;
-    proposedRoster?: Bid["proposedRoster"];
-    amount: number;
-    message?: string;
-  }) {
-    await onSubmitBid(game.id, values);
-    setShowBidForm(false);
   }
 
   async function handleDeleteBid(bidId: string) {
@@ -438,16 +369,6 @@ export function GameCard({
           ) : null}
 
           <div className="card-actions">
-            {role === "official" ? (
-              <button
-                type="button"
-                onClick={() => setShowBidForm((prev) => !prev)}
-                disabled={!canPlaceBid}
-              >
-                {showBidForm ? "Close" : hasSubmittedBid ? "Update Bid" : "Place Bid"}
-              </button>
-            ) : null}
-
             {role === "official" && layout === "grid" && latestUserBid && canDeleteLatestUserBid ? (
               <button
                 type="button"
@@ -475,25 +396,6 @@ export function GameCard({
           ) : null}
         </div>
       </div>
-
-      {showBidForm ? (
-        <BidForm
-          postedPay={game.payPosted}
-          defaultOfficialName={currentUserName}
-          sport={game.sport}
-          availableCrews={availableCrews}
-          availableOfficials={availableOfficials}
-          existingBids={officialBidsForGame}
-          singleBidMode
-          forceCrewOnly={requiresCrewBid}
-          onSubmit={handleBidSubmit}
-          onCancel={() => setShowBidForm(false)}
-        />
-      ) : null}
-
-      {placeBidDisabledReason ? (
-        <p className="hint-text">{placeBidDisabledReason}</p>
-      ) : null}
 
       {latestUserBid && role === "official" ? (
         <p className="hint-text">

@@ -5,6 +5,7 @@ import {
   type PlaceSuggestion
 } from "../lib/googlePlaces";
 import { buildMarketplaceGameSubmission } from "../lib/gameForms";
+import { buildRequestedCrewSizeOptions } from "../lib/crewSize";
 import type { Level, Sport } from "../types";
 import { Select } from "./ui/Select";
 
@@ -33,13 +34,7 @@ const LEVELS: Level[] = [
   "Middle School",
   "Youth"
 ];
-const CREW_SIZE_OPTIONS = Array.from({ length: 12 }, (_, index) => {
-  const size = String(index + 1);
-  return {
-    value: size,
-    label: `${size} official${size === "1" ? "" : "s"}`
-  };
-});
+const CREW_SIZE_OPTIONS = buildRequestedCrewSizeOptions();
 const MIN_AUTOCOMPLETE_CHARS = 3;
 
 export function PostGameForm({ onSubmit }: PostGameFormProps) {

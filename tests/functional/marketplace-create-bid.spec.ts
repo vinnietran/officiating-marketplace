@@ -30,17 +30,14 @@ test("creates a marketplace bid for an open game", async ({ page }) => {
 
   const gameCard = page.locator(".game-card").filter({ hasText: "Bid Test Academy" }).first();
   await expect(gameCard).toBeVisible();
-  await gameCard.getByRole("button", { name: "Place Bid" }).click();
+  await gameCard.click();
 
+  await page.getByRole("button", { name: "Place / Update Bid" }).click();
   await page.getByLabel("Bid Amount (USD)").fill("160");
   await page.getByRole("button", { name: "Place Bid" }).click();
 
   await expect(page.getByText("Bid Submitted")).toBeVisible();
   await dismissAlert(page);
-  await expect(gameCard).toContainText("Your Bid:");
-  await expect(gameCard).toContainText("$160");
-
-  await gameCard.click();
   const bidSection = page.locator(".details-card").filter({
     has: page.getByRole("heading", { name: "Bid On This Game" })
   });

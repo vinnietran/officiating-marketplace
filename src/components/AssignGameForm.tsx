@@ -12,6 +12,7 @@ import {
   getCrewMemberPositionLabel,
   type IndividualAssignee
 } from "../lib/assignGame";
+import { buildRequestedCrewSizeOptions } from "../lib/crewSize";
 import {
   formatAvailabilityDate,
   getAvailabilityDateKeyFromDateTimeLocal,
@@ -31,6 +32,7 @@ interface AssignGameFormValues {
   schoolName: string;
   sport: Sport;
   level: Level;
+  requestedCrewSize: number;
   dateISO: string;
   scheduledDateKey: string;
   location: string;
@@ -68,6 +70,7 @@ const LEVELS: Level[] = [
   "Middle School",
   "Youth"
 ];
+const CREW_SIZE_OPTIONS = buildRequestedCrewSizeOptions();
 const FOOTBALL_POSITIONS: Array<{ code: FootballPosition; label: string }> = [
   { code: "R", label: "Referee (R)" },
   { code: "U", label: "Umpire (U)" },
@@ -92,6 +95,7 @@ export function AssignGameForm({
   const [schoolName, setSchoolName] = useState("");
   const [sport, setSport] = useState<Sport>("Football");
   const [level, setLevel] = useState<Level>("Varsity");
+  const [requestedCrewSize, setRequestedCrewSize] = useState("");
   const [dateLocal, setDateLocal] = useState("");
   const [location, setLocation] = useState("");
   const [locationSuggestions, setLocationSuggestions] = useState<PlaceSuggestion[]>([]);
@@ -336,6 +340,7 @@ export function AssignGameForm({
         schoolName,
         sport,
         level,
+        requestedCrewSize,
         dateLocal,
         location,
         payPosted,
@@ -350,6 +355,7 @@ export function AssignGameForm({
       setSchoolName("");
       setSport("Football");
       setLevel("Varsity");
+      setRequestedCrewSize("");
       setDateLocal("");
       setLocation("");
       setLocationSuggestions([]);
@@ -409,6 +415,16 @@ export function AssignGameForm({
               value: levelOption,
               label: levelOption
             }))}
+          />
+        </label>
+
+        <label>
+          Crew Size Needed
+          <Select
+            value={requestedCrewSize}
+            onValueChange={setRequestedCrewSize}
+            options={CREW_SIZE_OPTIONS}
+            placeholder="Select crew size"
           />
         </label>
 

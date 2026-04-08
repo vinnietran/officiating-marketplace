@@ -14,6 +14,12 @@ import type {
   UserProfile,
   UserRole
 } from "../../types";
+import {
+  getCrewMemberCount,
+  getRequestedCrewSizeLabel,
+  getRequestedCrewSizeRequirement,
+  getRosterOfficialCount
+} from "../../lib/crewSize";
 
 type ScenarioName = "blank" | "incomplete-profile";
 
@@ -81,6 +87,33 @@ function cloneValue<T>(value: T): T {
 
 function nowIso(): string {
   return new Date().toISOString();
+}
+
+function assertCrewBidMeetsRequestedCrewSize(
+  crew: Crew,
+  proposedRoster: CrewRosterOfficial[] | undefined,
+  requestedCrewSize?: number
+): void {
+  const minimumCrewSize = getRequestedCrewSizeRequirement(requestedCrewSize);
+  if (!minimumCrewSize) {
+    return;
+  }
+
+  const crewMemberCount = getCrewMemberCount(crew);
+  if (crewMemberCount < minimumCrewSize) {
+    throw new Error(
+      `${crew.name} only has ${crewMemberCount} official${
+        crewMemberCount === 1 ? "" : "s"
+      }. This game requires at least ${getRequestedCrewSizeLabel(minimumCrewSize)}.`
+    );
+  }
+
+  const rosterCount = getRosterOfficialCount(proposedRoster);
+  if (rosterCount < minimumCrewSize) {
+    throw new Error(
+      `Game roster must include at least ${getRequestedCrewSizeLabel(minimumCrewSize)}.`
+    );
+  }
 }
 
 function sortProfiles(profiles: UserProfile[]): UserProfile[] {
@@ -728,6 +761,7 @@ export const e2eFirestore = {
       schoolName: string;
       sport: Game["sport"];
       level: Game["level"];
+      requestedCrewSize: number;
       dateISO: string;
       scheduledDateKey: string;
       location: string;
@@ -754,6 +788,7 @@ export const e2eFirestore = {
       schoolName: input.schoolName,
       sport: input.sport,
       level: input.level,
+      requestedCrewSize: input.requestedCrewSize,
       dateISO: input.dateISO,
       scheduledDateKey: input.scheduledDateKey,
       location: input.location,
@@ -828,6 +863,15 @@ export const e2eFirestore = {
       throw new Error("Game not found.");
     }
 
+    if (input.bidderType === "crew") {
+      const crewId = input.baseCrewId ?? input.crewId;
+      const crew = crewId ? state.crews.find((candidate) => candidate.id === crewId) : null;
+      if (!crew) {
+        throw new Error("Crew not found.");
+      }
+      assertCrewBidMeetsRequestedCrewSize(crew, input.proposedRoster, game.requestedCrewSize);
+    }
+
     const roster =
       input.bidderType === "crew" && input.proposedRoster?.length
         ? input.proposedRoster
@@ -880,6 +924,14 @@ export const e2eFirestore = {
     }
 
     const nextBidderType = input.bidderType ?? bid.bidderType ?? "individual";
+    if (nextBidderType === "crew") {
+      const crewId = input.baseCrewId ?? input.crewId ?? bid.baseCrewId ?? bid.crewId;
+      const crew = crewId ? state.crews.find((candidate) => candidate.id === crewId) : null;
+      if (!crew) {
+        throw new Error("Crew not found.");
+      }
+      assertCrewBidMeetsRequestedCrewSize(crew, input.proposedRoster, game.requestedCrewSize);
+    }
     const roster =
       nextBidderType === "crew" && input.proposedRoster?.length
         ? input.proposedRoster

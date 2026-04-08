@@ -4,7 +4,9 @@ import assert from "node:assert/strict";
 import {
   buildBidSubmission,
   findActiveBid,
+  getBidEligibleCrewsForGame,
   getBidEligibleCrews,
+  getCrewBidCapacityError,
   getBidCrewId,
   getCrewMemberCrews,
   getCrewRefereeOfficialId,
@@ -199,6 +201,40 @@ test("buildBidSubmission rejects lower offers, invalid messages, and varsity ind
       }),
     /Varsity games require crew bids/
   );
+
+  assert.throws(
+    () =>
+      buildBidSubmission({
+        officialName: "Alex Zebra",
+        bidderType: "crew",
+        selectedCrewId: "crew-1",
+        selectedCrew: crews[0],
+        amount: "120",
+        message: "",
+        activeBid: null,
+        availableCrews: crews,
+        proposedRoster: getCrewDefaultRoster(crews[0]),
+        requestedCrewSize: 2
+      }),
+    /only has 1 official/
+  );
+
+  assert.throws(
+    () =>
+      buildBidSubmission({
+        officialName: "Sam Blue",
+        bidderType: "crew",
+        selectedCrewId: "crew-2",
+        selectedCrew: crews[1],
+        amount: "120",
+        message: "",
+        activeBid: null,
+        availableCrews: crews,
+        proposedRoster: [getCrewDefaultRoster(crews[1])[0]],
+        requestedCrewSize: 2
+      }),
+    /Game roster must include at least 2 officials/
+  );
 });
 
 test("crew bidding helpers identify varsity games, members, and referee-eligible crews", () => {
@@ -231,6 +267,19 @@ test("crew bidding helpers identify varsity games, members, and referee-eligible
     ["crew-2"]
   );
   assert.deepEqual(getBidEligibleCrews(crews, "o9"), []);
+  assert.deepEqual(
+    getBidEligibleCrewsForGame(crews, 2).map((crew) => crew.id),
+    ["crew-2"]
+  );
+  assert.equal(
+    getCrewBidCapacityError({
+      bidderType: "crew",
+      selectedCrew: crews[0],
+      proposedRoster: getCrewDefaultRoster(crews[0]),
+      requestedCrewSize: 2
+    }),
+    "Metro Crew only has 1 official. This game requires at least 2 officials."
+  );
 });
 
 test("crew bid helpers resolve crew identity and editable bids for current referees", () => {

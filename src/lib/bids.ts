@@ -1,4 +1,12 @@
 import { findDuplicateRosterOfficialIds } from "./crewRosters";
+import {
+  crewMeetsRequestedCrewSize,
+  getCrewMemberCount,
+  getEligibleBidCrewsForRequestedCrewSize,
+  getRequestedCrewSizeLabel,
+  getRequestedCrewSizeRequirement,
+  rosterMeetsRequestedCrewSize
+} from "./crewSize";
 import type { Bid, Crew, CrewRosterOfficial, Game } from "../types";
 
 export function requiresCrewBidForGame(game: Pick<Game, "level">): boolean {
@@ -46,6 +54,73 @@ export function getCrewMemberCrews(crews: Crew[], userId: string): Crew[] {
 
 export function getBidEligibleCrews(crews: Crew[], userId: string): Crew[] {
   return crews.filter((crew) => canBidWithCrew(crew, userId));
+}
+
+export function getBidEligibleCrewsForGame(
+  crews: Crew[],
+  requestedCrewSize?: number | null
+): Crew[] {
+  return getEligibleBidCrewsForRequestedCrewSize(crews, requestedCrewSize);
+}
+
+export function getCrewBidCapacityError(input: {
+  bidderType: "individual" | "crew";
+  selectedCrew?: Pick<Crew, "name" | "memberUids" | "members"> | null;
+  proposedRoster?: CrewRosterOfficial[];
+  requestedCrewSize?: number | null;
+}): string | null {
+  if (input.bidderType !== "crew") {
+    return null;
+  }
+
+  const minimumCrewSize = getRequestedCrewSizeRequirement(input.requestedCrewSize);
+  if (!minimumCrewSize) {
+    return null;
+  }
+
+  if (!input.selectedCrew) {
+    return null;
+  }
+
+  const crewMemberCount = getCrewMemberCount(input.selectedCrew);
+  if (!crewMeetsRequestedCrewSize(input.selectedCrew, minimumCrewSize)) {
+    return `${input.selectedCrew.name} only has ${crewMemberCount} official${
+      crewMemberCount === 1 ? "" : "s"
+    }. This game requires at least ${getRequestedCrewSizeLabel(minimumCrewSize)}.`;
+  }
+
+  if (!rosterMeetsRequestedCrewSize(input.proposedRoster, minimumCrewSize)) {
+    return `Game roster must include at least ${getRequestedCrewSizeLabel(minimumCrewSize)}.`;
+  }
+
+  return null;
+}
+
+export function getCrewBidUnavailableReason(input: {
+  requestedCrewSize?: number | null;
+  eligibleCrewCount: number;
+  eligibleCrewCountForGame: number;
+  memberCrewCount?: number;
+  requiresCrewBid?: boolean;
+}): string | null {
+  if (input.eligibleCrewCountForGame > 0) {
+    return null;
+  }
+
+  const minimumCrewSize = getRequestedCrewSizeRequirement(input.requestedCrewSize);
+  if (input.eligibleCrewCount > 0 && minimumCrewSize) {
+    return `None of your referee crews have at least ${getRequestedCrewSizeLabel(minimumCrewSize)}.`;
+  }
+
+  if (input.memberCrewCount && input.memberCrewCount > 0) {
+    return "You are a member of one or more crews, but you are not the Referee for any crew eligible to place this bid.";
+  }
+
+  if (input.requiresCrewBid) {
+    return "Varsity games require crew bids. Join or create a crew to bid.";
+  }
+
+  return null;
 }
 
 export function getBidCrewId(bid: Pick<Bid, "baseCrewId" | "crewId">): string | null {
@@ -119,12 +194,14 @@ export function buildBidSubmission(input: {
   officialName: string;
   bidderType: "individual" | "crew";
   selectedCrewId: string;
+  selectedCrew?: Crew | null;
   amount: string;
   message: string;
   activeBid: Bid | null;
   availableCrews: Crew[];
   proposedRoster?: CrewRosterOfficial[];
   requiresCrewBid?: boolean;
+  requestedCrewSize?: number | null;
 }): {
   officialName: string;
   bidderType: "individual" | "crew";
@@ -170,13 +247,25 @@ export function buildBidSubmission(input: {
     }
   }
 
+  const crewCapacityError = getCrewBidCapacityError({
+    bidderType: input.bidderType,
+    selectedCrew: input.selectedCrew,
+    proposedRoster: input.proposedRoster,
+    requestedCrewSize: input.requestedCrewSize
+  });
+  if (crewCapacityError) {
+    throw new Error(crewCapacityError);
+  }
+
   if (input.activeBid && numericAmount <= input.activeBid.amount) {
     throw new Error("New offer must be higher than your current bid.");
   }
 
   const activeCrew =
     input.bidderType === "crew"
-      ? input.availableCrews.find((crew) => crew.id === input.selectedCrewId) ?? null
+      ? input.selectedCrew ??
+        input.availableCrews.find((crew) => crew.id === input.selectedCrewId) ??
+        null
       : null;
 
   return {

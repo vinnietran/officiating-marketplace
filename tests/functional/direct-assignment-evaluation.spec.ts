@@ -2,6 +2,7 @@ import { expect, test } from "@playwright/test";
 import {
   createCrew,
   dismissAlert,
+  selectOption,
   selectOptionInRegion,
   signIn,
   signOutFromProfile,
@@ -23,6 +24,7 @@ test("supports direct assignment workflows and evaluator submissions", async ({ 
   await signIn(page, "assignor@example.com");
   await page.goto("/assign-game");
   await page.getByLabel("School Name").fill("North Hills");
+  await selectOption(page, page.locator("form"), "Crew Size Needed", "5 officials");
   await page.getByLabel("Date & Time").fill("2030-10-05T18:30");
   await page.getByLabel("Location").fill("500 North Ave, Pittsburgh, PA");
   await page.getByLabel("Game Fee (USD)").fill("180");

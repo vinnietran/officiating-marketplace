@@ -73,6 +73,7 @@ test("buildAssignedGameSubmission builds mixed direct assignments", () => {
     schoolName: "  Central High ",
     sport: "Football",
     level: "Varsity",
+    requestedCrewSize: "5",
     dateLocal: "2026-03-20T18:00",
     location: " Stadium ",
     payPosted: "250",
@@ -84,6 +85,7 @@ test("buildAssignedGameSubmission builds mixed direct assignments", () => {
   assert.equal(result.schoolName, "Central High");
   assert.equal(result.location, "Stadium");
   assert.equal(result.payPosted, 250);
+  assert.equal(result.requestedCrewSize, 5);
   assert.equal(result.scheduledDateKey, "2026-03-20");
   assert.equal(result.directAssignments.length, 2);
   assert.deepEqual(result.directAssignments[0], {
@@ -102,6 +104,24 @@ test("buildAssignedGameSubmission rejects missing roster entries", () => {
         schoolName: "Central High",
         sport: "Football",
         level: "Varsity",
+        requestedCrewSize: "1",
+        dateLocal: "2026-03-20T18:00",
+        location: "Stadium",
+        payPosted: "250",
+        notes: "",
+        individualAssignments: [],
+        selectedCrews: []
+      }),
+    /Crew size needed must be a whole number from 2 to 11/
+  );
+
+  assert.throws(
+    () =>
+      buildAssignedGameSubmission({
+        schoolName: "Central High",
+        sport: "Football",
+        level: "Varsity",
+        requestedCrewSize: "5",
         dateLocal: "2026-03-20T18:00",
         location: "Stadium",
         payPosted: "250",

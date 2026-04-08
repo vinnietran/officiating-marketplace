@@ -29,7 +29,8 @@ test("captures post-game ratings from both assignor and official perspectives", 
   await signIn(page, "official1@example.com");
   await page.goto("/marketplace");
   const ratingGameCard = page.locator(".game-card").filter({ hasText: "Riverside Prep" }).first();
-  await ratingGameCard.getByRole("button", { name: "Place Bid" }).click();
+  await ratingGameCard.click();
+  await page.getByRole("button", { name: "Place / Update Bid" }).click();
   await page.getByLabel("Bid Amount (USD)").fill("160");
   await page.getByRole("button", { name: "Place Bid" }).click();
   await expect(page.getByText("Bid Submitted")).toBeVisible();

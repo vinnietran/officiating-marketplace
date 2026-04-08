@@ -120,6 +120,7 @@ export function AssignGame() {
     schoolName: string;
     sport: Game["sport"];
     level: Game["level"];
+    requestedCrewSize: number;
     dateISO: string;
     scheduledDateKey: string;
     location: string;

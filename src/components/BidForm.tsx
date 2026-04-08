@@ -1,6 +1,14 @@
 import { useEffect, useMemo, useState } from "react";
-import { buildBidSubmission, findActiveBid, getBidFormDefaults } from "../lib/bids";
+import {
+  buildBidSubmission,
+  findActiveBid,
+  getBidEligibleCrewsForGame,
+  getBidFormDefaults,
+  getCrewBidCapacityError,
+  getCrewBidUnavailableReason
+} from "../lib/bids";
 import { getAvailableFootballPositionsForRoster, getCrewDefaultRoster } from "../lib/crewRosters";
+import { getRequestedCrewSizeLabel, getRequestedCrewSizeRequirement } from "../lib/crewSize";
 import type { Bid, Crew, CrewRosterOfficial, Game, UserProfile } from "../types";
 import { SearchableSelect } from "./ui/SearchableSelect";
 import { Select } from "./ui/Select";
@@ -35,6 +43,7 @@ interface BidFormProps {
   postedPay: number;
   defaultOfficialName: string;
   sport: Game["sport"];
+  requestedCrewSize?: number;
   availableCrews: Crew[];
   availableOfficials: UserProfile[];
   existingBids: Bid[];
@@ -48,6 +57,7 @@ export function BidForm({
   postedPay,
   defaultOfficialName,
   sport,
+  requestedCrewSize,
   availableCrews,
   availableOfficials,
   existingBids,
@@ -64,27 +74,32 @@ export function BidForm({
   const [amount, setAmount] = useState(String(postedPay));
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
-  const noEligibleCrews = forceCrewOnly && availableCrews.length === 0;
   const isFootball = sport === "Football";
+  const minimumCrewSize = getRequestedCrewSizeRequirement(requestedCrewSize);
+  const bidEligibleCrews = useMemo(
+    () => getBidEligibleCrewsForGame(availableCrews, requestedCrewSize),
+    [availableCrews, requestedCrewSize]
+  );
+  const noEligibleCrews = forceCrewOnly && bidEligibleCrews.length === 0;
 
   useEffect(() => {
     setOfficialName(defaultOfficialName);
   }, [defaultOfficialName]);
 
   useEffect(() => {
-    if (availableCrews.length === 0) {
+    if (bidEligibleCrews.length === 0) {
       setBidderType(forceCrewOnly ? "crew" : "individual");
       setSelectedCrewId("");
       return;
     }
 
     setSelectedCrewId((current) => {
-      if (availableCrews.some((crew) => crew.id === current)) {
+      if (bidEligibleCrews.some((crew) => crew.id === current)) {
         return current;
       }
-      return availableCrews[0].id;
+      return bidEligibleCrews[0].id;
     });
-  }, [availableCrews, forceCrewOnly]);
+  }, [bidEligibleCrews, forceCrewOnly]);
 
   useEffect(() => {
     if (forceCrewOnly && bidderType !== "crew") {
@@ -93,8 +108,8 @@ export function BidForm({
   }, [bidderType, forceCrewOnly]);
 
   const activeCrew = useMemo(
-    () => availableCrews.find((crew) => crew.id === selectedCrewId) ?? null,
-    [availableCrews, selectedCrewId]
+    () => bidEligibleCrews.find((crew) => crew.id === selectedCrewId) ?? null,
+    [bidEligibleCrews, selectedCrewId]
   );
   const activeBid = useMemo(
     () =>
@@ -160,6 +175,26 @@ export function BidForm({
         })),
     [availableOfficials, proposedRoster]
   );
+  const crewBidUnavailableReason = useMemo(
+    () =>
+      getCrewBidUnavailableReason({
+        requestedCrewSize,
+        eligibleCrewCount: availableCrews.length,
+        eligibleCrewCountForGame: bidEligibleCrews.length,
+        requiresCrewBid: forceCrewOnly
+      }),
+    [availableCrews.length, bidEligibleCrews.length, forceCrewOnly, requestedCrewSize]
+  );
+  const crewCapacityError = useMemo(
+    () =>
+      getCrewBidCapacityError({
+        bidderType,
+        selectedCrew: activeCrew,
+        proposedRoster,
+        requestedCrewSize
+      }),
+    [activeCrew, bidderType, proposedRoster, requestedCrewSize]
+  );
 
   function updateRosterOfficial(
     officialUid: string,
@@ -223,12 +258,14 @@ export function BidForm({
         officialName,
         bidderType,
         selectedCrewId,
+        selectedCrew: activeCrew,
         amount,
         message: "",
         activeBid,
-        availableCrews,
+        availableCrews: bidEligibleCrews,
         proposedRoster,
-        requiresCrewBid: forceCrewOnly
+        requiresCrewBid: forceCrewOnly,
+        requestedCrewSize
       });
 
       setSubmitting(true);
@@ -286,13 +323,13 @@ export function BidForm({
             </label>
           ) : null}
 
-          {bidderType === "crew" ? (
+          {bidderType === "crew" && bidEligibleCrews.length > 0 ? (
             <label>
               {forceCrewOnly ? "Select Crew to Bid As" : "Crew"}
               <Select
                 value={selectedCrewId}
                 onValueChange={setSelectedCrewId}
-                options={availableCrews.map((crew) => ({
+                options={bidEligibleCrews.map((crew) => ({
                   value: crew.id,
                   label: crew.name
                 }))}
@@ -302,11 +339,12 @@ export function BidForm({
         </div>
       ) : null}
 
-      {forceCrewOnly ? (
+      {forceCrewOnly || (bidderType === "crew" && crewBidUnavailableReason) ? (
         <p className="hint-text">
-          {noEligibleCrews
-            ? "You are a member of one or more crews, but you are not the Referee for any crew eligible to place this bid."
-            : "Varsity games require a crew bid."}
+          {crewBidUnavailableReason ??
+            (minimumCrewSize
+              ? `This game requires at least ${getRequestedCrewSizeLabel(minimumCrewSize)}.`
+              : "Varsity games require a crew bid.")}
         </p>
       ) : null}
 
@@ -422,10 +460,22 @@ export function BidForm({
         </p>
       ) : null}
 
+      {bidderType === "crew" && activeCrew && minimumCrewSize ? (
+        <p className="hint-text">
+          {activeCrew.name} has {activeCrew.members.length} official
+          {activeCrew.members.length === 1 ? "" : "s"} available for a minimum request of{" "}
+          {getRequestedCrewSizeLabel(minimumCrewSize)}.
+        </p>
+      ) : null}
+
       {error ? <p className="error-text">{error}</p> : null}
+      {!error && crewCapacityError ? <p className="error-text">{crewCapacityError}</p> : null}
 
       <div className="bid-form-actions">
-        <button type="submit" disabled={submitting || noEligibleCrews}>
+        <button
+          type="submit"
+          disabled={submitting || noEligibleCrews || Boolean(crewCapacityError)}
+        >
           {submitting ? "Submitting..." : activeBid ? "Update Bid" : "Place Bid"}
         </button>
         <button type="button" className="button-secondary" onClick={onCancel}>

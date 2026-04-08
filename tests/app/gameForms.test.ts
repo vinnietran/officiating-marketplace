@@ -67,6 +67,22 @@ test("buildMarketplaceGameSubmission rejects invalid form states", () => {
         schoolName: "Central High",
         sport: "Football",
         level: "Varsity",
+        requestedCrewSize: "1",
+        dateLocal: "2026-03-14T19:30",
+        acceptingBidsUntilLocal: "",
+        location: "123 Main St",
+        payPosted: "125",
+        notes: ""
+      }),
+    /Crew size needed must be a whole number from 2 to 11/
+  );
+
+  assert.throws(
+    () =>
+      buildMarketplaceGameSubmission({
+        schoolName: "Central High",
+        sport: "Football",
+        level: "Varsity",
         requestedCrewSize: "5",
         dateLocal: "2026-03-14T19:30",
         acceptingBidsUntilLocal: "",

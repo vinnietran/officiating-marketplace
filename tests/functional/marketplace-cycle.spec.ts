@@ -24,7 +24,7 @@ test("runs the crew-bid marketplace workflow end to end", async ({ page }) => {
   await signIn(page, "assignor@example.com");
   await page.goto("/post-game");
   await page.getByLabel("School Name").fill("Central Catholic");
-  await selectOption(page, page.locator("form"), "Crew Size Needed", "5 officials");
+  await selectOption(page, page.locator("form"), "Crew Size Needed", "2 officials");
   await page.getByLabel("Date & Time").fill("2030-09-10T19:00");
   await page.getByLabel("Accepting Bids Until").fill("2030-09-08T18:00");
   await page.getByLabel("Location").fill("100 Stadium Dr, Pittsburgh, PA");
@@ -45,22 +45,25 @@ test("runs the crew-bid marketplace workflow end to end", async ({ page }) => {
   await page.goto("/marketplace");
   const officialGameCard = page.locator(".game-card").filter({ hasText: "Central Catholic" }).first();
   await expect(officialGameCard.getByText("CREW BID REQUIRED")).toBeVisible();
-  await expect(officialGameCard).toContainText("Crew of 5");
-  await officialGameCard.getByRole("button", { name: "Place Bid" }).click();
+  await expect(officialGameCard).toContainText("Crew of 2");
+  await officialGameCard.click();
+  await page.getByRole("button", { name: "Place / Update Bid" }).click();
   await page.getByLabel("Bid Amount (USD)").fill("300");
   await page.getByRole("button", { name: "Place Bid" }).click();
   await expect(page.getByText("Bid Submitted")).toBeVisible();
   await dismissAlert(page);
-  await expect(officialGameCard).toContainText("Your Bid:");
-  await expect(officialGameCard).toContainText("$300");
+  const bidsSection = page.locator(".details-card").filter({
+    has: page.getByRole("heading", { name: "Bid On This Game" })
+  });
+  await expect(bidsSection.getByText("Your bids on this game")).toBeVisible();
+  await expect(bidsSection.getByText("$300", { exact: true })).toBeVisible();
 
-  await officialGameCard.getByRole("button", { name: "Update Bid" }).click();
-  await page.getByLabel("Bid Amount (USD)").fill("325");
+  await page.getByRole("button", { name: "Place / Update Bid" }).click();
   await page.getByRole("button", { name: "Update Bid" }).click();
   await expect(page.getByText("Offer Increased")).toBeVisible();
   await dismissAlert(page);
-  await expect(officialGameCard).toContainText("$325");
-  await expect(officialGameCard).not.toContainText("$300");
+  await expect(bidsSection.getByText("$301", { exact: true })).toBeVisible();
+  await expect(bidsSection.getByText("$300", { exact: true })).not.toBeVisible();
   await signOutFromProfile(page);
 
   await signIn(page, "assignor@example.com");
@@ -80,7 +83,7 @@ test("runs the crew-bid marketplace workflow end to end", async ({ page }) => {
   await page
     .getByRole("button", { name: /Open details for Central Catholic/i })
     .click();
-  await expect(page.getByText("Crew of 5")).toBeVisible();
+  await expect(page.getByText("Crew of 2")).toBeVisible();
   await expect(page.getByText("Assigned Individuals")).toBeVisible();
   await expect(page.getByRole("cell", { name: "Olivia Official" })).toBeVisible();
 });

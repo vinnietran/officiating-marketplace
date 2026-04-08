@@ -11,6 +11,9 @@ import { Select } from "../components/ui/Select";
 import { useAuth } from "../context/AuthContext";
 import {
   findActiveBid,
+  getBidEligibleCrewsForGame,
+  getCrewBidCapacityError,
+  getCrewBidUnavailableReason,
   getBidEligibleCrews,
   getCrewMemberCrews,
   isBidEditableByOfficial,
@@ -356,6 +359,10 @@ export function ScheduleGameDetails() {
     }
     return getBidEligibleCrews(memberCrews, user.uid);
   }, [memberCrews, profile?.role, user]);
+  const gameEligibleCrews = useMemo(
+    () => getBidEligibleCrewsForGame(officialCrews, game?.requestedCrewSize),
+    [game?.requestedCrewSize, officialCrews]
+  );
 
   const officialBidsForGame = useMemo(() => {
     if (!user || profile?.role !== "official") {
@@ -760,10 +767,14 @@ export function ScheduleGameDetails() {
           ? "Bidding is closed for this game."
           : bidWindowInfo.state === "closed"
             ? "The bidding window has closed."
-            : requiresCrewBid && officialCrews.length === 0
-              ? memberCrews.length > 0
-                ? "You are a member of one or more crews, but you are not the Referee for any crew eligible to place this bid."
-                : "Varsity games require crew bids. Join or create a crew to bid."
+            : requiresCrewBid && gameEligibleCrews.length === 0
+              ? getCrewBidUnavailableReason({
+                  requestedCrewSize: activeGame.requestedCrewSize,
+                  eligibleCrewCount: officialCrews.length,
+                  eligibleCrewCountForGame: gameEligibleCrews.length,
+                  memberCrewCount: memberCrews.length,
+                  requiresCrewBid: true
+                })
               : null;
 
   if (!canViewAwardedDetails) {
@@ -867,11 +878,21 @@ export function ScheduleGameDetails() {
 
     const selectedCrew =
       input.bidderType === "crew" && input.crewId
-        ? officialCrews.find((crew) => crew.id === input.crewId) ?? null
+        ? gameEligibleCrews.find((crew) => crew.id === input.crewId) ?? null
         : null;
 
     if (input.bidderType === "crew" && !selectedCrew) {
       throw new Error("Only the Referee for this crew can place a crew bid.");
+    }
+
+    const crewCapacityError = getCrewBidCapacityError({
+      bidderType: input.bidderType,
+      selectedCrew,
+      proposedRoster: input.proposedRoster,
+      requestedCrewSize: activeGame.requestedCrewSize
+    });
+    if (crewCapacityError) {
+      throw new Error(crewCapacityError);
     }
 
     const latestIdentityBid = findActiveBid({
@@ -1298,7 +1319,8 @@ export function ScheduleGameDetails() {
                   postedPay={activeGame.payPosted}
                   defaultOfficialName={activeProfile.displayName}
                   sport={activeGame.sport}
-                  availableCrews={officialCrews}
+                  requestedCrewSize={activeGame.requestedCrewSize}
+                  availableCrews={gameEligibleCrews}
                   availableOfficials={officialProfiles}
                   existingBids={officialBidsForGame}
                   forceCrewOnly={requiresCrewBid}

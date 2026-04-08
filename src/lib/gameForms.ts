@@ -1,4 +1,9 @@
 import type { Level, Sport } from "../types";
+import {
+  MAX_REQUESTED_CREW_SIZE,
+  MIN_REQUESTED_CREW_SIZE,
+  isValidRequestedCrewSize
+} from "./crewSize";
 
 export interface MarketplaceGameSubmission {
   schoolName: string;
@@ -79,10 +84,10 @@ export function buildMarketplaceGameSubmission(
     throw new Error("Crew size needed is required.");
   }
 
-  if (
-    !Number.isInteger(parsedCrewSize) || parsedCrewSize <= 0 || parsedCrewSize > 12
-  ) {
-    throw new Error("Crew size needed must be a whole number from 1 to 12.");
+  if (!isValidRequestedCrewSize(parsedCrewSize)) {
+    throw new Error(
+      `Crew size needed must be a whole number from ${MIN_REQUESTED_CREW_SIZE} to ${MAX_REQUESTED_CREW_SIZE}.`
+    );
   }
 
   return {

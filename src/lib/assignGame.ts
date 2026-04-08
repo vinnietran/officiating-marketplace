@@ -1,4 +1,9 @@
 import type { Crew, FootballPosition, Level, Sport, UserProfile } from "../types";
+import {
+  MAX_REQUESTED_CREW_SIZE,
+  MIN_REQUESTED_CREW_SIZE,
+  isValidRequestedCrewSize
+} from "./crewSize";
 
 export interface IndividualAssignee {
   officialUid: string;
@@ -11,6 +16,7 @@ export interface AssignGameSubmission {
   schoolName: string;
   sport: Sport;
   level: Level;
+  requestedCrewSize: number;
   dateISO: string;
   scheduledDateKey: string;
   location: string;
@@ -79,6 +85,7 @@ export function buildAssignedGameSubmission(input: {
   schoolName: string;
   sport: Sport;
   level: Level;
+  requestedCrewSize: string;
   dateLocal: string;
   location: string;
   payPosted: string;
@@ -87,6 +94,8 @@ export function buildAssignedGameSubmission(input: {
   selectedCrews: Crew[];
 }): AssignGameSubmission {
   const parsedPay = Number(input.payPosted);
+  const crewSizeValue = input.requestedCrewSize.trim();
+  const parsedCrewSize = crewSizeValue === "" ? null : Number(crewSizeValue);
   const gameDate = new Date(input.dateLocal);
 
   if (!input.schoolName.trim() || !input.location.trim()) {
@@ -99,6 +108,16 @@ export function buildAssignedGameSubmission(input: {
 
   if (!Number.isFinite(parsedPay) || parsedPay <= 0) {
     throw new Error("Game fee must be greater than 0.");
+  }
+
+  if (parsedCrewSize === null) {
+    throw new Error("Crew size needed is required.");
+  }
+
+  if (!isValidRequestedCrewSize(parsedCrewSize)) {
+    throw new Error(
+      `Crew size needed must be a whole number from ${MIN_REQUESTED_CREW_SIZE} to ${MAX_REQUESTED_CREW_SIZE}.`
+    );
   }
 
   if (input.individualAssignments.length === 0 && input.selectedCrews.length === 0) {
@@ -116,6 +135,7 @@ export function buildAssignedGameSubmission(input: {
     schoolName: input.schoolName.trim(),
     sport: input.sport,
     level: input.level,
+    requestedCrewSize: parsedCrewSize,
     dateISO: gameDate.toISOString(),
     scheduledDateKey: input.dateLocal.slice(0, 10),
     location: input.location.trim(),

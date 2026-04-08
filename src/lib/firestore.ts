@@ -43,6 +43,7 @@ export interface NewAssignedGameInput {
   schoolName: string;
   sport: Sport;
   level: Level;
+  requestedCrewSize: number;
   dateISO: string;
   scheduledDateKey: string;
   location: string;

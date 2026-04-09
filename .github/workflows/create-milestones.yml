@@ -1,0 +1,32 @@
+name: Create Milestones
+
+on:
+  push:
+    branches:
+      - main
+      - master
+    paths:
+      - scripts/create-milestones.mjs
+      - .github/workflows/create-milestones.yml
+  workflow_dispatch:
+
+jobs:
+  create-milestones:
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Create milestones
+        run: node scripts/create-milestones.mjs
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          GITHUB_API_URL: ${{ github.api_url }}

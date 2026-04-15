@@ -8,12 +8,14 @@ import {
   ClipboardPlus,
   LayoutDashboard,
   LogOut,
+  Menu,
   Store,
+  X,
   User,
   Users
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
-import { Link, NavLink, useNavigate } from "react-router-dom";
+import { Link, NavLink, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import {
   isOfficialAssignedToAwardedMarketplaceGame,
@@ -58,6 +60,7 @@ function getDismissedStorageKey(uid: string): string {
 
 export function NavBar() {
   const navigate = useNavigate();
+  const location = useLocation();
   const { user, profile, signOut } = useAuth();
   const [modalMessage, setModalMessage] = useState<{
     title: string;
@@ -69,6 +72,7 @@ export function NavBar() {
   const [seenNotificationIds, setSeenNotificationIds] = useState<string[]>([]);
   const [dismissedNotificationIds, setDismissedNotificationIds] = useState<string[]>([]);
   const [notificationsMenuOpen, setNotificationsMenuOpen] = useState(false);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   useEffect(() => {
     if (!user) {
@@ -281,6 +285,33 @@ export function NavBar() {
     });
   }, [notificationsMenuOpen, visibleNotifications]);
 
+  useEffect(() => {
+    setMobileMenuOpen(false);
+  }, [location.pathname]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return undefined;
+    }
+
+    const mediaQuery = window.matchMedia("(max-width: 640px)");
+    const handleViewportChange = (event?: MediaQueryListEvent) => {
+      if (!(event?.matches ?? mediaQuery.matches)) {
+        setMobileMenuOpen(false);
+      }
+    };
+
+    handleViewportChange();
+
+    if (typeof mediaQuery.addEventListener === "function") {
+      mediaQuery.addEventListener("change", handleViewportChange);
+      return () => mediaQuery.removeEventListener("change", handleViewportChange);
+    }
+
+    mediaQuery.addListener(handleViewportChange);
+    return () => mediaQuery.removeListener(handleViewportChange);
+  }, []);
+
   function getProfileInitial(): string {
     const displayName = profile?.displayName?.trim();
     if (displayName) {
@@ -334,17 +365,32 @@ export function NavBar() {
       <nav className="top-nav">
         <div className="top-nav-inner">
           <div className="top-nav-primary">
-            <Link to="/" className="top-nav-brand" aria-label="Go to home">
-              <span className="top-nav-brand-mark" aria-hidden="true">
-                OM
-              </span>
-              <span className="top-nav-brand-copy">
-                <strong>Officiating Marketplace</strong>
-                <span>Operations platform</span>
-              </span>
-            </Link>
+            <div className="top-nav-mobile-bar">
+              <Link to="/" className="top-nav-brand" aria-label="Go to home">
+                <span className="top-nav-brand-mark" aria-hidden="true">
+                  OM
+                </span>
+                <span className="top-nav-brand-copy">
+                  <strong>Officiating Marketplace</strong>
+                  <span>Operations platform</span>
+                </span>
+              </Link>
+              <button
+                type="button"
+                className="icon-button nav-icon-button top-nav-menu-button"
+                aria-label={mobileMenuOpen ? "Close navigation menu" : "Open navigation menu"}
+                aria-expanded={mobileMenuOpen}
+                aria-controls="mobile-navigation-links"
+                onClick={() => setMobileMenuOpen((current) => !current)}
+              >
+                {mobileMenuOpen ? <X aria-hidden="true" /> : <Menu aria-hidden="true" />}
+              </button>
+            </div>
 
-            <div className="top-nav-links">
+            <div
+              id="mobile-navigation-links"
+              className={`top-nav-links${mobileMenuOpen ? " top-nav-links-mobile-open" : ""}`}
+            >
               {user && profile && profile.role !== "evaluator" ? (
                 <NavLink
                   to="/dashboard"

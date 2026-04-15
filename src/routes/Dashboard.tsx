@@ -411,7 +411,7 @@ export function Dashboard() {
             <p className="empty-state">No active bid games right now.</p>
           ) : (
             <div className="schedule-table-wrapper">
-              <table className="schedule-table">
+              <table className="schedule-table schedule-table-mobile-cards">
                 <thead>
                   <tr>
                     <th>Date/Time</th>
@@ -439,19 +439,21 @@ export function Dashboard() {
                       }}
                       aria-label={`Open details for ${row.game.schoolName} on ${formatGameDate(row.game.dateISO)}`}
                     >
-                      <td>{formatGameDate(row.game.dateISO)}</td>
-                      <td>{row.game.schoolName}</td>
-                      <td>
+                      <td data-label="Date/Time">{formatGameDate(row.game.dateISO)}</td>
+                      <td data-label="School">{row.game.schoolName}</td>
+                      <td data-label="Sport/Level">
                         {row.game.sport} • {row.game.level}
                       </td>
-                      <td>
+                      <td data-label="Bid Window">
                         <span className={`bid-window-label bid-window-${row.bidWindowState}`}>
                           {row.bidWindowLabel}
                         </span>
                       </td>
-                      <td>{formatCurrency(row.myHighestBid)}</td>
-                      <td>{row.highestBid === null ? "-" : formatCurrency(row.highestBid)}</td>
-                      <td>{row.bidCount}</td>
+                      <td data-label="Your Bid">{formatCurrency(row.myHighestBid)}</td>
+                      <td data-label="Current Price">
+                        {row.highestBid === null ? "-" : formatCurrency(row.highestBid)}
+                      </td>
+                      <td data-label="Total Bids">{row.bidCount}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -471,7 +473,7 @@ export function Dashboard() {
             <p className="empty-state">No upcoming assigned games yet.</p>
           ) : (
             <div className="schedule-table-wrapper">
-              <table className="schedule-table">
+              <table className="schedule-table schedule-table-mobile-cards">
                 <thead>
                   <tr>
                     <th>Date/Time</th>
@@ -499,15 +501,15 @@ export function Dashboard() {
                       }}
                       aria-label={`Open details for ${entry.game.schoolName} on ${formatGameDate(entry.game.dateISO)}`}
                     >
-                      <td>{formatGameDate(entry.game.dateISO)}</td>
-                      <td>{entry.game.schoolName}</td>
-                      <td>
+                      <td data-label="Date/Time">{formatGameDate(entry.game.dateISO)}</td>
+                      <td data-label="School">{entry.game.schoolName}</td>
+                      <td data-label="Sport/Level">
                         {entry.game.sport} • {entry.game.level}
                       </td>
-                      <td>{entry.game.location}</td>
-                      <td>{entry.positionLabel}</td>
-                      <td>{entry.crewLabel}</td>
-                      <td>{formatCurrency(entry.awardedFee)}</td>
+                      <td data-label="Location">{entry.game.location}</td>
+                      <td data-label="Position">{entry.positionLabel}</td>
+                      <td data-label="Crew">{entry.crewLabel}</td>
+                      <td data-label="Awarded Fee">{formatCurrency(entry.awardedFee)}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -566,7 +568,7 @@ export function Dashboard() {
           <p className="empty-state">No open games need attention right now.</p>
         ) : (
           <div className="schedule-table-wrapper">
-            <table className="schedule-table">
+            <table className="schedule-table schedule-table-mobile-cards">
               <thead>
                 <tr>
                   <th>Date/Time</th>
@@ -593,18 +595,20 @@ export function Dashboard() {
                     }}
                     aria-label={`Open details for ${row.game.schoolName} on ${formatGameDate(row.game.dateISO)}`}
                   >
-                    <td>{formatGameDate(row.game.dateISO)}</td>
-                    <td>{row.game.schoolName}</td>
-                    <td>
+                    <td data-label="Date/Time">{formatGameDate(row.game.dateISO)}</td>
+                    <td data-label="School">{row.game.schoolName}</td>
+                    <td data-label="Sport/Level">
                       {row.game.sport} • {row.game.level}
                     </td>
-                    <td>
+                    <td data-label="Bid Window">
                       <span className={`bid-window-label bid-window-${row.bidWindowState}`}>
                         {row.bidWindowLabel}
                       </span>
                     </td>
-                    <td>{row.bidCount}</td>
-                    <td>{row.highestBid === null ? "-" : formatCurrency(row.highestBid)}</td>
+                    <td data-label="Total Bids">{row.bidCount}</td>
+                    <td data-label="Highest Bid">
+                      {row.highestBid === null ? "-" : formatCurrency(row.highestBid)}
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -624,7 +628,7 @@ export function Dashboard() {
           <p className="empty-state">No upcoming games posted yet.</p>
         ) : (
           <div className="schedule-table-wrapper">
-            <table className="schedule-table">
+            <table className="schedule-table schedule-table-mobile-cards">
               <thead>
                 <tr>
                   <th>Date/Time</th>
@@ -651,14 +655,18 @@ export function Dashboard() {
                     }}
                     aria-label={`Open details for ${row.game.schoolName} on ${formatGameDate(row.game.dateISO)}`}
                   >
-                    <td>{formatGameDate(row.game.dateISO)}</td>
-                    <td>{row.game.schoolName}</td>
-                    <td>
+                    <td data-label="Date/Time">{formatGameDate(row.game.dateISO)}</td>
+                    <td data-label="School">{row.game.schoolName}</td>
+                    <td data-label="Sport/Level">
                       {row.game.sport} • {row.game.level}
                     </td>
-                    <td>{getGameStatusLabel(row.game.status, row.game.mode)}</td>
-                    <td>{row.bidCount}</td>
-                    <td>{row.highestBid === null ? "-" : formatCurrency(row.highestBid)}</td>
+                    <td data-label="Status">
+                      {getGameStatusLabel(row.game.status, row.game.mode)}
+                    </td>
+                    <td data-label="Total Bids">{row.bidCount}</td>
+                    <td data-label="Highest Bid">
+                      {row.highestBid === null ? "-" : formatCurrency(row.highestBid)}
+                    </td>
                   </tr>
                 ))}
               </tbody>

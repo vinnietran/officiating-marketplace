@@ -913,6 +913,43 @@ body {
   min-height: 34px;
 }
 
+.filters-mobile-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.filters-mobile-copy {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.filters-mobile-title {
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: var(--text-strong);
+}
+
+.filters-mobile-summary {
+  font-size: 0.78rem;
+  color: var(--muted);
+}
+
+.filters-mobile-toggle {
+  appearance: none;
+  border: 1px solid var(--border-soft);
+  background: #f8fbff;
+  color: var(--brand-strong);
+  border-radius: 999px;
+  padding: 7px 12px;
+  font-size: 0.82rem;
+  font-weight: 700;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
 label {
   display: flex;
   flex-direction: column;
@@ -3367,6 +3404,10 @@ a {
   min-width: 0;
 }
 
+.top-nav-mobile-bar {
+  display: contents;
+}
+
 .top-nav-brand {
   display: inline-flex;
   align-items: center;
@@ -3443,6 +3484,10 @@ a {
 .nav-link svg {
   width: 16px;
   height: 16px;
+}
+
+.top-nav-menu-button {
+  display: none;
 }
 
 .top-nav-actions {
@@ -4845,6 +4890,67 @@ button.ui-button {
 }
 
 @media (max-width: 640px) {
+  .top-nav-inner {
+    padding: 10px 12px;
+    gap: 12px;
+  }
+
+  .top-nav-primary {
+    width: 100%;
+    display: grid;
+    gap: 12px;
+  }
+
+  .top-nav-mobile-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+  }
+
+  .top-nav-brand {
+    width: auto;
+    flex: 1 1 auto;
+  }
+
+  .top-nav-brand-copy span {
+    display: none;
+  }
+
+  .top-nav-menu-button {
+    display: inline-flex;
+    flex: 0 0 auto;
+    min-width: 44px;
+    min-height: 44px;
+    justify-content: center;
+    align-items: center;
+  }
+
+  .top-nav-links {
+    display: none;
+  }
+
+  .top-nav-links.top-nav-links-mobile-open {
+    display: grid;
+    gap: 8px;
+  }
+
+  .nav-link {
+    width: 100%;
+    padding: 11px 14px;
+    white-space: normal;
+  }
+
+  .top-nav-actions {
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  .profile-avatar-button {
+    flex: 1 1 auto;
+    justify-content: space-between;
+  }
+
   .hero h1 {
     font-size: 1.9rem;
   }
@@ -4871,6 +4977,65 @@ button.ui-button {
   .assign-crew-member-table th,
   .assign-crew-member-table td {
     padding: 12px;
+  }
+
+  .schedule-table-mobile-cards {
+    min-width: 0;
+    border-collapse: separate;
+    border-spacing: 0;
+  }
+
+  .schedule-table-mobile-cards thead {
+    display: none;
+  }
+
+  .schedule-table-mobile-cards tbody {
+    display: grid;
+    gap: 12px;
+    padding: 12px;
+  }
+
+  .schedule-table-mobile-cards tbody tr {
+    display: grid;
+    gap: 10px;
+    padding: 14px;
+    border: 1px solid rgba(15, 23, 42, 0.08);
+    border-radius: 18px;
+    background: rgba(248, 251, 255, 0.92);
+  }
+
+  .schedule-table-mobile-cards tbody td {
+    display: grid;
+    grid-template-columns: minmax(92px, 112px) minmax(0, 1fr);
+    gap: 12px;
+    align-items: start;
+    min-width: 0;
+    padding: 0;
+    border-bottom: none;
+    font-size: 0.92rem;
+    white-space: normal;
+    overflow-wrap: anywhere;
+    word-break: break-word;
+  }
+
+  .schedule-table-mobile-cards tbody td::before {
+    content: attr(data-label);
+    color: #64748b;
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+
+  .schedule-table-mobile-cards tbody td > * {
+    min-width: 0;
+    white-space: normal;
+    overflow-wrap: anywhere;
+    word-break: break-word;
+  }
+
+  .schedule-table-mobile-cards .bid-window-label {
+    justify-self: start;
   }
 
   .rating-hub-header,
@@ -5418,6 +5583,10 @@ button.ui-button {
     grid-template-columns: 1fr;
   }
 
+  .marketplace-game-grid {
+    grid-template-columns: 1fr;
+  }
+
   .marketplace-sort-control {
     min-width: 0;
   }
@@ -5430,5 +5599,31 @@ button.ui-button {
   .marketplace-intel-cards,
   .game-card-market-meta {
     grid-template-columns: 1fr;
+  }
+
+  .marketplace-toolbar {
+    padding: 12px 14px;
+  }
+
+  .marketplace-toolbar .filters {
+    gap: 0;
+  }
+
+  .filters-compact .filters-grid {
+    gap: 10px;
+    margin-top: 12px;
+  }
+
+  .filters-compact label {
+    font-size: 0.74rem;
+  }
+
+  .marketplace-toolbar-actions {
+    margin-top: 10px;
+    justify-content: stretch;
+  }
+
+  .marketplace-toolbar-actions .button-secondary {
+    width: 100%;
   }
 }

@@ -98,6 +98,22 @@ test("filters, sorts, and deletes an existing marketplace bid", async ({ page })
   await page.getByLabel("Minimum Pay").fill("200");
   await expect(page.locator(".marketplace-game-list .game-card h3")).toHaveText(["Bravo High"]);
 
+  await page.getByLabel("Start Date").fill("2030-09-14");
+  await page.getByLabel("End Date").fill("2030-09-14");
+  await expect(page.locator(".marketplace-game-list .game-card h3")).toHaveText(["Bravo High"]);
+  await expect(page).toHaveURL(/startDate=2030-09-14/);
+  await expect(page).toHaveURL(/endDate=2030-09-14/);
+
+  await page
+    .locator(".marketplace-game-list .game-card")
+    .filter({ hasText: "Bravo High" })
+    .first()
+    .click();
+  await expect(page.getByRole("heading", { name: "Game Details" })).toBeVisible();
+  await page.getByRole("link", { name: "Back to Marketplace" }).click();
+  await expect(page.getByRole("heading", { name: "Available Games" })).toBeVisible();
+  await expect(page.locator(".marketplace-game-list .game-card h3")).toHaveText(["Bravo High"]);
+
   await page.getByRole("button", { name: "Clear Filters" }).click();
   await page.getByRole("button", { name: /Open Bids \(1\)/ }).click();
   await expect(page.getByRole("heading", { name: "Open Bid Games" })).toBeVisible();

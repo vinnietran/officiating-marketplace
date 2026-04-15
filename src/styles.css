@@ -896,7 +896,7 @@ body {
 }
 
 .filters-compact .filters-grid {
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(6, minmax(0, 1fr));
   gap: 8px;
 }
 
@@ -1447,6 +1447,7 @@ button:disabled {
   margin: 8px 0 0;
   font-size: 0.9rem;
 }
+
 
 .bid-window-open strong {
   color: #166534;

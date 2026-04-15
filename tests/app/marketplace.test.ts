@@ -8,6 +8,10 @@ import {
   normalizeForMatch,
   tokenizeForMatch
 } from "../../src/lib/marketplace";
+import {
+  isGameWithinMarketplaceDateRange,
+  validateMarketplaceDateRange
+} from "../../src/lib/marketplaceDateFilter";
 import type { Game } from "../../src/types";
 
 const openGame: Game = {
@@ -85,3 +89,35 @@ test("filterAvailableMarketplaceGames excludes closed windows and direct assignm
   );
 });
 
+test("marketplace date range helpers validate and include boundary dates", () => {
+  assert.equal(
+    validateMarketplaceDateRange({ startDate: "2030-09-20", endDate: "2030-09-14" }),
+    "End date cannot be before start date."
+  );
+  assert.equal(
+    validateMarketplaceDateRange({ startDate: "2030-09-14", endDate: "2030-09-20" }),
+    null
+  );
+
+  assert.equal(
+    isGameWithinMarketplaceDateRange(openGame, {
+      startDate: "2026-03-20",
+      endDate: "2026-03-20"
+    }),
+    true
+  );
+  assert.equal(
+    isGameWithinMarketplaceDateRange(openGame, {
+      startDate: "2026-03-21",
+      endDate: "2026-03-25"
+    }),
+    false
+  );
+  assert.equal(
+    isGameWithinMarketplaceDateRange(
+      { ...openGame, dateISO: "not-a-date" },
+      { startDate: "2026-03-20", endDate: "2026-03-25" }
+    ),
+    false
+  );
+});

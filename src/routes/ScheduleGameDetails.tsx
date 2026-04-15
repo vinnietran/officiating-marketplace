@@ -87,6 +87,7 @@ interface RateableTarget {
 
 interface DetailsRouteState {
   from?: "marketplace" | "schedule";
+  fromPath?: string;
 }
 
 interface AssignedIndividual {
@@ -667,8 +668,13 @@ export function ScheduleGameDetails() {
   }
 
   const routeState = location.state as DetailsRouteState | null;
-  const backPath = routeState?.from === "marketplace" ? "/marketplace" : "/schedule";
-  const backLabel = backPath === "/marketplace" ? "Back to Marketplace" : "Back to Schedule";
+  const backPath =
+    routeState?.from === "marketplace"
+      ? routeState.fromPath?.trim() || "/marketplace"
+      : "/schedule";
+  const backLabel = backPath.startsWith("/marketplace")
+    ? "Back to Marketplace"
+    : "Back to Schedule";
 
   if (!game) {
     return (

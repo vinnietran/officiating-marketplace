@@ -1,5 +1,5 @@
 import { useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
-import { Navigate, useNavigate } from "react-router-dom";
+import { Navigate, useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import { AuthPanel } from "../components/AuthPanel";
 import { CompleteProfilePanel } from "../components/CompleteProfilePanel";
 import { Filters, type FilterValues } from "../components/Filters";
@@ -35,13 +35,19 @@ import {
   tokenizeForMatch,
   type OfficialLocationContext
 } from "../lib/marketplace";
+import {
+  isGameWithinMarketplaceDateRange,
+  validateMarketplaceDateRange
+} from "../lib/marketplaceDateFilter";
 import type { Bid, Crew, Game, GeoPoint, UserProfile } from "../types";
 
 const DEFAULT_FILTERS: FilterValues = {
   search: "",
   sport: "All",
   level: "All",
-  minPay: ""
+  minPay: "",
+  startDate: "",
+  endDate: ""
 };
 
 type OfficialQuickFilter = "all" | "open_bids" | "won_bids";
@@ -107,10 +113,16 @@ function toGeoPoint(value: unknown): GeoPoint | null {
 
 export function Marketplace() {
   const navigate = useNavigate();
+  const location = useLocation();
+  const [searchParams, setSearchParams] = useSearchParams();
   const { user, profile, loading, profileLoading } = useAuth();
   const listingsRef = useRef<HTMLElement | null>(null);
 
-  const [filters, setFilters] = useState<FilterValues>(DEFAULT_FILTERS);
+  const [filters, setFilters] = useState<FilterValues>(() => ({
+    ...DEFAULT_FILTERS,
+    startDate: searchParams.get("startDate") ?? "",
+    endDate: searchParams.get("endDate") ?? ""
+  }));
   const [officialQuickFilter, setOfficialQuickFilter] =
     useState<OfficialQuickFilter>("all");
   const [sortBy, setSortBy] = useState<MarketplaceSortOption>("best_match");
@@ -128,6 +140,45 @@ export function Marketplace() {
   } | null>(null);
   const deferredFilters = useDeferredValue(filters);
   const isOfficial = profile?.role === "official";
+  const dateRangeError = validateMarketplaceDateRange(deferredFilters);
+
+  useEffect(() => {
+    setFilters((current) => {
+      const nextStartDate = searchParams.get("startDate") ?? "";
+      const nextEndDate = searchParams.get("endDate") ?? "";
+
+      if (
+        current.startDate === nextStartDate &&
+        current.endDate === nextEndDate
+      ) {
+        return current;
+      }
+
+      return {
+        ...current,
+        startDate: nextStartDate,
+        endDate: nextEndDate
+      };
+    });
+  }, [searchParams]);
+
+  useEffect(() => {
+    const nextParams = new URLSearchParams(searchParams);
+    if (filters.startDate) {
+      nextParams.set("startDate", filters.startDate);
+    } else {
+      nextParams.delete("startDate");
+    }
+    if (filters.endDate) {
+      nextParams.set("endDate", filters.endDate);
+    } else {
+      nextParams.delete("endDate");
+    }
+
+    if (nextParams.toString() !== searchParams.toString()) {
+      setSearchParams(nextParams, { replace: true });
+    }
+  }, [filters.endDate, filters.startDate, searchParams, setSearchParams]);
 
   useEffect(() => {
     const timerId = window.setInterval(() => {
@@ -286,10 +337,14 @@ export function Marketplace() {
         deferredFilters.level === "All" || game.level === deferredFilters.level;
       const matchesPay =
         minPay === null || Number.isNaN(minPay) ? true : game.payPosted >= minPay;
+      const matchesDateRange =
+        dateRangeError === null
+          ? isGameWithinMarketplaceDateRange(game, deferredFilters)
+          : true;
 
-      return matchesSearch && matchesSport && matchesLevel && matchesPay;
+      return matchesSearch && matchesSport && matchesLevel && matchesPay && matchesDateRange;
     });
-  }, [deferredFilters, listingPoolGames]);
+  }, [dateRangeError, deferredFilters, listingPoolGames]);
 
   const officialCrews = useMemo(() => {
     if (!user || profile?.role !== "official") {
@@ -301,10 +356,12 @@ export function Marketplace() {
 
   const hasActiveFilters = useMemo(() => {
     return Boolean(
-      filters.search.trim() ||
+        filters.search.trim() ||
         filters.sport !== "All" ||
         filters.level !== "All" ||
         filters.minPay.trim() ||
+        filters.startDate ||
+        filters.endDate ||
         (profile?.role === "official" && officialQuickFilter !== "all")
     );
   }, [filters, officialQuickFilter, profile?.role]);
@@ -859,7 +916,10 @@ export function Marketplace() {
 
   function handleOpenGameDetails(game: Game) {
     navigate(`/schedule/games/${game.id}`, {
-      state: { from: "marketplace" }
+      state: {
+        from: "marketplace",
+        fromPath: `${location.pathname}${location.search}`
+      }
     });
   }
 

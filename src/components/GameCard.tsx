@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { EditGameForm } from "./EditGameForm";
 import { isBidEditableByOfficial, requiresCrewBidForGame } from "../lib/bids";
+import { getExpectedBidRangeLabel } from "../lib/bidRange";
 import {
   formatCurrency,
   formatGameDate,
@@ -33,6 +34,8 @@ interface GameCardProps {
       acceptingBidsUntilISO?: string;
       location: string;
       payPosted: number;
+      minBidAmount?: number;
+      maxBidAmount?: number;
       notes?: string;
     }
   ) => Promise<void>;
@@ -102,6 +105,7 @@ export function GameCard({
   );
 
   const latestUserBid = officialBidsForGame[0] ?? null;
+  const expectedBidRangeLabel = getExpectedBidRangeLabel(game);
   const canDeleteLatestUserBid = latestUserBid
     ? isBidEditableByOfficial(
         latestUserBid,
@@ -182,6 +186,8 @@ export function GameCard({
     acceptingBidsUntilISO?: string;
     location: string;
     payPosted: number;
+    minBidAmount?: number;
+    maxBidAmount?: number;
     notes?: string;
   }) {
     await onUpdateGame(game.id, input);
@@ -254,6 +260,11 @@ export function GameCard({
                     <Shield aria-hidden="true" /> Crew of {game.requestedCrewSize}
                   </p>
                 ) : null}
+                {expectedBidRangeLabel ? (
+                  <p className="meta-line">
+                    <Wallet aria-hidden="true" /> Expected Bid Range: {expectedBidRangeLabel}
+                  </p>
+                ) : null}
                 {role === "official" ? (
                   <p className="meta-line">
                     <Shield aria-hidden="true" />{" "}
@@ -318,6 +329,11 @@ export function GameCard({
               {game.requestedCrewSize ? (
                 <p className="meta-line">
                   Crew of <strong>{game.requestedCrewSize}</strong>
+                </p>
+              ) : null}
+              {expectedBidRangeLabel ? (
+                <p className="meta-line">
+                  Expected Bid Range: <strong>{expectedBidRangeLabel}</strong>
                 </p>
               ) : null}
               {role === "official" ? (

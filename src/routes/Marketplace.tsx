@@ -828,6 +828,8 @@ export function Marketplace() {
       acceptingBidsUntilISO?: string;
       location: string;
       payPosted: number;
+      minBidAmount?: number;
+      maxBidAmount?: number;
       notes?: string;
     }
   ) {

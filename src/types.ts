@@ -122,6 +122,8 @@ export interface Game {
   location: string;
   locationCoordinates?: GeoPoint;
   payPosted: number;
+  minBidAmount?: number | null;
+  maxBidAmount?: number | null;
   notes?: string;
   createdByUid: string;
   createdByName?: string;

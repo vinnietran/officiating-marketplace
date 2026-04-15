@@ -732,6 +732,24 @@ export const e2eFirestore = {
     createdBy: { uid: string; role: "assignor" | "school"; displayName: string }
   ): Promise<void> {
     ensureInitialized();
+    if (
+      (typeof input.minBidAmount === "number") !== (typeof input.maxBidAmount === "number")
+    ) {
+      throw new Error("Minimum and maximum preferred bids must both be provided or both be blank.");
+    }
+    if (typeof input.minBidAmount === "number" && input.minBidAmount < 0) {
+      throw new Error("Minimum preferred bid must be zero or greater.");
+    }
+    if (typeof input.maxBidAmount === "number" && input.maxBidAmount <= 0) {
+      throw new Error("Maximum preferred bid must be greater than 0.");
+    }
+    if (
+      typeof input.minBidAmount === "number" &&
+      typeof input.maxBidAmount === "number" &&
+      input.maxBidAmount < input.minBidAmount
+    ) {
+      throw new Error("Maximum preferred bid must be greater than or equal to the minimum.");
+    }
     state.games.push({
       id: nextId("game"),
       schoolName: input.schoolName,
@@ -744,6 +762,8 @@ export const e2eFirestore = {
       location: input.location,
       locationCoordinates: input.locationCoordinates ?? undefined,
       payPosted: input.payPosted,
+      minBidAmount: input.minBidAmount,
+      maxBidAmount: input.maxBidAmount,
       notes: input.notes,
       createdByUid: createdBy.uid,
       createdByName: createdBy.displayName,
@@ -821,10 +841,30 @@ export const e2eFirestore = {
       location: string;
       locationCoordinates?: GeoPoint | null;
       payPosted: number;
+      minBidAmount?: number;
+      maxBidAmount?: number;
       notes?: string;
     }
   ): Promise<void> {
     ensureInitialized();
+    if (
+      (typeof input.minBidAmount === "number") !== (typeof input.maxBidAmount === "number")
+    ) {
+      throw new Error("Minimum and maximum preferred bids must both be provided or both be blank.");
+    }
+    if (typeof input.minBidAmount === "number" && input.minBidAmount < 0) {
+      throw new Error("Minimum preferred bid must be zero or greater.");
+    }
+    if (typeof input.maxBidAmount === "number" && input.maxBidAmount <= 0) {
+      throw new Error("Maximum preferred bid must be greater than 0.");
+    }
+    if (
+      typeof input.minBidAmount === "number" &&
+      typeof input.maxBidAmount === "number" &&
+      input.maxBidAmount < input.minBidAmount
+    ) {
+      throw new Error("Maximum preferred bid must be greater than or equal to the minimum.");
+    }
     const game = state.games.find((candidate) => candidate.id === gameId);
     if (!game) {
       throw new Error("Game not found.");
@@ -840,6 +880,8 @@ export const e2eFirestore = {
     game.location = input.location;
     game.locationCoordinates = input.locationCoordinates ?? undefined;
     game.payPosted = input.payPosted;
+    game.minBidAmount = input.minBidAmount;
+    game.maxBidAmount = input.maxBidAmount;
     game.notes = input.notes;
     persistState();
     notifyChannels("games");

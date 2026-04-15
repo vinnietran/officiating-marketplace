@@ -36,6 +36,8 @@ export interface NewGameInput {
   acceptingBidsUntilISO?: string;
   location: string;
   payPosted: number;
+  minBidAmount?: number;
+  maxBidAmount?: number;
   notes?: string;
 }
 

@@ -19,6 +19,7 @@ import {
   isBidEditableByOfficial,
   requiresCrewBidForGame
 } from "../lib/bids";
+import { getExpectedBidRangeLabel } from "../lib/bidRange";
 import {
   formatCurrency,
   formatGameDate,
@@ -758,6 +759,7 @@ export function ScheduleGameDetails() {
     activeGame.status,
     nowMs
   );
+  const expectedBidRangeLabel = getExpectedBidRangeLabel(activeGame);
   const placeBidDisabledReason =
     activeProfile.role !== "official"
       ? null
@@ -1208,6 +1210,9 @@ export function ScheduleGameDetails() {
           <p className="meta-line">Date/Time: {formatGameDate(activeGame.dateISO)}</p>
           <p className="meta-line">Location: {activeGame.location}</p>
           <p className="meta-line">Posted pay: {formatCurrency(activeGame.payPosted)}</p>
+          {expectedBidRangeLabel ? (
+            <p className="meta-line">Expected Bid Range: {expectedBidRangeLabel}</p>
+          ) : null}
           {activeGame.requestedCrewSize ? (
             <p className="meta-line">Crew of {activeGame.requestedCrewSize}</p>
           ) : null}
@@ -1317,6 +1322,8 @@ export function ScheduleGameDetails() {
               {showBidForm ? (
                 <BidForm
                   postedPay={activeGame.payPosted}
+                  minBidAmount={activeGame.minBidAmount}
+                  maxBidAmount={activeGame.maxBidAmount}
                   defaultOfficialName={activeProfile.displayName}
                   sport={activeGame.sport}
                   requestedCrewSize={activeGame.requestedCrewSize}

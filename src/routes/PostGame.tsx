@@ -85,6 +85,8 @@ export function PostGame() {
     acceptingBidsUntilISO?: string;
     location: string;
     payPosted: number;
+    minBidAmount?: number;
+    maxBidAmount?: number;
     notes?: string;
   }) {
     await createGame(values, {

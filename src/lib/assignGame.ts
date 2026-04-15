@@ -4,6 +4,7 @@ import {
   MIN_REQUESTED_CREW_SIZE,
   isValidRequestedCrewSize
 } from "./crewSize";
+import { searchOfficials } from "./officialSearch";
 
 export interface IndividualAssignee {
   officialUid: string;
@@ -58,18 +59,9 @@ export function filterAssignableOfficials(
   availableOfficials: UserProfile[],
   rawSearchTerm: string
 ): UserProfile[] {
-  const searchTerm = rawSearchTerm.trim().toLowerCase();
-  if (!searchTerm) {
-    return [];
-  }
-
-  return availableOfficials
-    .filter(
-      (official) =>
-        official.displayName.toLowerCase().includes(searchTerm) ||
-        official.email.toLowerCase().includes(searchTerm)
-    )
-    .slice(0, 30);
+  return searchOfficials(availableOfficials, rawSearchTerm, { limit: 10 }).map(
+    (result) => result.official
+  );
 }
 
 export function getCrewMemberPositionLabel(crew: Crew, memberUid: string): string {

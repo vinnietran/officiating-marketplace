@@ -66,11 +66,25 @@ export async function setCrewMemberPosition(
   await selectOption(page, memberRow, "Position", positionLabel);
 }
 
+export async function searchAndPickOfficial(
+  section: Locator,
+  query: string,
+  officialName: string
+) {
+  const picker = section.locator(".official-picker").first();
+  await picker.locator("input").fill(query);
+  await picker
+    .locator(".ui-searchable-select-item")
+    .filter({ hasText: officialName })
+    .first()
+    .click();
+}
+
 export async function createCrew(
   page: Page,
   options: {
     crewName: string;
-    inviteEmail: string;
+    inviteQuery: string;
     creatorName: string;
     inviteeName: string;
   }
@@ -81,13 +95,7 @@ export async function createCrew(
   });
 
   await createCrewSection.getByLabel("Crew Name").fill(options.crewName);
-  await createCrewSection.getByLabel("Invite Official by Email").fill(options.inviteEmail);
-  await createCrewSection.getByRole("button", { name: "Search" }).click();
-  await createCrewSection
-    .locator(".crew-result-row")
-    .filter({ hasText: options.inviteeName })
-    .getByRole("button", { name: "Invite" })
-    .click();
+  await searchAndPickOfficial(createCrewSection, options.inviteQuery, options.inviteeName);
 
   await setCrewMemberPosition(page, createCrewSection, options.creatorName, "Referee (R)");
   await setCrewMemberPosition(page, createCrewSection, options.inviteeName, "Umpire (U)");

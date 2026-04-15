@@ -2,7 +2,9 @@ import { useEffect, useMemo, useState } from "react";
 import { AuthPanel } from "../components/AuthPanel";
 import { CompleteProfilePanel } from "../components/CompleteProfilePanel";
 import { MessageModal } from "../components/MessageModal";
+import { SearchableOfficialPicker } from "../components/SearchableOfficialPicker";
 import { PageHeader } from "../components/ui/PageHeader";
+import { SearchableSelect } from "../components/ui/SearchableSelect";
 import { Select } from "../components/ui/Select";
 import { useAuth } from "../context/AuthContext";
 import { getCrewRefereeOfficialId } from "../lib/bids";
@@ -11,8 +13,8 @@ import { getReadableFirestoreError } from "../lib/firebaseErrors";
 import {
   createCrew,
   deleteCrew,
-  searchOfficialProfilesByEmail,
   subscribeCrews,
+  subscribeOfficialProfiles,
   updateCrewChief,
   updateCrewMemberPositions,
   updateCrewMembers
@@ -104,12 +106,9 @@ export function Crews() {
   const { user, profile, loading, profileLoading } = useAuth();
 
   const [crews, setCrews] = useState<Crew[]>([]);
+  const [officialProfiles, setOfficialProfiles] = useState<UserProfile[]>([]);
   const [dataError, setDataError] = useState<string | null>(null);
   const [crewName, setCrewName] = useState("");
-  const [inviteEmail, setInviteEmail] = useState("");
-  const [matchedOfficials, setMatchedOfficials] = useState<UserProfile[]>([]);
-  const [searching, setSearching] = useState(false);
-  const [searchResultMessage, setSearchResultMessage] = useState<string | null>(null);
   const [selectedMembers, setSelectedMembers] = useState<CrewMember[]>([]);
   const [selectedMemberPositions, setSelectedMemberPositions] = useState<
     Record<string, FootballPosition | "">
@@ -119,9 +118,6 @@ export function Crews() {
   const [creating, setCreating] = useState(false);
   const [deleteCrewId, setDeleteCrewId] = useState<string | null>(null);
   const [deletingCrew, setDeletingCrew] = useState(false);
-  const [manageInviteEmail, setManageInviteEmail] = useState("");
-  const [manageMatchedOfficials, setManageMatchedOfficials] = useState<UserProfile[]>([]);
-  const [manageSearching, setManageSearching] = useState(false);
   const [manageResultMessage, setManageResultMessage] = useState<string | null>(null);
   const [updatingCrewMembers, setUpdatingCrewMembers] = useState(false);
   const [manageCrewChiefUid, setManageCrewChiefUid] = useState("");
@@ -139,15 +135,20 @@ export function Crews() {
   useEffect(() => {
     if (!user) {
       setCrews([]);
+      setOfficialProfiles([]);
       return;
     }
 
     const unsubscribeCrews = subscribeCrews(setCrews, (error) =>
       setDataError(getReadableFirestoreError(error, FIRESTORE_DATABASE_ID))
     );
+    const unsubscribeOfficialProfiles = subscribeOfficialProfiles(setOfficialProfiles, (error) =>
+      setDataError(getReadableFirestoreError(error, FIRESTORE_DATABASE_ID))
+    );
 
     return () => {
       unsubscribeCrews();
+      unsubscribeOfficialProfiles();
     };
   }, [user]);
 
@@ -224,10 +225,16 @@ export function Crews() {
       .map(([uid, name]) => ({ uid, name }))
       .sort((a, b) => a.name.localeCompare(b.name));
   }, [selectedCrew]);
+  const selectedMemberIds = useMemo(
+    () => selectedMembers.map((member) => member.uid),
+    [selectedMembers]
+  );
+  const selectedCrewMemberIds = useMemo(
+    () => selectedCrew?.members.map((member) => member.uid) ?? [],
+    [selectedCrew]
+  );
   useEffect(() => {
     if (!selectedCrewId) {
-      setManageInviteEmail("");
-      setManageMatchedOfficials([]);
       setManageResultMessage(null);
       setManageCrewChiefUid("");
       setManageMemberPositions({});
@@ -237,8 +244,6 @@ export function Crews() {
     const exists = visibleCrews.some((crew) => crew.id === selectedCrewId);
     if (!exists) {
       setSelectedCrewId(null);
-      setManageInviteEmail("");
-      setManageMatchedOfficials([]);
       setManageResultMessage(null);
       setManageCrewChiefUid("");
       setManageMemberPositions({});
@@ -331,34 +336,6 @@ export function Crews() {
       })
     : false;
 
-  async function handleSearchInvite() {
-    const email = inviteEmail.trim();
-    if (!email) {
-      setSearchResultMessage("Enter an email to search.");
-      setMatchedOfficials([]);
-      return;
-    }
-
-    setSearching(true);
-    setSearchResultMessage(null);
-    setMatchedOfficials([]);
-
-    try {
-      const results = await searchOfficialProfilesByEmail(email);
-      if (results.length === 0) {
-        setSearchResultMessage("No official found for that email.");
-      } else {
-        setMatchedOfficials(results);
-      }
-    } catch (error) {
-      setSearchResultMessage(
-        getReadableFirestoreError(error, FIRESTORE_DATABASE_ID)
-      );
-    } finally {
-      setSearching(false);
-    }
-  }
-
   function handleInviteOfficial(official: UserProfile) {
     if (hasMaximumMembers) {
       setFormError(`A crew can include up to ${MAX_CREW_MEMBERS} members.`);
@@ -445,9 +422,6 @@ export function Crews() {
       );
 
       setCrewName("");
-      setInviteEmail("");
-      setMatchedOfficials([]);
-      setSearchResultMessage(null);
       setSelectedMembers(
         activeProfile.role === "official"
           ? [
@@ -514,32 +488,6 @@ export function Crews() {
     }
   }
 
-  async function handleSearchManageInvite() {
-    const email = manageInviteEmail.trim();
-    if (!email) {
-      setManageResultMessage("Enter an email to search.");
-      setManageMatchedOfficials([]);
-      return;
-    }
-
-    setManageSearching(true);
-    setManageResultMessage(null);
-    setManageMatchedOfficials([]);
-
-    try {
-      const results = await searchOfficialProfilesByEmail(email);
-      if (results.length === 0) {
-        setManageResultMessage("No official found for that email.");
-      } else {
-        setManageMatchedOfficials(results);
-      }
-    } catch (error) {
-      setManageResultMessage(getReadableFirestoreError(error, FIRESTORE_DATABASE_ID));
-    } finally {
-      setManageSearching(false);
-    }
-  }
-
   async function handleAddMemberToSelectedCrew(official: UserProfile) {
     if (!selectedCrew) {
       return;
@@ -576,8 +524,6 @@ export function Crews() {
     try {
       await updateCrewMembers(selectedCrew.id, nextMembers);
       setManageResultMessage("Member added.");
-      setManageInviteEmail("");
-      setManageMatchedOfficials([]);
     } catch (error) {
       setDataError(getReadableFirestoreError(error, FIRESTORE_DATABASE_ID));
     } finally {
@@ -759,53 +705,22 @@ export function Crews() {
               />
             </label>
 
-            <div className="crew-invite-row">
-              <label>
-                Invite Official by Email
-                <input
-                  type="email"
-                  value={inviteEmail}
-                  onChange={(event) => setInviteEmail(event.target.value)}
-                  placeholder="official@email.com"
-                />
-              </label>
-              <button
-                type="button"
-                className="button-secondary"
-                onClick={handleSearchInvite}
-                disabled={searching}
-              >
-                {searching ? "Searching..." : "Search"}
-              </button>
+            <div className="crew-picker-field">
+              <label htmlFor="create-crew-official-search">Add Member</label>
+              <SearchableOfficialPicker
+                id="create-crew-official-search"
+                officials={officialProfiles}
+                onSelect={handleInviteOfficial}
+                excludeOfficialIds={selectedMemberIds}
+                placeholder="Search officials by name"
+                inputAriaLabel="Add member"
+                disabled={hasMaximumMembers}
+              />
             </div>
-
-            {searchResultMessage ? <p className="hint-text">{searchResultMessage}</p> : null}
-
-            {matchedOfficials.length > 0 ? (
-              <div className="crew-search-results">
-                {matchedOfficials.map((official) => {
-                  const alreadyInvited = selectedMembers.some(
-                    (member) => member.uid === official.uid
-                  );
-
-                  return (
-                    <div key={official.uid} className="crew-result-row">
-                      <div>
-                        <strong>{official.displayName}</strong>
-                        <div className="meta-line">{official.email}</div>
-                      </div>
-                      <button
-                        type="button"
-                        className="button-secondary"
-                        disabled={alreadyInvited || hasMaximumMembers}
-                        onClick={() => handleInviteOfficial(official)}
-                      >
-                        {alreadyInvited ? "Added" : "Invite"}
-                      </button>
-                    </div>
-                  );
-                })}
-              </div>
+            {hasMaximumMembers ? (
+              <p className="hint-text">
+                A crew can include up to {MAX_CREW_MEMBERS} members.
+              </p>
             ) : null}
 
             <div className="crew-members-header">
@@ -1043,10 +958,13 @@ export function Crews() {
                   <div className="crew-invite-row crew-manage-tools">
                     <label>
                       Crew Chief
-                      <Select
+                      <SearchableSelect
                         value={manageCrewChiefUid}
                         disabled={updatingCrewChief || updatingCrewMembers || updatingCrewPositions}
                         onValueChange={setManageCrewChiefUid}
+                        placeholder="Select a crew chief"
+                        searchPlaceholder="Search current crew members"
+                        maxResults={8}
                         options={chiefOptions.map((option) => ({
                           value: option.uid,
                           label: `${option.name}${
@@ -1070,65 +988,29 @@ export function Crews() {
                     </button>
                   </div>
 
-                  <div className="crew-invite-row crew-manage-tools">
-                    <label>
-                      Add Member by Email
-                      <input
-                        type="email"
-                        value={manageInviteEmail}
-                        onChange={(event) => setManageInviteEmail(event.target.value)}
-                        placeholder="official@email.com"
-                      />
-                    </label>
-                    <button
-                      type="button"
-                      className="button-secondary"
-                      onClick={handleSearchManageInvite}
+                  <div className="crew-picker-field crew-manage-tools">
+                    <label htmlFor="manage-crew-official-search">Add Member</label>
+                    <SearchableOfficialPicker
+                      id="manage-crew-official-search"
+                      officials={officialProfiles}
+                      onSelect={(official) => void handleAddMemberToSelectedCrew(official)}
+                      excludeOfficialIds={selectedCrewMemberIds}
+                      placeholder="Search officials by name"
+                      inputAriaLabel="Add member"
                       disabled={
-                        manageSearching ||
                         updatingCrewMembers ||
                         updatingCrewChief ||
-                        updatingCrewPositions
+                        updatingCrewPositions ||
+                        selectedCrew.members.length >= MAX_CREW_MEMBERS
                       }
-                    >
-                      {manageSearching ? "Searching..." : "Search"}
-                    </button>
+                    />
                   </div>
 
                   {manageResultMessage ? <p className="hint-text">{manageResultMessage}</p> : null}
-
-                  {manageMatchedOfficials.length > 0 ? (
-                    <div className="crew-search-results">
-                      {manageMatchedOfficials.map((official) => {
-                        const alreadyMember = selectedCrew.members.some(
-                          (member) => member.uid === official.uid
-                        );
-                        const atLimit = selectedCrew.members.length >= MAX_CREW_MEMBERS;
-
-                        return (
-                          <div key={official.uid} className="crew-result-row">
-                            <div>
-                              <strong>{official.displayName}</strong>
-                              <div className="meta-line">{official.email}</div>
-                            </div>
-                            <button
-                              type="button"
-                              className="button-secondary"
-                              disabled={
-                                alreadyMember ||
-                                atLimit ||
-                                updatingCrewMembers ||
-                                updatingCrewChief ||
-                                updatingCrewPositions
-                              }
-                              onClick={() => handleAddMemberToSelectedCrew(official)}
-                            >
-                              {alreadyMember ? "Added" : atLimit ? "Limit Reached" : "Add"}
-                            </button>
-                          </div>
-                        );
-                      })}
-                    </div>
+                  {selectedCrew.members.length >= MAX_CREW_MEMBERS ? (
+                    <p className="hint-text">
+                      This crew already has the maximum of {MAX_CREW_MEMBERS} members.
+                    </p>
                   ) : null}
 
                   <div className="crew-actions">

@@ -3071,7 +3071,8 @@ a {
 }
 
 .ui-searchable-select-item:hover,
-.ui-searchable-select-item[aria-selected="true"] {
+.ui-searchable-select-item[aria-selected="true"],
+.ui-searchable-select-item-active {
   background: rgba(241, 245, 249, 0.9);
   color: var(--brand-strong);
 }
@@ -3126,6 +3127,25 @@ a {
   padding: 16px 14px;
   color: var(--muted);
   font-size: 0.95rem;
+}
+
+.official-picker {
+  position: relative;
+  width: 100%;
+}
+
+.official-picker-input {
+  width: 100%;
+}
+
+.official-picker-dropdown {
+  left: 0;
+  right: 0;
+}
+
+.crew-picker-field {
+  display: grid;
+  gap: 6px;
 }
 
 .ui-section-header {

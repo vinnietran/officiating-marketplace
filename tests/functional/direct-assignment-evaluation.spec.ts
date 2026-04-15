@@ -15,7 +15,7 @@ test("supports direct assignment workflows and evaluator submissions", async ({ 
   await signIn(page, "official1@example.com");
   await createCrew(page, {
     crewName: "Direct Assign Crew",
-    inviteEmail: "official2@example.com",
+    inviteQuery: "Noah",
     creatorName: "Olivia Official",
     inviteeName: "Noah Official"
   });
@@ -33,13 +33,11 @@ test("supports direct assignment workflows and evaluator submissions", async ({ 
   const assignIndividualsSection = page.locator(".assign-section").filter({
     has: page.getByRole("heading", { name: "Assign Individuals" })
   });
-  await assignIndividualsSection
-    .getByPlaceholder("Search officials by name or email")
-    .fill("Ava Official");
-  await assignIndividualsSection
-    .locator(".assign-match-item")
+  await assignIndividualsSection.getByPlaceholder("Search officials by name").fill("Ava");
+  await page
+    .locator(".ui-searchable-select-item")
     .filter({ hasText: "Ava Official" })
-    .getByRole("button", { name: "Assign" })
+    .first()
     .click();
 
   const assignCrewsSection = page.locator(".assign-section").filter({

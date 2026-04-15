@@ -17,6 +17,8 @@ interface SearchableSelectProps<T extends string> {
   emptyText?: string;
   className?: string;
   disabled?: boolean;
+  minSearchChars?: number;
+  maxResults?: number;
 }
 
 function getOptionSearchText(option: SearchableSelectOption<string>): string {
@@ -39,22 +41,38 @@ export function SearchableSelect<T extends string>({
   searchPlaceholder = "Search...",
   emptyText = "No results found.",
   className,
-  disabled = false
+  disabled = false,
+  minSearchChars = 0,
+  maxResults
 }: SearchableSelectProps<T>) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const searchInputRef = useRef<HTMLInputElement | null>(null);
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
+  const [highlightedIndex, setHighlightedIndex] = useState(0);
 
   const selectedOption = options.find((option) => option.value === value) ?? null;
   const filteredOptions = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase();
-    if (!normalizedQuery) {
-      return options;
+    if (normalizedQuery.length < minSearchChars) {
+      return maxResults ? options.slice(0, maxResults) : options;
     }
 
-    return options.filter((option) => getOptionSearchText(option).includes(normalizedQuery));
-  }, [options, query]);
+    const matchedOptions = options.filter((option) =>
+      getOptionSearchText(option).includes(normalizedQuery)
+    );
+    return maxResults ? matchedOptions.slice(0, maxResults) : matchedOptions;
+  }, [maxResults, minSearchChars, options, query]);
+
+  useEffect(() => {
+    if (!open) {
+      setHighlightedIndex(0);
+      return;
+    }
+
+    const selectedIndex = filteredOptions.findIndex((option) => option.value === value);
+    setHighlightedIndex(selectedIndex >= 0 ? selectedIndex : 0);
+  }, [filteredOptions, open, value]);
 
   useEffect(() => {
     if (!open) {
@@ -84,11 +102,49 @@ export function SearchableSelect<T extends string>({
     setOpen(false);
   }
 
+  function moveHighlight(direction: 1 | -1) {
+    if (filteredOptions.length === 0) {
+      return;
+    }
+
+    setHighlightedIndex((current) =>
+      direction === 1
+        ? (current + 1) % filteredOptions.length
+        : (current - 1 + filteredOptions.length) % filteredOptions.length
+    );
+  }
+
   return (
     <div
       ref={containerRef}
       className={cn("ui-searchable-select", className)}
       onKeyDown={(event) => {
+        if (event.key === "ArrowDown") {
+          event.preventDefault();
+          if (!open) {
+            setOpen(true);
+            return;
+          }
+          moveHighlight(1);
+          return;
+        }
+
+        if (event.key === "ArrowUp") {
+          event.preventDefault();
+          if (!open) {
+            setOpen(true);
+            return;
+          }
+          moveHighlight(-1);
+          return;
+        }
+
+        if (event.key === "Enter" && open && filteredOptions[highlightedIndex]) {
+          event.preventDefault();
+          handleSelect(filteredOptions[highlightedIndex].value);
+          return;
+        }
+
         if (event.key === "Escape") {
           setOpen(false);
         }
@@ -118,7 +174,10 @@ export function SearchableSelect<T extends string>({
               ref={searchInputRef}
               type="text"
               value={query}
-              onChange={(event) => setQuery(event.target.value)}
+              onChange={(event) => {
+                setQuery(event.target.value);
+                setHighlightedIndex(0);
+              }}
               placeholder={searchPlaceholder}
             />
           </div>
@@ -128,13 +187,22 @@ export function SearchableSelect<T extends string>({
             ) : (
               filteredOptions.map((option) => {
                 const selected = option.value === value;
+                const highlighted = filteredOptions[highlightedIndex]?.value === option.value;
                 return (
                   <button
                     key={option.value}
                     type="button"
-                    className="ui-searchable-select-item"
+                    className={cn(
+                      "ui-searchable-select-item",
+                      highlighted && "ui-searchable-select-item-active"
+                    )}
                     role="option"
                     aria-selected={selected}
+                    onMouseEnter={() =>
+                      setHighlightedIndex(
+                        filteredOptions.findIndex((candidate) => candidate.value === option.value)
+                      )
+                    }
                     onMouseDown={(event) => {
                       event.preventDefault();
                       handleSelect(option.value);

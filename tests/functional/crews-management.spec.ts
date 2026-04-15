@@ -1,6 +1,7 @@
 import { expect, test, type Page } from "@playwright/test";
 import {
   createCrew,
+  searchAndPickOfficial,
   selectOption,
   setCrewMemberPosition,
   signIn,
@@ -30,7 +31,7 @@ test("lets an official create, manage, and delete a crew", async ({ page }) => {
   await signIn(page, "official1@example.com");
   await createCrew(page, {
     crewName: "Saturday Showcase Crew",
-    inviteEmail: "official2@example.com",
+    inviteQuery: "Noah",
     creatorName: "Olivia Official",
     inviteeName: "Noah Official"
   });
@@ -50,13 +51,7 @@ test("lets an official create, manage, and delete a crew", async ({ page }) => {
   await expect(selectedCrewPanel).toContainText("Name: Saturday Showcase Crew");
   await expect(selectedCrewPanel).toContainText("Crew Chief: Olivia Official");
 
-  await selectedCrewPanel.getByLabel("Add Member by Email").fill("official3@example.com");
-  await selectedCrewPanel.getByRole("button", { name: "Search" }).click();
-  await selectedCrewPanel
-    .locator(".crew-result-row")
-    .filter({ hasText: "Ava Official" })
-    .getByRole("button", { name: "Add" })
-    .click();
+  await searchAndPickOfficial(selectedCrewPanel, "Ava", "Ava Official");
 
   await expect(selectedCrewPanel).toContainText("Member added.");
   await expect(selectedCrewPanel.getByText("Ava Official")).toBeVisible();

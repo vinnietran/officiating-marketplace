@@ -8,7 +8,6 @@ import {
 } from "../lib/googlePlaces";
 import {
   buildAssignedGameSubmission,
-  filterAssignableOfficials,
   getCrewMemberPositionLabel,
   type IndividualAssignee
 } from "../lib/assignGame";
@@ -18,6 +17,8 @@ import {
   getAvailabilityDateKeyFromDateTimeLocal,
   isOfficialBlockedOnDateKey
 } from "../lib/availability";
+import { searchOfficials } from "../lib/officialSearch";
+import { SearchableOfficialPicker } from "./SearchableOfficialPicker";
 import { Button } from "./ui/Button";
 import { Select } from "./ui/Select";
 import type {
@@ -104,7 +105,6 @@ export function AssignGameForm({
   const [locationFocused, setLocationFocused] = useState(false);
   const [payPosted, setPayPosted] = useState("");
   const [notes, setNotes] = useState("");
-  const [officialDirectorySearch, setOfficialDirectorySearch] = useState("");
   const [individualAssignments, setIndividualAssignments] = useState<IndividualAssignee[]>([]);
   const [selectedCrewIds, setSelectedCrewIds] = useState<string[]>([]);
   const [selectedCrewId, setSelectedCrewId] = useState("");
@@ -137,15 +137,6 @@ export function AssignGameForm({
     [dateLocal]
   );
   const gameDateLabel = gameDateKey ? formatAvailabilityDate(gameDateKey) : "";
-  const officialSearchTerm = officialDirectorySearch.trim().toLowerCase();
-  const hasOfficialSearch = officialSearchTerm.length > 0;
-  const filteredOfficials = useMemo(
-    () =>
-      hasOfficialSearch
-        ? filterAssignableOfficials(availableOfficials, officialDirectorySearch)
-        : [],
-    [availableOfficials, hasOfficialSearch, officialDirectorySearch]
-  );
   const assignmentRosterCount = individualAssignments.length + selectedCrews.length;
   const hasAssignmentRosterEntries = assignmentRosterCount > 0;
   const selectedCrew = useMemo(
@@ -189,15 +180,20 @@ export function AssignGameForm({
   );
   const blockedOfficialCount = availableOfficials.length - availableOfficialCount;
   const filteredAvailabilityOfficials = useMemo(() => {
-    const searchTerm = availabilitySearch.trim().toLowerCase();
+    const searchTerm = availabilitySearch.trim();
+    const rankedOfficials =
+      searchTerm.length >= 2
+        ? searchOfficials(availableOfficials, searchTerm, { limit: 200 }).map(
+            (result) => result.official
+          )
+        : [...availableOfficials];
+    const rankedOfficialIds = new Map(
+      rankedOfficials.map((official, index) => [official.uid, index])
+    );
 
     return [...availableOfficials]
       .filter((official) => {
-        const matchesSearch =
-          searchTerm.length === 0 ||
-          official.displayName.toLowerCase().includes(searchTerm) ||
-          official.email.toLowerCase().includes(searchTerm);
-        if (!matchesSearch) {
+        if (searchTerm.length >= 2 && !rankedOfficialIds.has(official.uid)) {
           return false;
         }
 
@@ -216,9 +212,29 @@ export function AssignGameForm({
         if (leftBlocked !== rightBlocked) {
           return leftBlocked ? 1 : -1;
         }
+        if (searchTerm.length >= 2) {
+          return (
+            (rankedOfficialIds.get(left.uid) ?? Number.MAX_SAFE_INTEGER) -
+              (rankedOfficialIds.get(right.uid) ?? Number.MAX_SAFE_INTEGER) ||
+            left.displayName.localeCompare(right.displayName)
+          );
+        }
         return left.displayName.localeCompare(right.displayName);
       });
   }, [availabilityFilter, availabilitySearch, availableOfficials, gameDateKey]);
+  const assignableOfficialIds = useMemo(
+    () =>
+      new Set(
+        availableOfficials
+          .filter(
+            (official) =>
+              !individualAssignments.some((assignee) => assignee.officialUid === official.uid) &&
+              !isOfficialBlockedOnDateKey(official, gameDateKey)
+          )
+          .map((official) => official.uid)
+      ),
+    [availableOfficials, gameDateKey, individualAssignments]
+  );
 
   useEffect(() => {
     const trimmedLocation = location.trim();
@@ -361,7 +377,6 @@ export function AssignGameForm({
       setLocationSuggestions([]);
       setPayPosted("");
       setNotes("");
-      setOfficialDirectorySearch("");
       setIndividualAssignments([]);
       setSelectedCrewIds([]);
       setSelectedCrewId("");
@@ -503,11 +518,14 @@ export function AssignGameForm({
         <section className="full-width assign-section">
           <h3>Assign Individuals</h3>
           <div className="assign-search-row">
-            <input
-              type="text"
-              value={officialDirectorySearch}
-              onChange={(event) => setOfficialDirectorySearch(event.target.value)}
-              placeholder="Search officials by name or email"
+            <SearchableOfficialPicker
+              id="assign-individual-search"
+              officials={availableOfficials.filter((official) =>
+                assignableOfficialIds.has(official.uid)
+              )}
+              onSelect={addIndividual}
+              placeholder="Search officials by name"
+              inputAriaLabel="Assign individual official"
             />
             <Button
               type="button"
@@ -523,69 +541,10 @@ export function AssignGameForm({
 
           {!gameDateKey ? (
             <p className="hint-text">Set the game date to browse all officials by availability.</p>
-          ) : null}
-
-          {!hasOfficialSearch ? (
-            <p className="hint-text">Start typing a name or email to search officials.</p>
-          ) : filteredOfficials.length > 0 ? (
-            <div className="assign-match-list">
-              {filteredOfficials.map((match) => {
-                const alreadyAdded = individualAssignments.some(
-                  (assignee) => assignee.officialUid === match.uid
-                );
-                const isBlockedForGameDate = gameDateKey
-                  ? isOfficialBlockedOnDateKey(match, gameDateKey)
-                  : false;
-
-                return (
-                  <div key={match.uid} className="assign-match-item">
-                    <div>
-                      <strong>{match.displayName}</strong>
-                      <div className="meta-line">{match.email}</div>
-                      <div className="assign-availability-meta">
-                        <span
-                          className={[
-                            "assign-availability-badge",
-                            !gameDateKey
-                              ? "assign-availability-badge-pending"
-                              : isBlockedForGameDate
-                                ? "assign-availability-badge-blocked"
-                                : "assign-availability-badge-open"
-                          ].join(" ")}
-                        >
-                          {!gameDateKey
-                            ? "Set game date"
-                            : isBlockedForGameDate
-                              ? "Blocked"
-                              : "Available"}
-                        </span>
-                        <span className="meta-line">
-                          {!gameDateKey
-                            ? "Pick the game date to preview availability."
-                            : isBlockedForGameDate
-                              ? `Blocked on ${gameDateLabel}`
-                              : `Open on ${gameDateLabel}`}
-                        </span>
-                      </div>
-                    </div>
-                    <button
-                      type="button"
-                      className="button-secondary"
-                      onClick={() => addIndividual(match)}
-                      disabled={alreadyAdded || isBlockedForGameDate}
-                    >
-                      {alreadyAdded
-                        ? "Added"
-                        : isBlockedForGameDate
-                          ? "Blocked"
-                          : "Assign"}
-                    </button>
-                  </div>
-                );
-              })}
-            </div>
           ) : (
-            <p className="empty-text">No matching officials found.</p>
+            <p className="hint-text">
+              Search by first name, last name, or partial full name to add an official.
+            </p>
           )}
         </section>
 

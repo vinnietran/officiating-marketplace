@@ -52,6 +52,22 @@ test("filterAssignableOfficials searches name and email", () => {
     filterAssignableOfficials(officials, "alex@example").map((official) => official.uid),
     ["o1"]
   );
+  assert.deepEqual(
+    filterAssignableOfficials(
+      [
+        ...officials,
+        {
+          uid: "o3",
+          email: "vincenzo@example.com",
+          displayName: "Vincenzo Tranquillo",
+          role: "official",
+          createdAtISO: "2026-03-01T00:00:00.000Z"
+        }
+      ],
+      "vince tr"
+    ).map((official) => official.uid),
+    ["o3"]
+  );
 });
 
 test("getCrewMemberPositionLabel reports assigned football positions", () => {

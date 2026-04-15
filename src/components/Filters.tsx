@@ -1,4 +1,5 @@
 import type { Level, Sport } from "../types";
+import { validateMarketplaceDateRange } from "../lib/marketplaceDateFilter";
 import { Select } from "./ui/Select";
 
 export interface FilterValues {
@@ -6,6 +7,8 @@ export interface FilterValues {
   sport: "All" | Sport;
   level: "All" | Level;
   minPay: string;
+  startDate: string;
+  endDate: string;
 }
 
 interface FiltersProps {
@@ -31,6 +34,8 @@ const LEVEL_OPTIONS: Array<"All" | Level> = [
 ];
 
 export function Filters({ values, onChange }: FiltersProps) {
+  const dateRangeError = validateMarketplaceDateRange(values);
+
   return (
     <section className="filters filters-compact">
       <div className="filters-grid">
@@ -78,7 +83,27 @@ export function Filters({ values, onChange }: FiltersProps) {
             onChange={(event) => onChange({ ...values, minPay: event.target.value })}
           />
         </label>
+
+        <label>
+          Start Date
+          <input
+            type="date"
+            value={values.startDate}
+            onChange={(event) => onChange({ ...values, startDate: event.target.value })}
+          />
+        </label>
+
+        <label>
+          End Date
+          <input
+            type="date"
+            value={values.endDate}
+            onChange={(event) => onChange({ ...values, endDate: event.target.value })}
+          />
+        </label>
       </div>
+
+      {dateRangeError ? <p className="error-text">{dateRangeError}</p> : null}
     </section>
   );
 }

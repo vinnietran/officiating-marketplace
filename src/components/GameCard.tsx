@@ -1,6 +1,6 @@
 import { CalendarDays, Clock3, Gavel, MapPin, Shield, Wallet } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import { EditGameForm } from "./EditGameForm";
 import { isBidEditableByOfficial, requiresCrewBidForGame } from "../lib/bids";
 import { getExpectedBidRangeLabel } from "../lib/bidRange";
@@ -56,6 +56,7 @@ export function GameCard({
   layout = "grid"
 }: GameCardProps) {
   const navigate = useNavigate();
+  const location = useLocation();
   const [showEditForm, setShowEditForm] = useState(false);
   const [busyBidId, setBusyBidId] = useState<string | null>(null);
   const [nowMs, setNowMs] = useState(() => Date.now());
@@ -132,7 +133,10 @@ export function GameCard({
 
   function openDetails() {
     navigate(`/schedule/games/${game.id}`, {
-      state: { from: "marketplace" }
+      state: {
+        from: "marketplace",
+        fromPath: `${location.pathname}${location.search}`
+      }
     });
   }
 

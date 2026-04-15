@@ -241,7 +241,7 @@ export function Schedule() {
           {officialScheduleGames.length === 0 ? (
             <div className="empty-state">No awarded games yet.</div>
           ) : (
-            <table className="schedule-table schedule-table-wrap">
+            <table className="schedule-table schedule-table-wrap schedule-table-mobile-cards">
               <thead>
                 <tr>
                   <th>Date/Time</th>
@@ -285,8 +285,8 @@ export function Schedule() {
                       }}
                       aria-label={`Open details for ${game.schoolName} on ${formatGameDate(game.dateISO)}`}
                     >
-                      <td>{formatGameDate(game.dateISO)}</td>
-                      <td>
+                      <td data-label="Date/Time">{formatGameDate(game.dateISO)}</td>
+                      <td data-label="Bid Window">
                         {game.mode === "direct_assignment" ? (
                           "-"
                         ) : (
@@ -295,13 +295,13 @@ export function Schedule() {
                           </span>
                         )}
                       </td>
-                      <td>{game.schoolName}</td>
-                      <td>
+                      <td data-label="School">{game.schoolName}</td>
+                      <td data-label="Sport/Level">
                         {game.sport} • {game.level}
                       </td>
-                      <td>{game.location}</td>
-                      <td>{assignedByLabel}</td>
-                      <td>
+                      <td data-label="Location">{game.location}</td>
+                      <td data-label="Assigned By">{assignedByLabel}</td>
+                      <td data-label="Game Fee">
                         {selectedBid
                           ? formatCurrency(selectedBid.amount)
                           : formatCurrency(game.payPosted)}
@@ -318,7 +318,7 @@ export function Schedule() {
           {evaluatorScheduleGames.length === 0 ? (
             <div className="empty-state">No games found.</div>
           ) : (
-            <table className="schedule-table schedule-table-wrap">
+            <table className="schedule-table schedule-table-wrap schedule-table-mobile-cards">
               <thead>
                 <tr>
                   <th>Date/Time</th>
@@ -358,8 +358,8 @@ export function Schedule() {
                       }}
                       aria-label={`Open details for ${game.schoolName} on ${formatGameDate(game.dateISO)}`}
                     >
-                      <td>{formatGameDate(game.dateISO)}</td>
-                      <td>
+                      <td data-label="Date/Time">{formatGameDate(game.dateISO)}</td>
+                      <td data-label="Bid Window">
                         {game.mode === "direct_assignment" ? (
                           "-"
                         ) : (
@@ -368,13 +368,13 @@ export function Schedule() {
                           </span>
                         )}
                       </td>
-                      <td>{game.schoolName}</td>
-                      <td>
+                      <td data-label="School">{game.schoolName}</td>
+                      <td data-label="Sport/Level">
                         {game.sport} • {game.level}
                       </td>
-                      <td>{game.location}</td>
-                      <td>{getGameStatusLabel(game.status, game.mode)}</td>
-                      <td>{formatCurrency(currentPrice)}</td>
+                      <td data-label="Location">{game.location}</td>
+                      <td data-label="Status">{getGameStatusLabel(game.status, game.mode)}</td>
+                      <td data-label="Current Price">{formatCurrency(currentPrice)}</td>
                     </tr>
                   );
                 })}
@@ -387,7 +387,7 @@ export function Schedule() {
           {assignorOrSchoolScheduleGames.length === 0 ? (
             <div className="empty-state">No posted games yet.</div>
           ) : (
-            <table className="schedule-table schedule-table-wrap">
+            <table className="schedule-table schedule-table-wrap schedule-table-mobile-cards">
               <thead>
                 <tr>
                   <th>Date/Time</th>
@@ -424,8 +424,8 @@ export function Schedule() {
                       }}
                       aria-label={`Open details for ${game.schoolName} on ${formatGameDate(game.dateISO)}`}
                     >
-                      <td>{formatGameDate(game.dateISO)}</td>
-                      <td>
+                      <td data-label="Date/Time">{formatGameDate(game.dateISO)}</td>
+                      <td data-label="Bid Window">
                         {game.mode === "direct_assignment" ? (
                           "-"
                         ) : (
@@ -434,25 +434,25 @@ export function Schedule() {
                           </span>
                         )}
                       </td>
-                      <td>{game.schoolName}</td>
-                      <td>
+                      <td data-label="School">{game.schoolName}</td>
+                      <td data-label="Sport/Level">
                         {game.sport} • {game.level}
                       </td>
-                      <td>{game.location}</td>
-                      <td>{getGameStatusLabel(game.status, game.mode)}</td>
-                      <td>
+                      <td data-label="Location">{game.location}</td>
+                      <td data-label="Status">{getGameStatusLabel(game.status, game.mode)}</td>
+                      <td data-label="Awarded To">
                         {game.mode === "direct_assignment"
                           ? getDirectAssignmentLabel(game)
                           : getBidderName(selectedBid)}
                       </td>
-                      <td>
+                      <td data-label="Awarded Price">
                         {game.mode === "direct_assignment"
                           ? formatCurrency(game.payPosted)
                           : selectedBid
                             ? formatCurrency(selectedBid.amount)
                             : "-"}
                       </td>
-                      <td>
+                      <td data-label="Bid Submitted">
                         {game.mode === "direct_assignment"
                           ? formatGameDate(game.createdAtISO)
                           : selectedBid

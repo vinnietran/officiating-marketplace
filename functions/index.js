@@ -361,6 +361,15 @@ function normalizeGameAssignment(assignment) {
 }
 
 function normalizeGameDocument(id, data) {
+  const minBidAmount =
+    typeof data.minBidAmount === "number" && Number.isFinite(data.minBidAmount)
+      ? data.minBidAmount
+      : undefined;
+  const maxBidAmount =
+    typeof data.maxBidAmount === "number" && Number.isFinite(data.maxBidAmount)
+      ? data.maxBidAmount
+      : undefined;
+
   return {
     id,
     schoolName: trimString(data.schoolName),
@@ -376,6 +385,8 @@ function normalizeGameDocument(id, data) {
     location: trimString(data.location),
     locationCoordinates: normalizeGeoPoint(data.locationCoordinates) || undefined,
     payPosted: typeof data.payPosted === "number" ? data.payPosted : 0,
+    minBidAmount,
+    maxBidAmount,
     notes: trimString(data.notes) || undefined,
     createdByUid: trimString(data.createdByUid),
     createdByName: trimString(data.createdByName) || undefined,
@@ -483,6 +494,14 @@ function validateNewGameInput(input, requireBidWindow) {
     typeof input.requestedCrewSize === "number" && Number.isFinite(input.requestedCrewSize)
       ? input.requestedCrewSize
       : null;
+  const minBidAmount =
+    typeof input.minBidAmount === "number" && Number.isFinite(input.minBidAmount)
+      ? input.minBidAmount
+      : null;
+  const maxBidAmount =
+    typeof input.maxBidAmount === "number" && Number.isFinite(input.maxBidAmount)
+      ? input.maxBidAmount
+      : null;
   const scheduledDateKey = normalizeAvailabilityDateKey(input.scheduledDateKey);
   const acceptingBidsUntilISO = asOptionalIsoString(input.acceptingBidsUntilISO, "acceptingBidsUntilISO");
   const locationCoordinates = normalizeGeoPoint(input.locationCoordinates);
@@ -508,6 +527,22 @@ function validateNewGameInput(input, requireBidWindow) {
     assert(acceptingBidsUntilISO || acceptingBidsUntilISO === "", "invalid-argument", "Invalid acceptingBidsUntilISO value.");
   }
 
+  assert(
+    (minBidAmount === null && maxBidAmount === null) ||
+      (minBidAmount !== null && maxBidAmount !== null),
+    "invalid-argument",
+    "minBidAmount and maxBidAmount must both be provided or both be omitted."
+  );
+  if (minBidAmount !== null && maxBidAmount !== null) {
+    assert(minBidAmount >= 0, "invalid-argument", "minBidAmount must be zero or greater.");
+    assert(maxBidAmount > 0, "invalid-argument", "maxBidAmount must be greater than 0.");
+    assert(
+      maxBidAmount >= minBidAmount,
+      "invalid-argument",
+      "maxBidAmount must be greater than or equal to minBidAmount."
+    );
+  }
+
   return {
     schoolName,
     sport,
@@ -519,6 +554,8 @@ function validateNewGameInput(input, requireBidWindow) {
     location,
     locationCoordinates,
     payPosted: input.payPosted,
+    ...(minBidAmount !== null ? { minBidAmount } : {}),
+    ...(maxBidAmount !== null ? { maxBidAmount } : {}),
     notes
   };
 }
@@ -1079,6 +1116,8 @@ exports.createGame = onClientCall(async (request) => {
     location: input.location,
     ...(input.locationCoordinates ? { locationCoordinates: input.locationCoordinates } : {}),
     payPosted: input.payPosted,
+    ...(typeof input.minBidAmount === "number" ? { minBidAmount: input.minBidAmount } : {}),
+    ...(typeof input.maxBidAmount === "number" ? { maxBidAmount: input.maxBidAmount } : {}),
     createdByUid: profile.uid,
     createdByName: profile.displayName,
     createdByRole: profile.role,
@@ -1222,6 +1261,10 @@ exports.updateGame = onClientCall(async (request) => {
     scheduledDateKey: input.scheduledDateKey,
     location: input.location,
     payPosted: input.payPosted,
+    minBidAmount:
+      typeof input.minBidAmount === "number" ? input.minBidAmount : FieldValue.delete(),
+    maxBidAmount:
+      typeof input.maxBidAmount === "number" ? input.maxBidAmount : FieldValue.delete(),
     acceptingBidsUntilISO: input.acceptingBidsUntilISO || FieldValue.delete(),
     notes: input.notes || FieldValue.delete(),
     locationCoordinates: input.locationCoordinates || FieldValue.delete()

@@ -21,6 +21,7 @@ import {
   getCrewDefaultRoster
 } from "../../src/lib/crewRosters";
 import type { Bid, Crew } from "../../src/types";
+import { evaluateBidAgainstPreferredRange as evaluatePreferredBidRange } from "../../src/lib/bidRange";
 
 const crews: Crew[] = [
   {
@@ -234,6 +235,21 @@ test("buildBidSubmission rejects lower offers, invalid messages, and varsity ind
         requestedCrewSize: 2
       }),
     /Game roster must include at least 2 officials/
+  );
+});
+
+test("preferred bid range evaluation flags out-of-range values without blocking valid ones", () => {
+  assert.equal(
+    evaluatePreferredBidRange(80, { minBidAmount: 100, maxBidAmount: 150 }).isOutsidePreferredRange,
+    true
+  );
+  assert.equal(
+    evaluatePreferredBidRange(120, { minBidAmount: 100, maxBidAmount: 150 }).isOutsidePreferredRange,
+    false
+  );
+  assert.equal(
+    evaluatePreferredBidRange(180, { minBidAmount: 100, maxBidAmount: 150 }).direction,
+    "above"
   );
 });
 

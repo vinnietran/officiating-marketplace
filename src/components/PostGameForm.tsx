@@ -5,6 +5,7 @@ import {
   type PlaceSuggestion
 } from "../lib/googlePlaces";
 import { buildMarketplaceGameSubmission } from "../lib/gameForms";
+import { getBidRangeFormErrors } from "../lib/bidRange";
 import { buildRequestedCrewSizeOptions } from "../lib/crewSize";
 import type { Level, Sport } from "../types";
 import { Select } from "./ui/Select";
@@ -19,6 +20,8 @@ interface PostGameFormValues {
   acceptingBidsUntilISO?: string;
   location: string;
   payPosted: number;
+  minBidAmount?: number;
+  maxBidAmount?: number;
   notes?: string;
 }
 
@@ -50,10 +53,16 @@ export function PostGameForm({ onSubmit }: PostGameFormProps) {
   const [locationLookupError, setLocationLookupError] = useState<string | null>(null);
   const [locationFocused, setLocationFocused] = useState(false);
   const [payPosted, setPayPosted] = useState("");
+  const [minBidAmount, setMinBidAmount] = useState("");
+  const [maxBidAmount, setMaxBidAmount] = useState("");
   const [notes, setNotes] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const placesEnabled = hasGooglePlacesApiKey();
+  const bidRangeErrors = useMemo(
+    () => getBidRangeFormErrors({ minBidAmount, maxBidAmount }),
+    [maxBidAmount, minBidAmount]
+  );
 
   const showLocationSuggestions = useMemo(
     () => locationFocused && locationSuggestions.length > 0,
@@ -118,6 +127,8 @@ export function PostGameForm({ onSubmit }: PostGameFormProps) {
         acceptingBidsUntilLocal,
         location,
         payPosted,
+        minBidAmount,
+        maxBidAmount,
         notes
       });
 
@@ -133,6 +144,8 @@ export function PostGameForm({ onSubmit }: PostGameFormProps) {
       setLocation("");
       setLocationSuggestions([]);
       setPayPosted("");
+      setMinBidAmount("");
+      setMaxBidAmount("");
       setNotes("");
     } catch (submitError) {
       const submitMessage =
@@ -265,10 +278,47 @@ export function PostGameForm({ onSubmit }: PostGameFormProps) {
           <input
             type="number"
             min="1"
+            step="1"
             value={payPosted}
             onChange={(event) => setPayPosted(event.target.value)}
             required
           />
+        </label>
+
+        <label>
+          Minimum Preferred Bid
+          <input
+            type="number"
+            min="0"
+            step="1"
+            value={minBidAmount}
+            onChange={(event) => setMinBidAmount(event.target.value)}
+            aria-invalid={Boolean(bidRangeErrors.minBidAmount)}
+          />
+          <small className="hint-text">
+            Set the range you expect bidders to offer for this game.
+          </small>
+          {bidRangeErrors.minBidAmount ? (
+            <small className="error-text">{bidRangeErrors.minBidAmount}</small>
+          ) : null}
+        </label>
+
+        <label>
+          Maximum Preferred Bid
+          <input
+            type="number"
+            min="1"
+            step="1"
+            value={maxBidAmount}
+            onChange={(event) => setMaxBidAmount(event.target.value)}
+            aria-invalid={Boolean(bidRangeErrors.maxBidAmount)}
+          />
+          <small className="hint-text">
+            Leave both preferred bid fields blank to keep bidding open-ended.
+          </small>
+          {bidRangeErrors.maxBidAmount ? (
+            <small className="error-text">{bidRangeErrors.maxBidAmount}</small>
+          ) : null}
         </label>
 
         <label className="full-width">

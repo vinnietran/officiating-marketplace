@@ -7,9 +7,15 @@ import {
   getCrewBidCapacityError,
   getCrewBidUnavailableReason
 } from "../lib/bids";
+import {
+  evaluateBidAgainstPreferredRange,
+  getExpectedBidRangeLabel
+} from "../lib/bidRange";
 import { getAvailableFootballPositionsForRoster, getCrewDefaultRoster } from "../lib/crewRosters";
 import { getRequestedCrewSizeLabel, getRequestedCrewSizeRequirement } from "../lib/crewSize";
+import { formatCurrency } from "../lib/format";
 import type { Bid, Crew, CrewRosterOfficial, Game, UserProfile } from "../types";
+import { MessageModal } from "./MessageModal";
 import { SearchableSelect } from "./ui/SearchableSelect";
 import { Select } from "./ui/Select";
 
@@ -41,6 +47,8 @@ interface BidFormValues {
 
 interface BidFormProps {
   postedPay: number;
+  minBidAmount?: number | null;
+  maxBidAmount?: number | null;
   defaultOfficialName: string;
   sport: Game["sport"];
   requestedCrewSize?: number;
@@ -55,6 +63,8 @@ interface BidFormProps {
 
 export function BidForm({
   postedPay,
+  minBidAmount,
+  maxBidAmount,
   defaultOfficialName,
   sport,
   requestedCrewSize,
@@ -74,8 +84,13 @@ export function BidForm({
   const [amount, setAmount] = useState(String(postedPay));
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [pendingSubmission, setPendingSubmission] = useState<BidFormValues | null>(null);
   const isFootball = sport === "Football";
   const minimumCrewSize = getRequestedCrewSizeRequirement(requestedCrewSize);
+  const expectedBidRangeLabel = useMemo(
+    () => getExpectedBidRangeLabel({ minBidAmount, maxBidAmount }),
+    [maxBidAmount, minBidAmount]
+  );
   const bidEligibleCrews = useMemo(
     () => getBidEligibleCrewsForGame(availableCrews, requestedCrewSize),
     [availableCrews, requestedCrewSize]
@@ -195,6 +210,11 @@ export function BidForm({
       }),
     [activeCrew, bidderType, proposedRoster, requestedCrewSize]
   );
+  const parsedBidAmount = amount.trim() === "" ? Number.NaN : Number(amount);
+  const bidAmountEvaluation = useMemo(
+    () => evaluateBidAgainstPreferredRange(parsedBidAmount, { minBidAmount, maxBidAmount }),
+    [maxBidAmount, minBidAmount, parsedBidAmount]
+  );
 
   function updateRosterOfficial(
     officialUid: string,
@@ -250,6 +270,22 @@ export function BidForm({
     setAlternateOfficialId("");
   }
 
+  async function submitBid(values: BidFormValues) {
+    setSubmitting(true);
+    setError(null);
+
+    try {
+      await onSubmit(values);
+      setPendingSubmission(null);
+    } catch (submitError) {
+      const submitMessage =
+        submitError instanceof Error ? submitError.message : "Unable to submit bid.";
+      setError(submitMessage);
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
@@ -268,18 +304,23 @@ export function BidForm({
         requestedCrewSize
       });
 
-      setSubmitting(true);
-      setError(null);
-      await onSubmit({
+      const bidValues = {
         ...submission,
         crewName: bidderType === "crew" ? activeCrew?.name ?? submission.crewName : undefined
-      });
+      };
+      if (
+        evaluateBidAgainstPreferredRange(bidValues.amount, { minBidAmount, maxBidAmount })
+          .isOutsidePreferredRange
+      ) {
+        setPendingSubmission(bidValues);
+        return;
+      }
+
+      await submitBid(bidValues);
     } catch (submitError) {
       const submitMessage =
         submitError instanceof Error ? submitError.message : "Unable to submit bid.";
       setError(submitMessage);
-    } finally {
-      setSubmitting(false);
     }
   }
 
@@ -306,6 +347,12 @@ export function BidForm({
           )}
         </ul>
       </details>
+
+      {expectedBidRangeLabel ? (
+        <p className="hint-text">
+          Expected bid range: <strong>{expectedBidRangeLabel}</strong>
+        </p>
+      ) : null}
 
       {availableCrews.length > 0 ? (
         <div className="bid-form-grid">
@@ -361,49 +408,67 @@ export function BidForm({
           {proposedRoster.length === 0 ? (
             <p className="empty-text">No officials selected for this game roster.</p>
           ) : (
-            <ul className="crew-member-list">
-              {proposedRoster.map((official) => (
-                <li key={official.officialUid} className="crew-member-item">
-                  <div>
-                    <strong>{official.officialName}</strong>
-                    <div className="meta-line">
-                      {official.officialEmail ?? "Official"} •{" "}
-                      {official.source === "alternate" ? "Alternate" : "Base crew"}
-                    </div>
-                    {isFootball ? (
-                      <label className="crew-position-control">
-                        Position
-                        <Select
-                          value={official.role ?? ""}
-                          onValueChange={(value) =>
-                            updateRosterOfficial(official.officialUid, (current) => ({
-                              ...current,
-                              role: value ? (value as CrewRosterOfficial["role"]) : undefined
-                            }))
-                          }
-                          options={FOOTBALL_POSITION_OPTIONS.filter((option) =>
-                            getAvailableFootballPositionsForRoster(
-                              proposedRoster,
-                              official.officialUid
-                            ).includes(option.value)
-                          ).map((option) => ({
-                            value: option.value,
-                            label: option.label
-                          }))}
-                        />
-                      </label>
-                    ) : null}
-                  </div>
-                  <button
-                    type="button"
-                    className="button-link-danger"
-                    onClick={() => removeRosterOfficial(official.officialUid)}
-                  >
-                    Remove
-                  </button>
-                </li>
-              ))}
-            </ul>
+            <div className="crew-table-wrapper bid-roster-table-wrapper">
+              <table className="crew-table bid-roster-table">
+                <thead>
+                  <tr>
+                    <th scope="col">Official</th>
+                    <th scope="col">Source</th>
+                    {isFootball ? <th scope="col">Position</th> : null}
+                    <th scope="col">Action</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {proposedRoster.map((official) => (
+                    <tr key={official.officialUid}>
+                      <td>
+                        <div className="bid-roster-official-cell">
+                          <strong>{official.officialName}</strong>
+                          <span className="meta-line">{official.officialEmail ?? "Official"}</span>
+                        </div>
+                      </td>
+                      <td>{official.source === "alternate" ? "Alternate" : "Base crew"}</td>
+                      {isFootball ? (
+                        <td>
+                          <label className="crew-position-control bid-roster-position-control">
+                            <span className="sr-only">
+                              Set position for {official.officialName}
+                            </span>
+                            <Select
+                              value={official.role ?? ""}
+                              onValueChange={(value) =>
+                                updateRosterOfficial(official.officialUid, (current) => ({
+                                  ...current,
+                                  role: value ? (value as CrewRosterOfficial["role"]) : undefined
+                                }))
+                              }
+                              options={FOOTBALL_POSITION_OPTIONS.filter((option) =>
+                                getAvailableFootballPositionsForRoster(
+                                  proposedRoster,
+                                  official.officialUid
+                                ).includes(option.value)
+                              ).map((option) => ({
+                                value: option.value,
+                                label: option.label
+                              }))}
+                            />
+                          </label>
+                        </td>
+                      ) : null}
+                      <td>
+                        <button
+                          type="button"
+                          className="button-link-danger"
+                          onClick={() => removeRosterOfficial(official.officialUid)}
+                        >
+                          Remove
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           )}
 
           <div className="crew-invite-row">
@@ -456,8 +521,12 @@ export function BidForm({
 
       {activeBid ? (
         <p className="hint-text">
-          Current offer for this game: <strong>${activeBid.amount}</strong>
+          Current offer for this game: <strong>{formatCurrency(activeBid.amount)}</strong>
         </p>
+      ) : null}
+
+      {!error && bidAmountEvaluation.isOutsidePreferredRange ? (
+        <p className="error-text">{bidAmountEvaluation.warning}</p>
       ) : null}
 
       {bidderType === "crew" && activeCrew && minimumCrewSize ? (
@@ -482,6 +551,20 @@ export function BidForm({
           Cancel
         </button>
       </div>
+
+      {pendingSubmission ? (
+        <MessageModal
+          title="Bid Outside Preferred Range"
+          message={`This bid is outside the creator's preferred range${
+            expectedBidRangeLabel ? ` of ${expectedBidRangeLabel}` : ""
+          }. Submit it anyway?`}
+          confirmLabel="Submit Anyway"
+          cancelLabel="Go Back"
+          confirmDisabled={submitting}
+          onClose={() => setPendingSubmission(null)}
+          onConfirm={() => void submitBid(pendingSubmission)}
+        />
+      ) : null}
     </form>
   );
 }

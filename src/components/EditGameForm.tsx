@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { buildMarketplaceGameSubmission, toDateTimeLocalValue } from "../lib/gameForms";
+import { getBidRangeFormErrors } from "../lib/bidRange";
 import { buildRequestedCrewSizeOptions } from "../lib/crewSize";
 import type { Game, Level, Sport } from "../types";
 import { Select } from "./ui/Select";
@@ -14,6 +15,8 @@ interface EditGameFormValues {
   acceptingBidsUntilISO?: string;
   location: string;
   payPosted: number;
+  minBidAmount?: number;
+  maxBidAmount?: number;
   notes?: string;
 }
 
@@ -40,9 +43,16 @@ export function EditGameForm({ game, onSubmit, onCancel }: EditGameFormProps) {
   );
   const [location, setLocation] = useState(game.location);
   const [payPosted, setPayPosted] = useState(String(game.payPosted));
+  const [minBidAmount, setMinBidAmount] = useState(
+    typeof game.minBidAmount === "number" ? String(game.minBidAmount) : ""
+  );
+  const [maxBidAmount, setMaxBidAmount] = useState(
+    typeof game.maxBidAmount === "number" ? String(game.maxBidAmount) : ""
+  );
   const [notes, setNotes] = useState(game.notes ?? "");
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const bidRangeErrors = getBidRangeFormErrors({ minBidAmount, maxBidAmount });
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -58,6 +68,8 @@ export function EditGameForm({ game, onSubmit, onCancel }: EditGameFormProps) {
         acceptingBidsUntilLocal,
         location,
         payPosted,
+        minBidAmount,
+        maxBidAmount,
         notes
       });
 
@@ -155,10 +167,47 @@ export function EditGameForm({ game, onSubmit, onCancel }: EditGameFormProps) {
           <input
             type="number"
             min="1"
+            step="1"
             value={payPosted}
             onChange={(event) => setPayPosted(event.target.value)}
             required
           />
+        </label>
+
+        <label>
+          Minimum Preferred Bid
+          <input
+            type="number"
+            min="0"
+            step="1"
+            value={minBidAmount}
+            onChange={(event) => setMinBidAmount(event.target.value)}
+            aria-invalid={Boolean(bidRangeErrors.minBidAmount)}
+          />
+          <small className="hint-text">
+            Set the range you expect bidders to offer for this game.
+          </small>
+          {bidRangeErrors.minBidAmount ? (
+            <small className="error-text">{bidRangeErrors.minBidAmount}</small>
+          ) : null}
+        </label>
+
+        <label>
+          Maximum Preferred Bid
+          <input
+            type="number"
+            min="1"
+            step="1"
+            value={maxBidAmount}
+            onChange={(event) => setMaxBidAmount(event.target.value)}
+            aria-invalid={Boolean(bidRangeErrors.maxBidAmount)}
+          />
+          <small className="hint-text">
+            Leave both preferred bid fields blank to keep bidding open-ended.
+          </small>
+          {bidRangeErrors.maxBidAmount ? (
+            <small className="error-text">{bidRangeErrors.maxBidAmount}</small>
+          ) : null}
         </label>
 
         <label className="full-width">

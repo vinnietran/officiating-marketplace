@@ -4,6 +4,7 @@ import {
   MIN_REQUESTED_CREW_SIZE,
   isValidRequestedCrewSize
 } from "./crewSize";
+import { buildBidRangeSubmission } from "./bidRange";
 
 export interface MarketplaceGameSubmission {
   schoolName: string;
@@ -15,6 +16,8 @@ export interface MarketplaceGameSubmission {
   acceptingBidsUntilISO?: string;
   location: string;
   payPosted: number;
+  minBidAmount?: number;
+  maxBidAmount?: number;
   notes?: string;
 }
 
@@ -27,6 +30,8 @@ export interface MarketplaceGameFormInput {
   acceptingBidsUntilLocal?: string;
   location: string;
   payPosted: string;
+  minBidAmount: string;
+  maxBidAmount: string;
   notes: string;
 }
 
@@ -90,6 +95,11 @@ export function buildMarketplaceGameSubmission(
     );
   }
 
+  const bidRange = buildBidRangeSubmission({
+    minBidAmount: input.minBidAmount,
+    maxBidAmount: input.maxBidAmount
+  });
+
   return {
     schoolName: input.schoolName.trim(),
     sport: input.sport,
@@ -100,6 +110,12 @@ export function buildMarketplaceGameSubmission(
     acceptingBidsUntilISO: bidsUntilDate ? bidsUntilDate.toISOString() : undefined,
     location: input.location.trim(),
     payPosted: parsedPay,
+    ...(typeof bidRange.minBidAmount === "number"
+      ? { minBidAmount: bidRange.minBidAmount }
+      : {}),
+    ...(typeof bidRange.maxBidAmount === "number"
+      ? { maxBidAmount: bidRange.maxBidAmount }
+      : {}),
     notes: input.notes.trim() || undefined
   };
 }
